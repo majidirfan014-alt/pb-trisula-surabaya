@@ -6,7 +6,7 @@
   <meta name="theme-color" content="#0b3d91">
   <link rel="icon" type="image/png" href="assets/favicon.png">
   <title>Daftar Atlet — PB TRISULA SURABAYA</title>
-  <link rel="stylesheet" href="css/style.css?v=8">
+  <link rel="stylesheet" href="css/style.css?v=10">
 </head>
 <body>
   <div class="auth-wrap">
@@ -28,11 +28,16 @@
         </div>
         <div class="auth-head">
           <img class="brand-logo brand-logo-lg" src="assets/logo-pb-trisula.png" alt="Logo PB Trisula Surabaya" width="56" height="56">
-          <h1>Pendaftaran Atlet</h1>
-          <p>Isi data di bawah ini. ID atlet dibuat otomatis setelah pendaftaran selesai.</p>
+          <h1 id="judul-daftar">Pendaftaran Atlet</h1>
+          <p id="sub-daftar">Isi data di bawah ini. ID atlet dibuat otomatis setelah pendaftaran selesai.</p>
         </div>
 
-        <form id="register-form" novalidate>
+        <div class="tabs" role="tablist" id="tab-daftar">
+          <button type="button" class="tab active" data-mode="atlet" role="tab">Daftar sebagai Atlet</button>
+          <button type="button" class="tab" data-mode="asisten" role="tab">Daftar sebagai Asisten</button>
+        </div>
+
+        <form id="register-form" data-mode="atlet" novalidate>
           <div class="form-grid cols-2">
             <div>
               <div class="field">
@@ -104,6 +109,27 @@
               </div>
 
               <div class="field">
+                <label class="label" for="f-agama">Agama</label>
+                <select class="input" id="f-agama" name="agama">
+                  <option value="">-- Pilih --</option>
+                  <option value="Islam">Islam</option>
+                  <option value="Kristen">Kristen</option>
+                  <option value="Katolik">Katolik</option>
+                  <option value="Hindu">Hindu</option>
+                  <option value="Buddha">Buddha</option>
+                  <option value="Konghucu">Konghucu</option>
+                  <option value="Lainnya">Lainnya</option>
+                </select>
+                <div class="field-error" data-error-for="agama"></div>
+              </div>
+
+              <div class="field">
+                <label class="label" for="f-alamat">Alamat Rumah</label>
+                <textarea class="input" id="f-alamat" name="alamat" rows="3" placeholder="Nama jalan, nomor rumah, kelurahan, kecamatan, kota"></textarea>
+                <div class="field-error" data-error-for="alamat"></div>
+              </div>
+
+              <div class="field">
                 <label class="label">Foto Profil (opsional)</label>
                 <div class="photo-upload">
                   <div id="photo-preview"></div>
@@ -152,17 +178,103 @@
             <a href="index.html">← Kembali ke beranda</a>
           </div>
         </form>
+        <form id="register-form-asisten" data-mode="asisten" novalidate hidden>
+          <div class="form-grid cols-2">
+            <div>
+              <div class="field">
+                <label class="label" for="a-nama">Nama Lengkap <span class="req">*</span></label>
+                <input class="input" type="text" id="a-nama" name="nama" placeholder="Nama lengkap" required>
+                <div class="field-error" data-error-for="nama"></div>
+              </div>
+
+              <div class="field">
+                <label class="label" for="a-tgl_lahir">Tanggal Lahir <span class="req">*</span></label>
+                <input class="input" type="date" id="a-tgl_lahir" name="tgl_lahir" required>
+                <div class="field-error" data-error-for="tgl_lahir"></div>
+              </div>
+
+              <div class="field">
+                <label class="label" for="a-usia">Usia</label>
+                <input class="input" type="text" id="a-usia" name="usia" placeholder="Terisi otomatis" readonly>
+                <div class="help">Terisi otomatis dari tanggal lahir.</div>
+              </div>
+
+              <div class="field">
+                <label class="label" for="a-no_hp">No. HP</label>
+                <input class="input" type="tel" id="a-no_hp" name="no_hp" placeholder="contoh: 081234567890">
+                <div class="field-error" data-error-for="no_hp"></div>
+              </div>
+            </div>
+
+            <div>
+              <div class="field">
+                <label class="label" for="a-lisensi_file">Lisensi Pelatih <span class="req">*</span></label>
+                <input class="input" type="file" id="a-lisensi_file" name="lisensi_file" accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png" required>
+                <div class="file-preview" id="lisensi-preview"></div>
+                <div class="help">Format PDF/JPG/PNG, maksimal 2 MB.</div>
+                <div class="field-error" data-error-for="lisensi_file"></div>
+              </div>
+
+              <div class="field">
+                <label class="label" for="a-foto_file">Foto Profil <span class="req">*</span></label>
+                <div class="photo-upload">
+                  <div id="asisten-photo-preview"></div>
+                  <input class="input" type="file" id="a-foto_file" name="foto_file" accept="image/jpeg,image/png,image/jpg" required>
+                </div>
+                <div class="help">Format JPG/PNG, maksimal 5 MB.</div>
+                <div class="field-error" data-error-for="foto_file"></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="notice">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 11v6"/><path d="M12 7h.01"/></svg>
+            <div>ID login dipakai untuk masuk ke dashboard asisten pelatih.</div>
+          </div>
+
+          <div class="form-grid cols-2">
+            <div class="field">
+              <label class="label" for="a-username">ID Login <span class="req">*</span></label>
+              <input class="input" type="text" id="a-username" name="username" placeholder="minimal 4 karakter, contoh: raka" autocomplete="username" required>
+              <div class="field-error" data-error-for="username"></div>
+            </div>
+            <div class="field">
+              <label class="label" for="a-password">Kata Sandi <span class="req">*</span></label>
+              <div class="pw-wrap">
+                <input class="input" type="password" id="a-password" name="password" placeholder="minimal 6 karakter" autocomplete="new-password" required>
+                <button type="button" class="pw-toggle" data-pw-toggle="a-password">Lihat</button>
+              </div>
+              <div class="field-error" data-error-for="password"></div>
+            </div>
+          </div>
+
+          <div class="field">
+            <label class="label" for="a-password2">Ulangi Kata Sandi <span class="req">*</span></label>
+            <div class="pw-wrap">
+              <input class="input" type="password" id="a-password2" name="password2" placeholder="Ketik ulang kata sandi" autocomplete="new-password" required>
+              <button type="button" class="pw-toggle" data-pw-toggle="a-password2">Lihat</button>
+            </div>
+            <div class="field-error" data-error-for="password2"></div>
+          </div>
+
+          <button class="btn btn-block" type="submit">Daftar sebagai Asisten</button>
+          <div class="auth-foot">
+            Sudah punya akun? <a href="login.html">Masuk di sini</a>
+          </div>
+        </form>
+
       </div>
     </main>
   </div>
 
-  <script src="js/config.js?v=8"></script>
-  <script src="js/utils.js?v=8"></script>
-  <script src="js/store.js?v=8"></script>
-  <script src="js/auth.js?v=8"></script>
-  <script src="js/ui.js?v=8"></script>
-  <script src="js/docs.js?v=8"></script>
-  <script src="js/pages-auth.js?v=8"></script>
+  <script src="js/config.js?v=10"></script>
+  <script src="js/utils.js?v=10"></script>
+  <script src="js/store.js?v=10"></script>
+  <script src="js/auth.js?v=10"></script>
+  <script src="js/ui.js?v=10"></script>
+  <script src="js/docs.js?v=10"></script>
+  <script src="js/cloud.js?v=10"></script>
+  <script src="js/pages-auth.js?v=10"></script>
   <script>
     (function () {
       var jalan = false;

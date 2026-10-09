@@ -200,6 +200,8 @@ var Auth = (function () {
         kategori_bmi: bmi.category.label,
         sekolah: payload.sekolah,
         asal_pb: payload.asal_pb || '',
+        alamat: payload.alamat || '',
+        agama: payload.agama || '',
         no_hp: payload.no_hp,
         foto: payload.foto || '',
         dokumen: payload.dokumen || {},
@@ -211,6 +213,25 @@ var Auth = (function () {
         foto: athlete.foto
       });
       return athlete;
+    });
+  }
+
+  // Pendaftaran asisten pelatih: membuat akun login + menyimpan profil
+  // (tanggal lahir, usia dihitung saat dibaca, foto, dan berkas lisensi pelatih).
+  function registerAsisten(payload) {
+    return createUser({
+      nama: payload.nama,
+      username: payload.username,
+      password: payload.password,
+      role: 'asisten',
+      status: 'aktif',
+      no_hp: payload.no_hp || '',
+      foto: payload.foto || ''
+    }).then(function (user) {
+      return Store.update('users', user.id, {
+        tgl_lahir: payload.tgl_lahir || '',
+        lisensi: payload.lisensi || null
+      });
     });
   }
 
@@ -412,6 +433,7 @@ var Auth = (function () {
     resetPassword: resetPassword,
     createUser: createUser,
     registerAthlete: registerAthlete,
+    registerAsisten: registerAsisten,
     seed: seed
   };
 })();

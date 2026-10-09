@@ -836,6 +836,16 @@ var PagesPublic = (function () {
     renderSemua();
     bindNav();
     bindNavAktif();
+    if (typeof Cloud !== 'undefined' && Cloud && Cloud.init) {
+      Cloud.init().then(function () {
+        if (Cloud.siap && Cloud.siap() && Cloud.migrasiFotoLama) {
+          Cloud.migrasiFotoLama().then(function () {
+            landing = null;
+            renderSemua();
+          }, function () {});
+        }
+      }, function () {});
+    }
     LandingStore.subscribe(function () {
       landing = null;
       renderSemua();

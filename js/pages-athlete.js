@@ -703,16 +703,230 @@ var PagesAthlete = (function () {
     });
   }
 
+  // Riwayat pembayaran milik atlet yang sedang login (read-only).
+  function riwayatPembayaran(root, user, app) {
+    var athlete = myAthlete(user);
+    if (!athlete) {
+      root.innerHTML = '<div class="page">' + UI.emptyState('Data atlet tidak ditemukan.', 'alert') + '</div>';
+      return;
+    }
+
+    root.innerHTML =
+      '<div class="page">' +
+      UI.pageHeader('Riwayat Pembayaran', 'Rekap pembayaran yang telah dicatat oleh pelatih.') +
+      '<div class="card">' +
+      '<div class="filter-bar">' +
+      '<select class="input" id="rp-kategori" style="max-width:240px" aria-label="Filter kategori">' +
+      '<option value="">Semua kategori</option>' +
+      CONFIG.KATEGORI_PEMBAYARAN.map(function (k) {
+        return '<option value="' + Utils.esc(k) + '">' + Utils.esc(k) + '</option>';
+      }).join('') +
+      '</select>' +
+      '</div>' +
+      '<div id="rp-ringkas"></div>' +
+      '<div id="rp-list"></div>' +
+      '</div></div>';
+
+    var page = root.querySelector('.page');
+
+    function render() {
+      var filter = page.querySelector('#rp-kategori').value;
+      var rows = Store.where('pembayaran', function (r) {
+        if (r.id_atlet !== athlete.id_atlet) return false;
+        if (filter && r.kategori !== filter) return false;
+        return true;
+      });
+      rows = Utils.sortBy(rows, 'tanggal', 'desc');
+
+      var lunas = 0, belum = 0, perKategori = {};
+      CONFIG.KATEGORI_PEMBAYARAN.forEach(function (k) {
+        perKategori[k] = 0;
+      });
+      rows.forEach(function (r) {
+        var n = Number(r.nominal) || 0;
+        if (r.status === 'lunas') lunas += n;
+        else belum += n;
+        if (perKategori[r.kategori] !== undefined) perKategori[r.kategori] += n;
+      });
+
+      page.querySelector('#rp-ringkas').innerHTML =
+        '<div class="stat-grid" style="grid-template-columns:repeat(auto-fit,minmax(150px,1fr))">' +
+        UI.statCard('Total Entri', rows.length, filter ? 'kategori ' + filter : 'semua kategori', 'clipboard', 'primary') +
+        UI.statCard('Sudah Lunas', 'Rp ' + Utils.fmtNumber(lunas, 0), 'pembayaran lunas', 'check', 'ok') +
+        UI.statCard('Belum Lunas', 'Rp ' + Utils.fmtNumber(belum, 0), belum ? 'segera lakukan pembayaran' : 'semua lunas', 'alert', belum ? 'warn' : 'ok') +
+        '</div>' +
+        '<div class="chip-row mt-2">' + CONFIG.KATEGORI_PEMBAYARAN.map(function (k) {
+          return '<span class="score-pill">' + Utils.esc(k) + ': Rp ' + Utils.fmtNumber(perKategori[k], 0) + '</span>';
+        }).join('') + '</div>';
+
+      var host = page.querySelector('#rp-list');
+      if (!rows.length) {
+        host.innerHTML = UI.emptyState('Belum ada riwayat pembayaran.', 'save');
+        return;
+      }
+      host.innerHTML = '<div class="table-wrap"><table class="table"><thead><tr>' +
+        '<th>Tanggal</th><th>Kategori</th><th class="align-right">Nominal</th><th>Keterangan</th><th>Status</th>' +
+        '</tr></thead><tbody>' +
+        rows.map(function (r) {
+          return '<tr>' +
+            '<td>' + Utils.fmtDate(r.tanggal, true) + '</td>' +
+            '<td>' + UI.badge(r.kategori, 'primary') + '</td>' +
+            '<td class="align-right fw-bold">Rp ' + Utils.fmtNumber(Number(r.nominal) || 0, 0) + '</td>' +
+            '<td class="small">' + Utils.esc(r.keterangan || '-') + '</td>' +
+            '<td>' + (r.status === 'lunas' ? UI.badge('Lunas', 'ok') : UI.badge('Belum Lunas', 'warn')) + '</td>' +
+            '</tr>';
+        }).join('') + '</tbody></table></div>';
+    }
+
+    render();
+
+    page.addEventListener('change', function (e) {
+      if (e.target.id === 'rp-kategori') render();
+    });
+
+    app.subscribe('pembayaran', render);
+  }
+
+  // Kehadiran milik atlet yang sedang login (read-only).
+  // Data diinput asisten pelatih / pelatih kepala, tampil otomatis di sini.
+  function kehadiranSaya(root, user, app) {
+    var athlete = myAthlete(user);
+    if (!athlete) {
+      root.innerHTML = '<div class="page">' + UI.emptyState('Data atlet tidak ditemukan.', 'alert') + '</div>';
+      return;
+    }
+
+    root.innerHTML =
+      '<div class="page">' +
+      UI.pageHeader('Kehadiran Saya', 'Rekap kehadiran latihan Anda. Data diinput oleh pelatih.') +
+      '<div class="card">' +
+      '<div class="filter-bar">' +
+      '<select class="input" id="kh-bulan" style="max-width:220px" aria-label="Filter bulan">' +
+      '<option value="">Semua bulan</option></select>' +
+      '<select class="input" id="kh-status" style="max-width:200px" aria-label="Filter status kehadiran">' +
+      '<option value="">Semua status</option>' +
+      CONFIG.STATUS_KEHADIRAN.map(function (s) {
+        return '<option value="' + Utils.esc(s) + '">' + Utils.esc(s === 'Tidak Hadir' ? 'Alpa' : s) + '</option>';
+      }).join('') +
+      '</select>' +
+      '</div>' +
+      '<div id="kh-ringkas"></div>' +
+      '<div id="kh-list"></div>' +
+      '</div></div>';
+
+    var page = root.querySelector('.page');
+
+    function labelStatus(s) {
+      return s === 'Tidak Hadir' ? 'Alpa' : s;
+    }
+
+    function fillBulan() {
+      var select = page.querySelector('#kh-bulan');
+      var map = {};
+      Store.all('attendance').forEach(function (r) {
+        if (r.id_atlet === athlete.id_atlet && r.tipe === 'atlet') map[Utils.monthKey(r.tanggal)] = true;
+      });
+      var current = select.value;
+      select.innerHTML = '<option value="">Semua bulan</option>' +
+        Object.keys(map).sort().reverse().map(function (m) {
+          return '<option value="' + m + '">' + Utils.esc(Utils.fmtDate(m + '-01', true)) + '</option>';
+        }).join('');
+      if (current && map[current]) select.value = current;
+    }
+
+    function render() {
+      var bulan = page.querySelector('#kh-bulan').value;
+      var status = page.querySelector('#kh-status').value;
+
+      var rows = Store.where('attendance', function (r) {
+        if (r.id_atlet !== athlete.id_atlet) return false;
+        if (r.tipe && r.tipe !== 'atlet') return false;
+        if (bulan && Utils.monthKey(r.tanggal) !== bulan) return false;
+        if (status && r.status !== status) return false;
+        return true;
+      });
+      rows = Utils.sortBy(rows, 'tanggal', 'desc');
+
+      // lokasi & program berasal dari absensi asisten yang mencantumkan atlet ini
+      var lokasiProgram = {};
+      Store.all('absensi_asisten').forEach(function (r) {
+        if (!r || (r.atlet || []).indexOf(athlete.id_atlet) === -1) return;
+        lokasiProgram[r.tanggal] = { lokasi: r.lokasi || '', program: r.program || '' };
+      });
+
+      var total = rows.length;
+      var c = { Hadir: 0, Izin: 0, Sakit: 0, 'Tidak Hadir': 0 };
+      rows.forEach(function (r) {
+        if (c[r.status] !== undefined) c[r.status]++;
+      });
+      var persen = Utils.pct(c.Hadir, total);
+
+      page.querySelector('#kh-ringkas').innerHTML =
+        '<div class="stat-grid" style="grid-template-columns:repeat(auto-fit,minmax(140px,1fr))">' +
+        UI.statCard('Total Latihan', total, bulan ? 'bulan terpilih' : 'seluruh periode', 'clipboard', 'primary') +
+        UI.statCard('Hadir', c.Hadir, persen + '% kehadiran', 'check', 'ok') +
+        UI.statCard('Izin', c.Izin, 'tidak hadir dengan izin', 'info', 'blue') +
+        UI.statCard('Sakit', c.Sakit, 'tidak hadir karena sakit', 'alert', 'warn') +
+        UI.statCard('Alpa', c['Tidak Hadir'], 'tidak hadir tanpa keterangan', 'alert', 'danger') +
+        '</div>';
+
+      var host = page.querySelector('#kh-list');
+      if (!rows.length) {
+        host.innerHTML = UI.emptyState('Belum ada data kehadiran.', 'calendar');
+        return;
+      }
+      host.innerHTML = '<div class="table-wrap"><table class="table"><thead><tr>' +
+        '<th>Tanggal</th><th>Lokasi Latihan</th><th>Program</th><th>Status</th><th>Keterangan</th>' +
+        '</tr></thead><tbody>' +
+        rows.map(function (r) {
+          var lp = lokasiProgram[r.tanggal] || {};
+          return '<tr>' +
+            '<td>' + Utils.fmtDate(r.tanggal, true) + '</td>' +
+            '<td class="small">' + Utils.esc(lp.lokasi || '-') + '</td>' +
+            '<td class="small">' + Utils.esc(lp.program || '-') + '</td>' +
+            '<td>' + UI.statusBadge(r.status === 'Tidak Hadir' ? 'Tidak Hadir' : r.status) +
+            (r.status === 'Tidak Hadir' ? ' <span class="small muted">(Alpa)</span>' : '') + '</td>' +
+            '<td class="small">' + Utils.esc(r.catatan || '-') + '</td>' +
+            '</tr>';
+        }).join('') + '</tbody></table></div>' +
+        '<p class="small muted mt-2">Data kehadiran diinput oleh asisten pelatih dan pelatih kepala. ' +
+        'Halaman ini bersifat baca-saja.</p>';
+    }
+
+    fillBulan();
+    render();
+
+    page.addEventListener('change', function (e) {
+      if (e.target.id === 'kh-bulan' || e.target.id === 'kh-status') render();
+    });
+
+    app.subscribe('attendance', function () {
+      fillBulan();
+      render();
+    });
+    app.subscribe('absensi_asisten', render);
+  }
+
   function register() {
     App.register('tes-saya', {
       title: 'Hasil Tes Kondisi Fisik',
       subtitle: 'Perbandingan hasil tes antar periode',
       render: tesSaya
     });
+    App.register('kehadiran-saya', {
+      title: 'Kehadiran Saya',
+      subtitle: 'Rekap kehadiran latihan Anda',
+      render: kehadiranSaya
+    });
     App.register('hasil-pertandingan', {
       title: 'Hasil Pertandingan',
       subtitle: 'Riwayat pertandingan Anda',
       render: hasilPertandingan
+    });
+    App.register('riwayat-pembayaran', {
+      title: 'Riwayat Pembayaran',
+      subtitle: 'Rekap pembayaran Anda',
+      render: riwayatPembayaran
     });
     App.register('profil', {
       title: 'Profil Atlet',

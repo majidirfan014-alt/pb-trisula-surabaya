@@ -181,6 +181,15 @@ var Utils = (function () {
     });
   }
 
+  // Simpan hasil kompresi foto ke penyimpanan cloud bila tersedia,
+  // kalau tidak, pakai data URL lokal sebagai cadangan.
+  function keCloud(dataUrl, folder, nama) {
+    if (typeof Cloud === 'undefined' || !Cloud || !Cloud.unggahAtauLokal) {
+      return Promise.resolve(dataUrl);
+    }
+    return Cloud.unggahAtauLokal(dataUrl, folder, nama);
+  }
+
   function formData(form) {
     var out = {};
     var elements = form.querySelectorAll('input, select, textarea');
@@ -293,6 +302,7 @@ var Utils = (function () {
     debounce: debounce,
     toast: toast,
     readImage: readImage,
+    keCloud: keCloud,
     formData: formData,
     showErrors: showErrors,
     clearErrors: clearErrors,

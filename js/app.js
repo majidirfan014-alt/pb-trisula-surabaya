@@ -18,19 +18,23 @@ var App = (function () {
       { id: 'monitoring', label: 'Monitoring', short: 'Monitoring', icon: 'chart', bottom: true },
       { id: 'pertandingan', label: 'Pertandingan', short: 'Pertandingan', icon: 'trophy', bottom: true },
       { id: 'pengguna', label: 'Pengguna', short: 'Pengguna', icon: 'settings' },
-      { id: 'landing-page', label: 'Landing Page', short: 'Landing', icon: 'eye' }
+      { id: 'landing-page', label: 'Landing Page', short: 'Landing', icon: 'eye' },
+      { id: 'setting', label: 'Setting', short: 'Setting', icon: 'settings' }
     ],
     asisten: [
       { id: 'beranda', label: 'Beranda', short: 'Beranda', icon: 'home', bottom: true },
       { id: 'absensi', label: 'Absensi Kehadiran', short: 'Absensi', icon: 'calendar', bottom: true },
       { id: 'logbook-harian', label: 'Logbook Harian', short: 'Logbook', icon: 'clipboard', bottom: true },
-      { id: 'input-pertandingan', label: 'Input Pertandingan', short: 'Pertandingan', icon: 'trophy', bottom: true }
+      { id: 'input-pertandingan', label: 'Input Pertandingan', short: 'Pertandingan', icon: 'trophy', bottom: true },
+      { id: 'profil-asisten', label: 'Profil Saya', short: 'Profil', icon: 'user', bottom: true }
     ],
     atlet: [
       { id: 'beranda', label: 'Perkembangan', short: 'Perkembangan', icon: 'chart', bottom: true },
+      { id: 'kehadiran-saya', label: 'Kehadiran Saya', short: 'Hadir', icon: 'calendar', bottom: true },
       { id: 'monitoring-saya', label: 'Monitoring', short: 'Monitoring', icon: 'chart', bottom: true },
       { id: 'tes-saya', label: 'Hasil Tes Kondisi Fisik', short: 'Tes Fisik', icon: 'activity', bottom: true },
       { id: 'hasil-pertandingan', label: 'Hasil Pertandingan', short: 'Pertandingan', icon: 'trophy', bottom: true },
+      { id: 'riwayat-pembayaran', label: 'Riwayat Pembayaran', short: 'Bayar', icon: 'save', bottom: true },
       { id: 'profil', label: 'Profil Atlet', short: 'Profil', icon: 'user', bottom: true }
     ]
   };
@@ -40,8 +44,32 @@ var App = (function () {
     routes[id] = def;
   }
 
+  // Menu role Pelatih Kepala dapat diubah lewat menu Setting (koleksi menu_config).
+  // Bila belum pernah diatur, memakai susunan default dari CONFIG.MENU_ADMIN_DEFAULT.
+  function menuConfig() {
+    var simpan = Store.all('menu_config');
+    if (!simpan.length) {
+      return (CONFIG.MENU_ADMIN_DEFAULT || []).filter(function (m) {
+        return m.aktif !== false;
+      });
+    }
+    return Utils.sortBy(simpan.filter(function (m) {
+      return m && m.aktif;
+    }), 'urutan', 'asc').map(function (m) {
+      return {
+        id: m.id,
+        label: m.label,
+        short: m.short || m.label,
+        icon: m.icon || 'info',
+        bottom: !!m.bottom,
+        urutan: m.urutan
+      };
+    });
+  }
+
   function menus() {
-    return MENUS[user.role] || [];
+    if (user && user.role === 'pelatih_kepala') return menuConfig();
+    return MENUS[(user && user.role)] || [];
   }
 
   function menuById(id) {
@@ -333,6 +361,17 @@ var App = (function () {
     PagesAthlete.register();
     if (typeof PagesLanding !== 'undefined' && PagesLanding && PagesLanding.register) PagesLanding.register();
     if (typeof PagesMonitoring !== 'undefined' && PagesMonitoring && PagesMonitoring.register) PagesMonitoring.register();
+
+    // Simpan foto ke penyimpanan cloud & sinkronkan data antar perangkat.
+    if (typeof Cloud !== 'undefined' && Cloud && Cloud.init) {
+      Cloud.init().then(function () {
+        if (Cloud.siap && Cloud.siap() && Cloud.migrasiFotoLama) {
+          Cloud.migrasiFotoLama().then(function (hasil) {
+            if (hasil && hasil.total) Utils.toast(hasil.pesan, 'success');
+          }, function () {});
+        }
+      }, function () {});
+    }
 
     App.register('beranda', {
       title: user.role === 'atlet' ? 'Perkembangan Saya' : 'Beranda',

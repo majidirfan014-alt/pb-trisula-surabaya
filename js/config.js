@@ -76,6 +76,31 @@ var CONFIG = {
   },
   STATUS_KEHADIRAN: ['Hadir', 'Izin', 'Sakit', 'Tidak Hadir'],
   GENDER: ['Laki-laki', 'Perempuan'],
+  AGAMA: ['Islam', 'Kristen', 'Katolik', 'Hindu', 'Buddha', 'Konghucu', 'Lainnya'],
+  KATEGORI_PEMBAYARAN: ['SPP', 'Pertandingan', 'Persahabatan'],
+  STATUS_PEMBAYARAN: [
+    { value: 'lunas', label: 'Lunas' },
+    { value: 'belum', label: 'Belum Lunas' }
+  ],
+  // Daftar ikon yang bisa dipilih untuk menu admin
+  ICON_MENU: ['home', 'users', 'calendar', 'activity', 'clipboard', 'trophy', 'chart',
+    'target', 'settings', 'user', 'star', 'eye', 'info', 'alert', 'save', 'refresh',
+    'search', 'menu', 'check', 'x', 'logout', 'edit', 'trash', 'plus', 'close', 'arrowLeft'],
+  // Susunan menu default role Pelatih Kepala / Admin.
+  // Disalin ke koleksi "menu_config" saat pertama kali dipakai, lalu bisa
+  // diubah dari menu Setting (nama, ikon, urutan, tampil/sembunyi, hapus).
+  MENU_ADMIN_DEFAULT: [
+    { id: 'beranda', label: 'Beranda', short: 'Beranda', icon: 'home', bottom: true, urutan: 1, aktif: true },
+    { id: 'daftar-atlet', label: 'Daftar Atlet', short: 'Atlet', icon: 'users', bottom: false, urutan: 2, aktif: true },
+    { id: 'kehadiran', label: 'Kehadiran', short: 'Kehadiran', icon: 'calendar', bottom: true, urutan: 3, aktif: true },
+    { id: 'tes-fisik', label: 'Tes Fisik', short: 'Tes Fisik', icon: 'activity', bottom: false, urutan: 4, aktif: true },
+    { id: 'logbook', label: 'Logbook', short: 'Logbook', icon: 'clipboard', bottom: true, urutan: 5, aktif: true },
+    { id: 'monitoring', label: 'Monitoring', short: 'Monitoring', icon: 'chart', bottom: true, urutan: 6, aktif: true },
+    { id: 'pertandingan', label: 'Pertandingan', short: 'Pertandingan', icon: 'trophy', bottom: true, urutan: 7, aktif: true },
+    { id: 'pengguna', label: 'Pengguna', short: 'Pengguna', icon: 'settings', bottom: false, urutan: 8, aktif: true },
+    { id: 'landing-page', label: 'Landing Page', short: 'Landing', icon: 'eye', bottom: false, urutan: 9, aktif: true },
+    { id: 'setting', label: 'Setting', short: 'Setting', icon: 'settings', bottom: false, urutan: 10, aktif: true, kunci: true }
+  ],
   ROLE_LABEL: {
     pelatih_kepala: 'Pelatih Kepala',
     asisten: 'Asisten Pelatih',

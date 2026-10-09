@@ -3861,6 +3861,141 @@ section[id],
   }
 }
 
+/* ============ Komponen tambahan: pendaftaran asisten, absensi, pembayaran ============ */
+.upload-loading {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px;
+  border: 1px dashed var(--primary-200, var(--primary-100));
+  border-radius: var(--radius-sm);
+  background: var(--primary-50);
+  color: var(--primary-800);
+  font-size: 0.9rem;
+  font-weight: 700;
+}
+
+.upload-loading::before {
+  content: "";
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  border: 3px solid var(--primary-100);
+  border-top-color: var(--primary-700);
+  animation: putar 0.8s linear infinite;
+}
+
+@keyframes putar {
+  to { transform: rotate(360deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .upload-loading::before { animation: none; }
+}
+
+.file-preview {
+  margin-top: 8px;
+}
+
+.file-chip {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--bg);
+}
+
+.file-chip img {
+  width: 68px;
+  height: 68px;
+  object-fit: cover;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+}
+
+.multi-pilih {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.chip-pilih {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 13px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: #fff;
+  cursor: pointer;
+  font-size: 0.9rem;
+  font-weight: 600;
+  transition: background 0.2s ease, border-color 0.2s ease;
+  user-select: none;
+}
+
+.chip-pilih input[type="checkbox"] {
+  accent-color: var(--primary-700);
+  width: 16px;
+  height: 16px;
+}
+
+.chip-pilih:hover {
+  border-color: var(--primary-500);
+  background: var(--primary-50);
+}
+
+.switch {
+  width: 44px;
+  height: 24px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: #cbd5e1;
+  cursor: pointer;
+  position: relative;
+  padding: 0;
+  flex-shrink: 0;
+  transition: background 0.22s ease, border-color 0.22s ease;
+}
+
+.switch .switch-knob {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.3);
+  transition: transform 0.22s ease;
+}
+
+.switch.on {
+  background: var(--primary-700);
+  border-color: var(--primary-700);
+}
+
+.switch.on .switch-knob {
+  transform: translateX(20px);
+}
+
+.switch:focus-visible {
+  outline: 2px solid var(--primary-500);
+  outline-offset: 2px;
+}
+
+#tab-daftar {
+  margin-bottom: 4px;
+}
+
+@media (max-width: 640px) {
+  .file-chip img { width: 52px; height: 52px; }
+  .chip-pilih { font-size: 0.84rem; padding: 7px 11px; }
+}
+
 /* ============ Kemajuan (persentase Teknik & Fisik, tanpa grafik) ============ */
 .ku-ringkas {
   display: flex;

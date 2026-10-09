@@ -250,19 +250,23 @@ var PagesLanding = (function () {
     if (!file) return;
     var key = input.getAttribute('data-lp-file');
     input.value = '';
+    Utils.toast('Mengunggah foto...', 'info');
     LandingStore.bacaFoto(file).then(function (f) {
-      var d = ambil();
-      if (key === 'logo') {
-        d.merek.logo = f.data;
-      } else if (key.indexOf('kolase_') === 0) {
-        var i = parseInt(key.split('_')[1], 10);
-        if (!d.kolase[i]) d.kolase[i] = { file: '', caption: '', alt: '' };
-        d.kolase[i].file = f.data;
-        if (!d.kolase[i].caption) d.kolase[i].caption = f.nama.replace(/\.[^.]+$/, '');
-        if (!d.kolase[i].alt) d.kolase[i].alt = f.nama;
-      }
-      App.setDirty(true);
-      renderTab();
+      return Utils.keCloud(f.data, 'foto/landing', f.nama || file.name || 'foto.jpg').then(function (src) {
+        var d = ambil();
+        if (key === 'logo') {
+          d.merek.logo = src;
+        } else if (key.indexOf('kolase_') === 0) {
+          var i = parseInt(key.split('_')[1], 10);
+          if (!d.kolase[i]) d.kolase[i] = { file: '', caption: '', alt: '' };
+          d.kolase[i].file = src;
+          if (!d.kolase[i].caption) d.kolase[i].caption = f.nama.replace(/\.[^.]+$/, '');
+          if (!d.kolase[i].alt) d.kolase[i].alt = f.nama;
+        }
+        App.setDirty(true);
+        renderTab();
+        Utils.toast(/^https?:/.test(src) ? 'Foto tersimpan di cloud.' : 'Foto berhasil dipilih.', 'success');
+      });
     }).catch(function (err) {
       var slot = document.querySelector('[data-lp-error="' + key + '"]');
       if (slot) slot.textContent = err.message;
@@ -274,14 +278,17 @@ var PagesLanding = (function () {
     var files = Array.prototype.slice.call(input.files || []);
     if (!files.length) return;
     var d = ambil();
+    Utils.toast('Mengunggah ' + files.length + ' foto...', 'info');
     var janji = files.map(function (f) {
       return LandingStore.bacaFoto(f).then(function (res) {
-        d.galeri.push({
-          id: 'g' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
-          src: res.data,
-          judul: res.nama.replace(/\.[^.]+$/, ''),
-          keterangan: '',
-          kategori: 'Atlet'
+        return Utils.keCloud(res.data, 'foto/galeri', res.nama || f.name || 'galeri.jpg').then(function (src) {
+          d.galeri.push({
+            id: 'g' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
+            src: src,
+            judul: res.nama.replace(/\.[^.]+$/, ''),
+            keterangan: '',
+            kategori: 'Atlet'
+          });
         });
       }).catch(function (err) {
         Utils.toast(err.message, 'danger');
@@ -290,6 +297,7 @@ var PagesLanding = (function () {
     Promise.all(janji).then(function () {
       App.setDirty(true);
       renderTab();
+      Utils.toast('Foto galeri berhasil ditambahkan.', 'success');
     });
     input.value = '';
   }

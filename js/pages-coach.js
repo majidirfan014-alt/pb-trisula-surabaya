@@ -97,10 +97,23 @@ var PagesCoach = (function () {
       photoInput.addEventListener('change', function () {
         var file = photoInput.files && photoInput.files[0];
         if (!file) return;
+        var pesanSalah = (typeof Cloud !== 'undefined' && Cloud && Cloud.validasiGambar)
+          ? Cloud.validasiGambar(file, 5 * 1024 * 1024) : '';
+        if (pesanSalah) {
+          Utils.toast(pesanSalah, 'danger');
+          photoInput.value = '';
+          return;
+        }
+        if (photoPreview) photoPreview.innerHTML = '<div class="upload-loading">Mengunggah foto...</div>';
         Utils.readImage(file, 256).then(function (dataUrl) {
-          photoData = dataUrl;
-          if (photoPreview) photoPreview.innerHTML = UI.avatar({ nama: 'Foto', foto: dataUrl }, 56);
+          return Utils.keCloud(dataUrl, 'foto/atlet', file.name || 'foto-atlet.jpg');
+        }).then(function (hasil) {
+          photoData = hasil;
+          if (photoPreview) photoPreview.innerHTML = UI.avatar({ nama: 'Foto', foto: hasil }, 56);
+          Utils.toast(/^https?:/.test(hasil) ? 'Foto tersimpan di cloud.' : 'Foto siap disimpan.', 'success');
         }).catch(function (err) {
+          photoData = athlete && athlete.foto ? athlete.foto : '';
+          if (photoPreview) photoPreview.innerHTML = photoData ? UI.avatar({ nama: 'Foto', foto: photoData }, 56) : '';
           Utils.toast(err.message, 'danger');
           photoInput.value = '';
         });
@@ -280,6 +293,144 @@ var PagesCoach = (function () {
     }
   }
 
+  // Riwayat pembayaran per atlet: SPP / Pertandingan / Persahabatan.
+  // Ditampilkan dalam satu modal: form tambah/edit di atas, daftar di bawah.
+  function bukaPembayaran(idAtlet) {
+    var a = UI.athleteById(idAtlet);
+    if (!a) return;
+    var editId = null;
+
+    function totalHtml(rows) {
+      var lunas = 0, belum = 0;
+      rows.forEach(function (r) {
+        var n = Number(r.nominal) || 0;
+        if (r.status === 'lunas') lunas += n;
+        else belum += n;
+      });
+      return '<div class="stat-grid" style="grid-template-columns:repeat(3,1fr)">' +
+        UI.statCard('Total Entri', rows.length, 'semua kategori', 'clipboard', 'primary') +
+        UI.statCard('Sudah Lunas', 'Rp ' + Utils.fmtNumber(lunas, 0), 'pembayaran lunas', 'check', 'ok') +
+        UI.statCard('Belum Lunas', 'Rp ' + Utils.fmtNumber(belum, 0), 'perlu ditindaklanjuti', 'alert', 'warn') +
+        '</div>';
+    }
+
+    function listHtml() {
+      var rows = Utils.sortBy(Store.where('pembayaran', function (r) {
+        return r.id_atlet === idAtlet;
+      }), 'tanggal', 'desc');
+      if (!rows.length) return UI.emptyState('Belum ada riwayat pembayaran.', 'save');
+      return totalHtml(rows) +
+        '<div class="table-wrap"><table class="table"><thead><tr>' +
+        '<th>Tanggal</th><th>Kategori</th><th class="align-right">Nominal</th><th>Keterangan</th><th>Status</th><th class="align-center">Aksi</th>' +
+        '</tr></thead><tbody>' +
+        rows.map(function (r) {
+          return '<tr>' +
+            '<td>' + Utils.fmtDate(r.tanggal, true) + '</td>' +
+            '<td>' + UI.badge(r.kategori, 'primary') + '</td>' +
+            '<td class="align-right fw-bold">Rp ' + Utils.fmtNumber(Number(r.nominal) || 0, 0) + '</td>' +
+            '<td class="small">' + Utils.esc(r.keterangan || '-') + '</td>' +
+            '<td>' + (r.status === 'lunas' ? UI.badge('Lunas', 'ok') : UI.badge('Belum Lunas', 'warn')) + '</td>' +
+            '<td class="align-center"><div class="flex gap-1" style="justify-content:center">' +
+            '<button type="button" class="btn btn-sm btn-secondary" data-bayar-edit="' + Utils.esc(r.id) + '">Edit</button>' +
+            '<button type="button" class="btn btn-sm btn-danger" data-bayar-hapus="' + Utils.esc(r.id) + '">Hapus</button>' +
+            '</div></td></tr>';
+        }).join('') + '</tbody></table></div>';
+    }
+
+    function formHtml() {
+      return '<form id="form-bayar" novalidate class="mb-2">' +
+        '<div class="form-grid cols-2">' +
+        UI.field({ name: 'tanggal', label: 'Tanggal', type: 'date', required: true, value: Utils.todayISO() }) +
+        UI.field({ name: 'kategori', label: 'Kategori', type: 'select', required: true, value: 'SPP', options: CONFIG.KATEGORI_PEMBAYARAN }) +
+        UI.field({ name: 'nominal', label: 'Nominal (Rp)', type: 'number', required: true, min: 0, step: '1000', placeholder: 'contoh: 150000' }) +
+        UI.field({ name: 'status', label: 'Status', type: 'select', value: 'lunas', options: CONFIG.STATUS_PEMBAYARAN }) +
+        UI.field({ name: 'keterangan', label: 'Keterangan', placeholder: 'Opsional, contoh: SPP Oktober' }) +
+        '</div>' +
+        '<div class="flex gap-1 flex-wrap">' +
+        '<button class="btn" type="submit">' + UI.icon('save', 20) + ' Simpan Pembayaran</button>' +
+        '<button type="button" class="btn btn-ghost" data-bayar-batal>Batal</button>' +
+        '</div></form>';
+    }
+
+    function render() {
+      document.getElementById('m-bayar-body').innerHTML = formHtml() +
+        '<h4 class="mt-2">Riwayat Pembayaran</h4>' + listHtml();
+      var form = document.getElementById('form-bayar');
+      if (editId) {
+        var r = Store.find('pembayaran', editId);
+        if (r) {
+          form.querySelector('[name="tanggal"]').value = r.tanggal || '';
+          form.querySelector('[name="kategori"]').value = r.kategori || 'SPP';
+          form.querySelector('[name="nominal"]').value = r.nominal === undefined ? '' : r.nominal;
+          form.querySelector('[name="status"]').value = r.status || 'lunas';
+          form.querySelector('[name="keterangan"]').value = r.keterangan || '';
+        }
+      }
+      UI.bindSubmit(form, function () {
+        Utils.clearErrors(form);
+        var d = Utils.formData(form);
+        var errors = {};
+        if (!d.tanggal) errors.tanggal = 'Tanggal wajib diisi.';
+        if (!d.kategori) errors.kategori = 'Kategori wajib dipilih.';
+        if (d.nominal === '' || isNaN(Number(d.nominal)) || Number(d.nominal) < 0) errors.nominal = 'Nominal tidak valid.';
+        if (Object.keys(errors).length) {
+          Utils.showErrors(form, errors);
+          Utils.toast('Mohon lengkapi isian yang ditandai.', 'danger');
+          return;
+        }
+        var payload = {
+          id_atlet: idAtlet,
+          tanggal: d.tanggal,
+          kategori: d.kategori,
+          nominal: Number(d.nominal),
+          keterangan: d.keterangan || '',
+          status: d.status === 'lunas' ? 'lunas' : 'belum'
+        };
+        if (editId) {
+          Store.update('pembayaran', editId, payload);
+          Utils.toast('Pembayaran berhasil diperbarui.', 'success');
+        } else {
+          Store.insert('pembayaran', payload);
+          Utils.toast('Pembayaran berhasil ditambahkan.', 'success');
+        }
+        editId = null;
+        render();
+      });
+    }
+
+    document.getElementById('modal-host').innerHTML =
+      UI.modalShell('m-bayar', 'Riwayat Pembayaran - ' + a.nama,
+        UI.backButton({ closeModal: 'm-bayar' }) + '<div id="m-bayar-body"></div>',
+        '<button type="button" class="btn btn-ghost" data-back-close="m-bayar">Tutup</button>');
+    UI.openModal('m-bayar');
+    render();
+
+    var host = document.getElementById('m-bayar');
+    host.addEventListener('click', function (e) {
+      var edit = e.target.closest('[data-bayar-edit]');
+      if (edit) {
+        editId = edit.getAttribute('data-bayar-edit');
+        render();
+        return;
+      }
+      var hapus = e.target.closest('[data-bayar-hapus]');
+      if (hapus) {
+        UI.confirmDialog('Data pembayaran ini akan dihapus. Lanjutkan?', 'Konfirmasi Hapus').then(function (ok) {
+          if (!ok) return;
+          Store.remove('pembayaran', hapus.getAttribute('data-bayar-hapus'));
+          if (editId === hapus.getAttribute('data-bayar-hapus')) editId = null;
+          Utils.toast('Data pembayaran dihapus.', 'success');
+          render();
+        });
+        return;
+      }
+      if (e.target.closest('[data-bayar-batal]')) {
+        editId = null;
+        render();
+      }
+    });
+  }
+
   function daftarAtlet(root, user, app) {
     root.innerHTML =
       '<div class="page">' +
@@ -292,6 +443,11 @@ var PagesCoach = (function () {
       CONFIG.GENDER.map(function (g) { return '<option value="' + Utils.esc(g) + '">' + Utils.esc(g) + '</option>'; }).join('') +
       '</select>' +
       '<select class="input" id="filter-sekolah" style="max-width:220px"><option value="">Semua sekolah</option></select>' +
+      '<select class="input" id="filter-status" style="max-width:180px" aria-label="Filter status">' +
+      '<option value="">Semua status</option>' +
+      '<option value="aktif">Aktif</option>' +
+      '<option value="nonaktif">Non-Aktif</option>' +
+      '</select>' +
       '</div>' +
       '<div id="daftar-atlet-list"></div>' +
       '</div></div>';
@@ -317,9 +473,11 @@ var PagesCoach = (function () {
       var q = page.querySelector('#filter-cari').value.trim().toLowerCase();
       var jk = page.querySelector('#filter-jk').value;
       var sekolah = page.querySelector('#filter-sekolah').value;
+      var status = page.querySelector('#filter-status').value;
       var rows = Store.all('athletes').filter(function (a) {
         if (jk && a.jk !== jk) return false;
         if (sekolah && a.sekolah !== sekolah) return false;
+        if (status && (a.status || 'aktif') !== status) return false;
         if (q && (a.nama || '').toLowerCase().indexOf(q) === -1 && (a.id_atlet || '').toLowerCase().indexOf(q) === -1) return false;
         return true;
       });
@@ -339,10 +497,16 @@ var PagesCoach = (function () {
             '<td>' + Utils.esc(a.bmi) + '<div class="small muted">' + Utils.esc(a.kategori_bmi) + '</div></td>' +
             '<td>' + Utils.esc(a.sekolah) + '</td>' +
             '<td>' + (rate === null ? '-' : rate + '%') + '</td>' +
-            '<td>' + UI.statusBadge(a.status) + '</td>' +
+            '<td><div class="flex items-center gap-1">' +
+            '<button type="button" class="switch' + ((a.status || 'aktif') === 'aktif' ? ' on' : '') + '"' +
+            ' role="switch" aria-checked="' + ((a.status || 'aktif') === 'aktif') + '"' +
+            ' data-toggle-status="' + Utils.esc(a.id_atlet) + '"' +
+            ' aria-label="Status atlet ' + Utils.esc(a.nama) + '"><span class="switch-knob"></span></button>' +
+            UI.statusBadge(a.status || 'aktif') + '</div></td>' +
             '<td class="align-center"><div class="flex gap-1" style="justify-content:center">' +
             '<button type="button" class="btn btn-sm btn-ghost" data-detail-atlet="' + Utils.esc(a.id_atlet) + '">Detail</button>' +
             '<button type="button" class="btn btn-sm btn-secondary" data-edit-atlet="' + Utils.esc(a.id_atlet) + '">Edit</button>' +
+            '<button type="button" class="btn btn-sm" data-bayar-atlet="' + Utils.esc(a.id_atlet) + '">Bayar</button>' +
             '<button type="button" class="btn btn-sm btn-danger" data-delete-atlet="' + Utils.esc(a.id_atlet) + '">Hapus</button>' +
             '</div></td></tr>';
         }).join('') +
@@ -360,12 +524,29 @@ var PagesCoach = (function () {
       if (e.target.id === 'filter-cari') refresh();
     }, 180));
     page.addEventListener('change', function (e) {
-      if (e.target.id === 'filter-cari' || e.target.id === 'filter-jk' || e.target.id === 'filter-sekolah') refresh();
+      if (e.target.id === 'filter-cari' || e.target.id === 'filter-jk' ||
+        e.target.id === 'filter-sekolah' || e.target.id === 'filter-status') refresh();
     });
 
     page.addEventListener('click', function (e) {
       if (e.target.closest('[data-add-atlet]')) {
         openAthleteForm(null);
+        return;
+      }
+      var toggle = e.target.closest('[data-toggle-status]');
+      if (toggle) {
+        var idToggle = toggle.getAttribute('data-toggle-status');
+        var atletToggle = UI.athleteById(idToggle);
+        if (!atletToggle) return;
+        var baru = (atletToggle.status || 'aktif') === 'aktif' ? 'nonaktif' : 'aktif';
+        Store.update('athletes', atletToggle.id, { status: baru });
+        UI.toast('Status atlet diubah menjadi ' + baru + '.', 'success');
+        refresh();
+        return;
+      }
+      var bayar = e.target.closest('[data-bayar-atlet]');
+      if (bayar) {
+        bukaPembayaran(bayar.getAttribute('data-bayar-atlet'));
         return;
       }
       var detail = e.target.closest('[data-detail-atlet]');
@@ -405,49 +586,36 @@ var PagesCoach = (function () {
   function kehadiran(root, user, app) {
     root.innerHTML =
       '<div class="page">' +
-      UI.pageHeader('Kehadiran', 'Pantau kehadiran atlet dan asisten pelatih. Input dilakukan oleh asisten pelatih.') +
+      UI.pageHeader('Kehadiran', 'Pantau kehadiran atlet dan jurnal asisten pelatih.') +
       '<div class="card">' +
-      UI.tabs([{ id: 'hari', label: 'Hari Ini' }, { id: 'bulan', label: 'Rekap Bulanan' }], 'hari') +
-      '<div class="filter-bar">' +
-      '<input class="input" type="date" id="kh-tanggal" style="max-width:220px">' +
-      '<select class="input" id="kh-bulan" style="max-width:220px" hidden></select>' +
+      '<div class="tabs" role="tablist" id="kh-jurnal">' +
+      '<button type="button" class="tab active" data-jurnal="atlet" role="tab">Jurnal Kehadiran Atlet</button>' +
+      '<button type="button" class="tab" data-jurnal="asisten" role="tab">Jurnal Kehadiran Asisten Pelatih</button>' +
       '</div>' +
-      '<div id="kh-body"></div>' +
+      '<div id="kh-jurnal-isi"></div>' +
       '</div></div>';
 
     var page = root.querySelector('.page');
-    var body = page.querySelector('#kh-body');
-    var tanggalInput = page.querySelector('#kh-tanggal');
-    var bulanSelect = page.querySelector('#kh-bulan');
-    var mode = 'hari';
-    tanggalInput.value = Utils.todayISO();
+    var isi = page.querySelector('#kh-jurnal-isi');
+    var jurnal = 'atlet';
+    var modeAtlet = 'hari';
 
-    function fillMonths() {
-      var current = bulanSelect.value;
-      var map = {};
-      Store.all('attendance').forEach(function (r) {
-        map[Utils.monthKey(r.tanggal)] = true;
-      });
-      map[Utils.monthKey(Utils.todayISO())] = true;
-      var keys = Object.keys(map).sort().reverse();
-      bulanSelect.innerHTML = keys.map(function (m) {
-        return '<option value="' + m + '">' + Utils.esc(Utils.fmtDate(m + '-01', true)) + '</option>';
-      }).join('');
-      if (current && map[current]) bulanSelect.value = current;
+    /* ---------- JURNAL KEHADIRAN ATLET (fitur lama) ---------- */
+    function renderAtlet() {
+      return '<div class="filter-bar">' +
+        UI.tabs([{ id: 'hari', label: 'Hari Ini' }, { id: 'bulan', label: 'Rekap Bulanan' }], modeAtlet) +
+        '<input class="input" type="date" id="kh-tanggal" style="max-width:220px"' + (modeAtlet === 'hari' ? '' : ' hidden') + '>' +
+        '<select class="input" id="kh-bulan" style="max-width:220px"' + (modeAtlet === 'bulan' ? '' : ' hidden') + '></select>' +
+        '</div>' +
+        '<div id="kh-body"></div>';
     }
-    fillMonths();
 
-    function renderHari() {
-      var tgl = tanggalInput.value || Utils.todayISO();
+    function renderHari(tgl) {
       var athletes = Shared.activeAthletes();
       var s = Shared.attendanceSummary(tgl);
-      var asistenRows = Store.where('attendance', function (r) {
-        return r.tanggal === tgl && r.tipe === 'asisten';
-      });
-
       var html = '<div class="stat-grid" style="grid-template-columns:repeat(2,1fr)">' +
         UI.statCard('Total Hadir', s.Hadir + ' / ' + s.total, s.persen + '% kehadiran', 'check', 'ok') +
-        UI.statCard('Izin / Sakit / Absen', (s.Izin + s.Sakit + s['Tidak Hadir']) + ' atlet', s.Izin + ' izin · ' + s.Sakit + ' sakit · ' + s['Tidak Hadir'] + ' absen', 'alert', 'warn') +
+        UI.statCard('Izin / Sakit / Absen', (s.Izin + s.Sakit + s['Tidak Hadir']) + ' atlet', s.Izin + ' izin / ' + s.Sakit + ' sakit / ' + s['Tidak Hadir'] + ' absen', 'alert', 'warn') +
         '</div>';
 
       if (!athletes.length) {
@@ -460,39 +628,24 @@ var PagesCoach = (function () {
         var rec = Shared.attendanceFor(tgl, a.id_atlet);
         html += '<div class="attendance-item">' +
           '<div class="attendance-head">' + UI.avatar(a, 42) +
-          '<div class="grow"><b>' + Utils.esc(a.nama) + '</b><span>' + Utils.esc(a.id_atlet) + ' · ' + Utils.esc(a.sekolah) + '</span></div>' +
+          '<div class="grow"><b>' + Utils.esc(a.nama) + '</b><span>' + Utils.esc(a.id_atlet) + ' / ' + Utils.esc(a.sekolah) + '</span></div>' +
           (rec ? UI.statusBadge(rec.status) : UI.badge('Belum diabsen', 'muted')) +
           '</div>' +
           (rec ? '<div class="small muted">Diinput oleh ' + Utils.esc(UI.userName(rec.input_oleh)) +
-            (rec.catatan ? ' · ' + Utils.esc(rec.catatan) : '') + '</div>' : '<div class="small muted">Belum ada catatan untuk tanggal ini.</div>') +
+            (rec.catatan ? ' / ' + Utils.esc(rec.catatan) : '') + '</div>' : '<div class="small muted">Belum ada catatan untuk tanggal ini.</div>') +
           '</div>';
       });
       html += '</div>';
-
-      html += '<h4 class="mt-3">Kehadiran Asisten Pelatih</h4>';
-      if (asistenRows.length) {
-        html += '<div class="list-rows">' + asistenRows.map(function (r) {
-          var u = Store.find('users', r.id_pengguna);
-          return '<div class="list-row"><div class="grow"><b>' + Utils.esc(u ? u.nama : '-') + '</b>' +
-            '<span>Masuk ' + Utils.esc(r.jam_masuk || '-') + ' · Pulang ' + Utils.esc(r.jam_pulang || '-') + '</span></div>' +
-            UI.statusBadge(r.status) + '</div>';
-        }).join('') + '</div>';
-      } else {
-        html += UI.emptyState('Belum ada absensi asisten pelatih.', 'user');
-      }
       return html;
     }
 
-    function renderBulan() {
-      var key = bulanSelect.value;
+    function renderBulan(key) {
       var athletes = Shared.activeAthletes();
       if (!athletes.length) return UI.emptyState('Belum ada atlet terdaftar.', 'users');
-
       var html = '<div class="table-wrap"><table class="table"><thead><tr>' +
         '<th>Atlet</th><th class="align-center">Hadir</th><th class="align-center">Izin</th><th class="align-center">Sakit</th>' +
         '<th class="align-center">Tidak Hadir</th><th class="align-center">Total</th><th class="align-center">Persen</th>' +
         '</tr></thead><tbody>';
-
       athletes.forEach(function (a) {
         var rows = Store.where('attendance', function (r) {
           return r.id_atlet === a.id_atlet && r.tipe === 'atlet' && Utils.monthKey(r.tanggal) === key;
@@ -517,30 +670,147 @@ var PagesCoach = (function () {
       return html;
     }
 
+    function fillMonths(selectEl) {
+      var current = selectEl.value;
+      var map = {};
+      Store.all('attendance').forEach(function (r) {
+        map[Utils.monthKey(r.tanggal)] = true;
+      });
+      map[Utils.monthKey(Utils.todayISO())] = true;
+      var keys = Object.keys(map).sort().reverse();
+      selectEl.innerHTML = keys.map(function (m) {
+        return '<option value="' + m + '">' + Utils.esc(Utils.fmtDate(m + '-01', true)) + '</option>';
+      }).join('');
+      if (current && map[current]) selectEl.value = current;
+    }
+
+    function refreshAtlet() {
+      var body = isi.querySelector('#kh-body');
+      if (!body) return;
+      var tanggalInput = isi.querySelector('#kh-tanggal');
+      var bulanSelect = isi.querySelector('#kh-bulan');
+      if (modeAtlet === 'hari') {
+        body.innerHTML = renderHari(tanggalInput.value || Utils.todayISO());
+      } else {
+        fillMonths(bulanSelect);
+        body.innerHTML = renderBulan(bulanSelect.value);
+      }
+    }
+
+    /* ---------- JURNAL KEHADIRAN ASISTEN PELATIH ---------- */
+    function renderAsisten() {
+      var namaAsisten = {};
+      Store.all('absensi_asisten').forEach(function (r) {
+        var u = Store.find('users', r.id_asisten);
+        namaAsisten[r.id_asisten] = (u && u.nama) || r.nama_asisten || r.id_asisten;
+      });
+      var lokasiList = {};
+      Store.all('absensi_asisten').forEach(function (r) {
+        if (r.lokasi) lokasiList[r.lokasi] = true;
+      });
+
+      var fTanggal = isi.querySelector('#ka-tanggal');
+      var fAsisten = isi.querySelector('#ka-asisten');
+      var fLokasi = isi.querySelector('#ka-lokasi');
+      var nilaiTanggal = fTanggal ? fTanggal.value : '';
+      var nilaiAsisten = fAsisten ? fAsisten.value : '';
+      var nilaiLokasi = fLokasi ? fLokasi.value : '';
+
+      var rows = Store.where('absensi_asisten', function (r) {
+        if (nilaiTanggal && r.tanggal !== nilaiTanggal) return false;
+        if (nilaiAsisten && r.id_asisten !== nilaiAsisten) return false;
+        if (nilaiLokasi && r.lokasi !== nilaiLokasi) return false;
+        return true;
+      });
+      rows = Utils.sortBy(rows, 'tanggal', 'desc');
+
+      var filterHtml = '<div class="filter-bar">' +
+        '<input class="input" type="date" id="ka-tanggal" style="max-width:200px" value="' + Utils.esc(nilaiTanggal) + '" aria-label="Filter tanggal">' +
+        '<select class="input" id="ka-asisten" style="max-width:220px" aria-label="Filter nama asisten">' +
+        '<option value="">Semua asisten</option>' +
+        Object.keys(namaAsisten).map(function (id) {
+          return '<option value="' + Utils.esc(id) + '"' + (nilaiAsisten === id ? ' selected' : '') + '>' + Utils.esc(namaAsisten[id]) + '</option>';
+        }).join('') +
+        '</select>' +
+        '<select class="input" id="ka-lokasi" style="max-width:220px" aria-label="Filter lokasi">' +
+        '<option value="">Semua lokasi</option>' +
+        Object.keys(lokasiList).sort().map(function (l) {
+          return '<option value="' + Utils.esc(l) + '"' + (nilaiLokasi === l ? ' selected' : '') + '>' + Utils.esc(l) + '</option>';
+        }).join('') +
+        '</select>' +
+        '<button type="button" class="btn btn-sm btn-ghost" data-reset-filter>Reset</button>' +
+        '</div>';
+
+      if (!rows.length) {
+        return filterHtml + UI.emptyState('Belum ada jurnal kehadiran asisten pelatih.', 'user');
+      }
+
+      return filterHtml +
+        '<div class="table-wrap"><table class="table"><thead><tr>' +
+        '<th>Asisten</th><th>Tanggal</th><th>Lokasi</th><th>Atlet yang Dilatih</th><th>Program</th>' +
+        '</tr></thead><tbody>' +
+        rows.map(function (r) {
+          var atlet = (r.atlet || []).map(function (id) {
+            var a = UI.athleteById(id);
+            return Utils.esc(a ? a.nama : id);
+          }).join(', ');
+          var u = Store.find('users', r.id_asisten);
+          return '<tr>' +
+            '<td><div class="flex items-center gap-1">' + UI.avatar(u || { nama: r.nama_asisten || '-' }, 34) +
+            '<b>' + Utils.esc((u && u.nama) || r.nama_asisten || '-') + '</b></div></td>' +
+            '<td>' + Utils.fmtDate(r.tanggal, true) + '</td>' +
+            '<td>' + Utils.esc(r.lokasi || '-') + '</td>' +
+            '<td class="small">' + (atlet || '-') + '</td>' +
+            '<td class="small">' + Utils.esc(r.program || '-') + '</td>' +
+            '</tr>';
+        }).join('') + '</tbody></table></div>';
+    }
+
     function refresh() {
-      if (mode === 'bulan') fillMonths();
-      body.innerHTML = mode === 'hari' ? renderHari() : renderBulan();
+      if (jurnal === 'atlet') {
+        isi.innerHTML = renderAtlet();
+        refreshAtlet();
+      } else {
+        isi.innerHTML = renderAsisten();
+      }
     }
 
     refresh();
 
     page.addEventListener('click', function (e) {
-      var tab = e.target.closest('[data-tab]');
-      if (tab) {
-        mode = tab.getAttribute('data-tab');
-        page.querySelectorAll('.tab').forEach(function (t) {
-          t.classList.toggle('active', t === tab);
+      var tombolJurnal = e.target.closest('[data-jurnal]');
+      if (tombolJurnal) {
+        jurnal = tombolJurnal.getAttribute('data-jurnal');
+        page.querySelectorAll('[data-jurnal]').forEach(function (t) {
+          t.classList.toggle('active', t === tombolJurnal);
         });
-        tanggalInput.hidden = mode !== 'hari';
-        bulanSelect.hidden = mode !== 'bulan';
+        refresh();
+        return;
+      }
+      var tabAtlet = e.target.closest('[data-tab]');
+      if (tabAtlet && jurnal === 'atlet') {
+        modeAtlet = tabAtlet.getAttribute('data-tab');
+        refresh();
+        return;
+      }
+      if (e.target.closest('[data-reset-filter]')) {
         refresh();
       }
     });
 
-    tanggalInput.addEventListener('change', refresh);
-    bulanSelect.addEventListener('change', refresh);
+    page.addEventListener('change', function (e) {
+      var id = e.target.id;
+      if (id === 'kh-tanggal' || id === 'kh-bulan') {
+        refreshAtlet();
+        return;
+      }
+      if (id === 'ka-tanggal' || id === 'ka-asisten' || id === 'ka-lokasi') {
+        refresh();
+      }
+    });
 
     app.subscribe('attendance', refresh);
+    app.subscribe('absensi_asisten', refresh);
     app.subscribe('athletes', refresh);
     app.subscribe('users', refresh);
   }
@@ -1480,6 +1750,216 @@ var PagesCoach = (function () {
     app.subscribe('physical_tests', refresh);
   }
 
+  /* ---------- Setting: kelola menu dashboard admin ---------- */
+  function muatMenuConfig() {
+    var simpan = Store.all('menu_config');
+    if (simpan.length) return simpan;
+    (CONFIG.MENU_ADMIN_DEFAULT || []).forEach(function (m) {
+      Store.insert('menu_config', {
+        id: m.id,
+        label: m.label,
+        short: m.short || m.label,
+        icon: m.icon || 'info',
+        urutan: m.urutan,
+        aktif: m.aktif !== false,
+        bottom: !!m.bottom,
+        kunci: !!m.kunci
+      });
+    });
+    return Store.all('menu_config');
+  }
+
+  function setting(root, user, app) {
+    root.innerHTML =
+      '<div class="page">' +
+      UI.pageHeader('Setting', 'Atur menu yang tampil di sidebar dan navigasi dashboard admin.',
+        '<button type="button" class="btn" data-tambah-menu>' + UI.icon('plus', 20) + ' Tambah Menu</button>') +
+      '<div class="card">' +
+      '<div class="card-title">' + UI.icon('settings', 20) + 'Daftar Menu</div>' +
+      '<p class="muted small">Perubahan langsung berlaku di sidebar. Menu <b>Setting</b> tidak dapat dihapus.</p>' +
+      '<div id="setting-list"></div>' +
+      '</div>' +
+      '<div class="card mt-2">' +
+      '<div class="card-title">' + UI.icon('save', 20) + 'Penyimpanan Foto</div>' +
+      '<p class="muted small">Foto yang diunggah disimpan ke <b>Firebase Storage</b> sehingga tampil di semua perangkat. ' +
+      'Foto lama yang masih tersimpan lokal dapat dipindahkan ke cloud lewat tombol di bawah ini.</p>' +
+      '<div class="flex gap-1 flex-wrap items-center">' +
+      '<button type="button" class="btn btn-secondary" data-migrasi-foto>' + UI.icon('refresh', 20) + ' Pindahkan Foto Lama ke Cloud</button>' +
+      '<span class="small muted" id="migrasi-status">' +
+      (typeof Cloud !== 'undefined' && Cloud && Cloud.siap && Cloud.siap() ? 'Cloud tersambung.' : 'Cloud belum tersambung.') +
+      '</span>' +
+      '</div></div>' +
+      '</div>';
+
+    var page = root.querySelector('.page');
+
+    function renderList() {
+      var host = page.querySelector('#setting-list');
+      var rows = Utils.sortBy(muatMenuConfig(), 'urutan', 'asc');
+      if (!rows.length) {
+        host.innerHTML = UI.emptyState('Belum ada menu.', 'settings');
+        return;
+      }
+      host.innerHTML = '<div class="table-wrap"><table class="table"><thead><tr>' +
+        '<th>Urutan</th><th>Nama Menu</th><th>Ikon</th><th>Status Tampil</th><th class="align-center">Aksi</th>' +
+        '</tr></thead><tbody>' +
+        rows.map(function (m) {
+          return '<tr>' +
+            '<td class="fw-bold">' + Utils.esc(m.urutan) + '</td>' +
+            '<td><b>' + Utils.esc(m.label) + '</b><div class="small muted">' + Utils.esc(m.short || '') + '</div></td>' +
+            '<td><div class="flex items-center gap-1">' + UI.icon(m.icon || 'info', 20) + '<span class="small muted">' + Utils.esc(m.icon || '-') + '</span></div></td>' +
+            '<td>' + UI.statusBadge(m.aktif ? 'aktif' : 'nonaktif') + '</td>' +
+            '<td class="align-center"><div class="flex gap-1" style="justify-content:center;flex-wrap:wrap">' +
+            '<button type="button" class="btn btn-sm btn-secondary" data-menu-edit="' + Utils.esc(m.id) + '">Edit</button>' +
+            '<button type="button" class="btn btn-sm btn-ghost" data-menu-naik="' + Utils.esc(m.id) + '" aria-label="Naik">Naik</button>' +
+            '<button type="button" class="btn btn-sm btn-ghost" data-menu-turun="' + Utils.esc(m.id) + '" aria-label="Turun">Turun</button>' +
+            '<button type="button" class="btn btn-sm" data-menu-toggle="' + Utils.esc(m.id) + '">' + (m.aktif ? 'Nonaktifkan' : 'Aktifkan') + '</button>' +
+            (m.kunci
+              ? '<span class="small muted">Terkunci</span>'
+              : '<button type="button" class="btn btn-sm btn-danger" data-menu-hapus="' + Utils.esc(m.id) + '">Hapus</button>') +
+            '</div></td></tr>';
+        }).join('') + '</tbody></table></div>';
+    }
+
+    function bukaForm(menu) {
+      var opsi = (CONFIG.ICON_MENU || []).map(function (n) {
+        return '<option value="' + Utils.esc(n) + '"' + (menu && menu.icon === n ? ' selected' : '') + '>' + Utils.esc(n) + '</option>';
+      }).join('');
+      document.getElementById('modal-host').innerHTML =
+        UI.modalShell('m-menu', menu ? 'Edit Menu' : 'Tambah Menu',
+          UI.backButton({ closeModal: 'm-menu' }) +
+          '<form id="form-menu" novalidate>' +
+          UI.field({ name: 'label', label: 'Nama Menu', required: true, value: menu ? menu.label : '' }) +
+          UI.field({ name: 'short', label: 'Nama Pendek (navigasi HP)', value: menu ? (menu.short || '') : '' }) +
+          UI.field({ name: 'icon', label: 'Ikon', type: 'select', value: menu ? (menu.icon || 'info') : 'info', options: (CONFIG.ICON_MENU || []).map(function (n) { return { value: n, label: n }; }) }) +
+          UI.field({ name: 'urutan', label: 'Urutan', type: 'number', min: 1, step: 1, value: menu ? menu.urutan : (muatMenuConfig().length + 1) }) +
+          UI.field({ name: 'aktif', label: 'Status Tampil', type: 'select', value: menu ? (menu.aktif ? '1' : '0') : '1', options: [{ value: '1', label: 'Tampil' }, { value: '0', label: 'Sembunyi' }] }) +
+          '</form>',
+          '<button type="button" class="btn btn-ghost" data-back-close="m-menu">Batal</button>' +
+          '<button type="submit" class="btn" form="form-menu">Simpan Menu</button>');
+      UI.openModal('m-menu');
+
+      var form = document.getElementById('form-menu');
+      UI.bindSubmit(form, function () {
+        Utils.clearErrors(form);
+        var d = Utils.formData(form);
+        var errors = {};
+        if (!d.label) errors.label = 'Nama menu wajib diisi.';
+        if (d.urutan === '' || isNaN(Number(d.urutan))) errors.urutan = 'Urutan harus berupa angka.';
+        if (Object.keys(errors).length) {
+          Utils.showErrors(form, errors);
+          Utils.toast('Mohon lengkapi isian yang ditandai.', 'danger');
+          return;
+        }
+        var payload = {
+          label: d.label,
+          short: d.short || d.label,
+          icon: d.icon || 'info',
+          urutan: Number(d.urutan),
+          aktif: d.aktif === '1'
+        };
+        if (menu) {
+          Store.update('menu_config', menu.id, payload);
+          Utils.toast('Menu berhasil diperbarui.', 'success');
+        } else {
+          var idBaru = 'menu_' + Date.now().toString(36);
+          Store.insert('menu_config', Object.assign({ id: idBaru, kunci: false, bottom: false }, payload));
+          Utils.toast('Menu baru berhasil ditambahkan.', 'success');
+        }
+        UI.closeModal('m-menu');
+        renderList();
+        if (typeof App !== 'undefined' && App && App.render) App.render();
+      });
+    }
+
+    renderList();
+
+    page.addEventListener('click', function (e) {
+      var migrasi = e.target.closest('[data-migrasi-foto]');
+      if (migrasi) {
+        if (typeof Cloud === 'undefined' || !Cloud || !Cloud.migrasiFotoLama) {
+          Utils.toast('Layanan cloud tidak tersedia.', 'danger');
+          return;
+        }
+        migrasi.disabled = true;
+        Utils.toast('Memindahkan foto lama ke cloud...', 'info');
+        Cloud.migrasiFotoLama(true).then(function (hasil) {
+          migrasi.disabled = false;
+          var st = page.querySelector('#migrasi-status');
+          if (st) st.textContent = hasil.pesan;
+          Utils.toast(hasil.pesan, hasil.total ? 'success' : 'info');
+        }, function (err) {
+          migrasi.disabled = false;
+          Utils.toast(err && err.message ? err.message : 'Migrasi foto gagal.', 'danger');
+        });
+        return;
+      }
+      if (e.target.closest('[data-tambah-menu]')) {
+        bukaForm(null);
+        return;
+      }
+      var edit = e.target.closest('[data-menu-edit]');
+      if (edit) {
+        bukaForm(Store.find('menu_config', edit.getAttribute('data-menu-edit')));
+        return;
+      }
+      var naik = e.target.closest('[data-menu-naik]');
+      if (naik) {
+        geserMenu(naik.getAttribute('data-menu-naik'), -1);
+        return;
+      }
+      var turun = e.target.closest('[data-menu-turun]');
+      if (turun) {
+        geserMenu(turun.getAttribute('data-menu-turun'), 1);
+        return;
+      }
+      var toggle = e.target.closest('[data-menu-toggle]');
+      if (toggle) {
+        var m = Store.find('menu_config', toggle.getAttribute('data-menu-toggle'));
+        if (!m) return;
+        Store.update('menu_config', m.id, { aktif: !m.aktif });
+        UI.toast('Menu ' + (m.aktif ? 'dinonaktifkan' : 'diaktifkan') + '.', 'success');
+        renderList();
+        if (typeof App !== 'undefined' && App && App.render) App.render();
+        return;
+      }
+      var hapus = e.target.closest('[data-menu-hapus]');
+      if (hapus) {
+        var target = Store.find('menu_config', hapus.getAttribute('data-menu-hapus'));
+        if (!target) return;
+        if (target.kunci) {
+          Utils.toast('Menu Setting tidak dapat dihapus.', 'danger');
+          return;
+        }
+        UI.confirmDialog('Menu "' + target.label + '" akan dihapus dari navigasi. Lanjutkan?', 'Konfirmasi Hapus Menu').then(function (ok) {
+          if (!ok) return;
+          Store.remove('menu_config', target.id);
+          Utils.toast('Menu dihapus.', 'success');
+          renderList();
+          if (typeof App !== 'undefined' && App && App.render) App.render();
+        });
+      }
+    });
+
+    function geserMenu(id, arah) {
+      var rows = Utils.sortBy(muatMenuConfig(), 'urutan', 'asc');
+      var idx = -1;
+      rows.forEach(function (r, i) {
+        if (r.id === id) idx = i;
+      });
+      var tukar = idx + arah;
+      if (idx < 0 || tukar < 0 || tukar >= rows.length) return;
+      var urutanA = rows[idx].urutan;
+      var urutanB = rows[tukar].urutan;
+      Store.update('menu_config', rows[idx].id, { urutan: urutanB });
+      Store.update('menu_config', rows[tukar].id, { urutan: urutanA });
+      renderList();
+      if (typeof App !== 'undefined' && App && App.render) App.render();
+    }
+
+    app.subscribe('menu_config', renderList);
+  }
+
   function register() {
     App.register('daftar-atlet', {
       title: 'Daftar Atlet',
@@ -1510,6 +1990,11 @@ var PagesCoach = (function () {
       title: 'Pengguna',
       subtitle: 'Kelola akun pengguna',
       render: pengguna
+    });
+    App.register('setting', {
+      title: 'Setting',
+      subtitle: 'Kelola menu navigasi admin',
+      render: setting
     });
   }
 

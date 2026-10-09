@@ -79,193 +79,304 @@ var PagesAssistant = (function () {
   }
 
   function absensi(root, user, app) {
-    var suppressRender = false;
-
     root.innerHTML =
       '<div class="page">' +
-      UI.pageHeader('Absensi Kehadiran', 'Tap status untuk menyimpan. Tersimpan otomatis.') +
+      UI.pageHeader('Absensi Kehadiran', 'Catat kehadiran Anda beserta program latihan yang dijalankan.') +
       '<div class="card">' +
-      '<div class="filter-bar">' +
-      '<input class="input" type="date" id="ab-tanggal" style="max-width:220px">' +
-      '<div class="grow" style="display:flex;align-items:flex-end;justify-content:flex-end">' +
-      '<button type="button" class="btn btn-sm btn-secondary" data-simpan-semua>' + UI.icon('save', 18) + ' Simpan Semua Catatan</button>' +
-      '</div></div>' +
-      '<div id="ab-body"></div>' +
+      '<div class="card-title">' + UI.icon('calendar', 20) + 'Form Absensi Saya</div>' +
+      '<form id="form-absen" novalidate>' +
+      '<div class="form-grid cols-2">' +
+      UI.field({ name: 'tanggal', label: 'Tanggal Latihan', type: 'date', required: true, value: Utils.todayISO() }) +
+      UI.field({ name: 'lokasi', label: 'Lokasi Latihan', required: true, placeholder: 'contoh: GOR Surabaya' }) +
+      '</div>' +
+      '<div class="field">' +
+      '<label class="label">Nama Atlet yang Dilatih <span class="req">*</span></label>' +
+      '<div class="multi-pilih" id="absen-atlet"></div>' +
+      '<div class="help">Pilih satu atau beberapa atlet.</div>' +
+      '<div class="field-error" data-error-for="atlet"></div>' +
+      '</div>' +
+      UI.field({ name: 'program', label: 'Program yang Dijalankan', type: 'textarea', required: true, rows: 3, placeholder: 'contoh: Pemanasan, footwork, smash, pendinginan' }) +
+      '<button class="btn" type="submit">' + UI.icon('save', 20) + ' Simpan Absensi</button>' +
+      '</form>' +
       '</div>' +
       '<div class="card mt-2">' +
-      '<div class="card-title">' + UI.icon('user', 20) + 'Absen Diri Sendiri</div>' +
-      '<form id="form-self"><div class="form-grid cols-2">' +
-      UI.field({ name: 'status', label: 'Status', type: 'select', value: 'Hadir', options: CONFIG.STATUS_KEHADIRAN }) +
-      UI.field({ name: 'catatan', label: 'Catatan', placeholder: 'Opsional' }) +
-      UI.field({ name: 'jam_masuk', label: 'Jam Masuk', type: 'time', value: '' }) +
-      UI.field({ name: 'jam_pulang', label: 'Jam Pulang', type: 'time', value: '' }) +
-      '</div><button class="btn" type="submit">' + UI.icon('save', 20) + ' Simpan Absen Saya</button></form>' +
+      '<div class="card-title">' + UI.icon('clipboard', 20) + 'Riwayat Absensi Saya</div>' +
+      '<div id="absen-riwayat"></div>' +
       '</div></div>';
 
     var page = root.querySelector('.page');
-    var body = page.querySelector('#ab-body');
-    var tanggalInput = page.querySelector('#ab-tanggal');
-    tanggalInput.value = Utils.todayISO();
+    var form = page.querySelector('#form-absen');
+    var multiHost = page.querySelector('#absen-atlet');
 
-    function currentCatatans() {
-      var out = {};
-      body.querySelectorAll('[data-catatan]').forEach(function (input) {
-        out[input.getAttribute('data-catatan')] = input.value.trim();
-      });
-      return out;
+    function renderMulti() {
+      var daftar = Shared.activeAthletes();
+      if (!daftar.length) {
+        multiHost.innerHTML = UI.emptyState('Belum ada atlet terdaftar.', 'users');
+        return;
+      }
+      multiHost.innerHTML = daftar.map(function (a) {
+        return '<label class="chip-pilih">' +
+          '<input type="checkbox" name="atlet" value="' + Utils.esc(a.id_atlet) + '">' +
+          '<span>' + Utils.esc(a.nama) + ' <b class="small muted">' + Utils.esc(a.id_atlet) + '</b></span>' +
+          '</label>';
+      }).join('');
     }
 
-    function renderBody() {
-      var tgl = tanggalInput.value || Utils.todayISO();
-      var athletes = Shared.activeAthletes();
-      var catatans = currentCatatans();
+    function renderRiwayat() {
+      var host = page.querySelector('#absen-riwayat');
+      var rows = Utils.sortBy(Store.where('absensi_asisten', function (r) {
+        return r.id_asisten === user.id;
+      }), 'tanggal', 'desc');
+      if (!rows.length) {
+        host.innerHTML = UI.emptyState('Belum ada absensi yang tercatat.', 'clipboard');
+        return;
+      }
+      host.innerHTML = '<div class="table-wrap"><table class="table"><thead><tr>' +
+        '<th>Tanggal</th><th>Lokasi</th><th>Atlet yang Dilatih</th><th>Program</th><th class="align-center">Aksi</th>' +
+        '</tr></thead><tbody>' +
+        rows.map(function (r) {
+          var nama = (r.atlet || []).map(function (id) {
+            var a = UI.athleteById(id);
+            return Utils.esc(a ? a.nama : id);
+          }).join(', ');
+          return '<tr>' +
+            '<td>' + Utils.fmtDate(r.tanggal, true) + '</td>' +
+            '<td>' + Utils.esc(r.lokasi || '-') + '</td>' +
+            '<td class="small">' + (nama || '-') + '</td>' +
+            '<td class="small">' + Utils.esc(r.program || '-') + '</td>' +
+            '<td class="align-center"><button type="button" class="btn btn-sm btn-danger" data-hapus-absen="' + Utils.esc(r.id) + '">Hapus</button></td>' +
+            '</tr>';
+        }).join('') + '</tbody></table></div>';
+    }
 
-      if (!athletes.length) {
-        body.innerHTML = UI.emptyState('Belum ada atlet terdaftar.', 'users');
+    renderMulti();
+    renderRiwayat();
+
+    UI.bindSubmit(form, function () {
+      Utils.clearErrors(form);
+      var data = Utils.formData(form);
+      var errors = {};
+      var dipilih = [];
+      var kotak = form.querySelectorAll('input[name="atlet"]');
+      for (var i = 0; i < kotak.length; i++) {
+        if (kotak[i].checked) dipilih.push(kotak[i].value);
+      }
+      if (!data.tanggal) errors.tanggal = 'Tanggal latihan wajib diisi.';
+      if (!data.lokasi) errors.lokasi = 'Lokasi latihan wajib diisi.';
+      if (!dipilih.length) errors.atlet = 'Pilih minimal satu atlet yang dilatih.';
+      if (!data.program) errors.program = 'Program yang dijalankan wajib diisi.';
+
+      if (Object.keys(errors).length) {
+        Utils.showErrors(form, errors);
+        Utils.toast('Mohon lengkapi isian yang ditandai.', 'danger');
         return;
       }
 
-      body.innerHTML = '<div class="attendance-grid">' + athletes.map(function (a) {
-        var rec = Shared.attendanceFor(tgl, a.id_atlet);
-        var catVal = catatans[a.id_atlet] !== undefined ? catatans[a.id_atlet] : (rec ? rec.catatan || '' : '');
-        return '<div class="attendance-item" data-atlet-card="' + Utils.esc(a.id_atlet) + '">' +
-          '<div class="attendance-head">' + UI.avatar(a, 44) +
-          '<div class="grow"><b>' + Utils.esc(a.nama) + '</b><span>' + Utils.esc(a.id_atlet) + ' · ' + Utils.esc(a.sekolah) + '</span></div>' +
-          '<div data-status-badge>' + (rec ? UI.statusBadge(rec.status) : UI.badge('Belum diabsen', 'muted')) + '</div>' +
-          '</div>' +
-          '<div class="status-picker">' +
-          CONFIG.STATUS_KEHADIRAN.map(function (s) {
-            return '<button type="button" class="status-btn' + (rec && rec.status === s ? ' active' : '') +
-              '" data-status="' + Utils.esc(s) + '" data-id-atlet="' + Utils.esc(a.id_atlet) + '">' + Utils.esc(s) + '</button>';
-          }).join('') +
-          '</div>' +
-          '<div class="field mt-1" style="margin-bottom:0">' +
-          '<input class="input" placeholder="Catatan (opsional)" value="' + Utils.esc(catVal) + '" data-catatan="' + Utils.esc(a.id_atlet) + '">' +
-          '</div></div>';
-      }).join('') + '</div>';
-    }
-
-    function saveStatus(idAtlet, status, catatan) {
-      var tgl = tanggalInput.value || Utils.todayISO();
-      var existing = Shared.attendanceFor(tgl, idAtlet);
-      var payload = {
-        tanggal: tgl,
-        id_pengguna: idAtlet,
-        id_atlet: idAtlet,
-        tipe: 'atlet',
-        status: status,
-        catatan: catatan || '',
-        jam_masuk: '',
-        jam_pulang: '',
-        input_oleh: user.id
-      };
-      suppressRender = true;
-      try {
-        if (existing) Store.update('attendance', existing.id, payload);
-        else Store.insert('attendance', payload);
-      } finally {
-        suppressRender = false;
-      }
-      UI.toast('Absensi ' + status + ' tersimpan.', 'success');
-    }
-
-    renderBody();
-
-    tanggalInput.addEventListener('change', renderBody);
-
-    body.addEventListener('click', function (e) {
-      var btn = e.target.closest('[data-status]');
-      if (!btn) return;
-      var card = btn.closest('[data-atlet-card]');
-      var idAtlet = btn.getAttribute('data-id-atlet');
-      var status = btn.getAttribute('data-status');
-      var catatan = card.querySelector('[data-catatan]').value.trim();
-      saveStatus(idAtlet, status, catatan);
-      card.querySelectorAll('.status-btn').forEach(function (b) {
-        b.classList.toggle('active', b === btn);
+      var sudah = Store.findOne('absensi_asisten', function (r) {
+        return r.id_asisten === user.id && r.tanggal === data.tanggal;
       });
-      card.querySelector('[data-status-badge]').innerHTML = UI.statusBadge(status);
-    });
-
-    body.addEventListener('change', function (e) {
-      var input = e.target.closest('[data-catatan]');
-      if (!input) return;
-      var idAtlet = input.getAttribute('data-catatan');
-      var tgl = tanggalInput.value || Utils.todayISO();
-      var rec = Shared.attendanceFor(tgl, idAtlet);
-      if (!rec) return;
-      suppressRender = true;
-      try {
-        Store.update('attendance', rec.id, { catatan: input.value.trim() });
-      } finally {
-        suppressRender = false;
+      var payload = {
+        id_asisten: user.id,
+        nama_asisten: user.nama,
+        tanggal: data.tanggal,
+        lokasi: data.lokasi,
+        atlet: dipilih,
+        program: data.program
+      };
+      if (sudah) {
+        Store.update('absensi_asisten', sudah.id, payload);
+        Utils.toast('Absensi berhasil diperbarui.', 'success');
+      } else {
+        Store.insert('absensi_asisten', payload);
+        Utils.toast('Absensi berhasil disimpan.', 'success');
       }
+      form.reset();
+      form.querySelector('[name="tanggal"]').value = Utils.todayISO();
+      renderMulti();
+      renderRiwayat();
     });
 
     page.addEventListener('click', function (e) {
-      if (!e.target.closest('[data-simpan-semua]')) return;
-      var tgl = tanggalInput.value || Utils.todayISO();
-      var count = 0;
-      body.querySelectorAll('[data-catatan]').forEach(function (input) {
-        var idAtlet = input.getAttribute('data-catatan');
-        var rec = Shared.attendanceFor(tgl, idAtlet);
-        if (!rec) return;
-        if ((rec.catatan || '') !== input.value.trim()) {
-          Store.update('attendance', rec.id, { catatan: input.value.trim() });
-          count++;
-        }
+      var hapus = e.target.closest('[data-hapus-absen]');
+      if (!hapus) return;
+      UI.confirmDialog('Data absensi ini akan dihapus. Lanjutkan?', 'Konfirmasi Hapus').then(function (ok) {
+        if (!ok) return;
+        Store.remove('absensi_asisten', hapus.getAttribute('data-hapus-absen'));
+        Utils.toast('Absensi dihapus.', 'success');
+        renderRiwayat();
       });
-      UI.toast(count ? count + ' catatan disimpan.' : 'Tidak ada perubahan catatan.', count ? 'success' : 'info');
     });
 
-    var selfForm = page.querySelector('#form-self');
-    function fillSelf() {
-      var tgl = tanggalInput.value || Utils.todayISO();
-      var rec = Store.findOne('attendance', function (r) {
-        return r.tanggal === tgl && r.id_pengguna === user.id && r.tipe === 'asisten';
-      });
-      selfForm.querySelector('[name="status"]').value = rec ? rec.status : 'Hadir';
-      selfForm.querySelector('[name="catatan"]').value = rec ? rec.catatan || '' : '';
-      selfForm.querySelector('[name="jam_masuk"]').value = rec && rec.jam_masuk ? rec.jam_masuk : '';
-      selfForm.querySelector('[name="jam_pulang"]').value = rec && rec.jam_pulang ? rec.jam_pulang : '';
+    app.subscribe('absensi_asisten', renderRiwayat);
+    app.subscribe('athletes', renderMulti);
+  }
+
+  function profilAsisten(root, user, app) {
+    root.innerHTML =
+      '<div class="page">' +
+      UI.pageHeader('Profil Saya', 'Data diri dan berkas lisensi pelatih Anda.',
+        '<button type="button" class="btn" data-edit-profil>' + UI.icon('edit', 20) + ' Edit Profil</button>') +
+      '<div id="profil-isi"></div>' +
+      '</div>';
+
+    var page = root.querySelector('.page');
+
+    function render() {
+      var host = page.querySelector('#profil-isi');
+      var u = Store.find('users', user.id) || user;
+      var usia = u.tgl_lahir ? Utils.age(u.tgl_lahir) + ' tahun' : '-';
+      var lis = u.lisensi || null;
+      var bisaUnduh = !!(lis && lis.data);
+
+      host.innerHTML =
+        '<div class="grid-2 equal">' +
+        '<div class="card">' +
+        '<div class="flex items-center gap-2 mb-2">' + UI.avatar(u, 84) +
+        '<div><h3 class="mt-0 mb-0">' + Utils.esc(u.nama) + '</h3>' +
+        '<div class="mt-1">' + UI.badge('Asisten Pelatih', 'primary') + '</div></div></div>' +
+        '<div class="detail-grid">' +
+        '<div class="detail-item"><div class="k">Nama Lengkap</div><div class="v">' + Utils.esc(u.nama) + '</div></div>' +
+        '<div class="detail-item"><div class="k">Tanggal Lahir</div><div class="v">' + (u.tgl_lahir ? Utils.fmtDate(u.tgl_lahir, true) : '-') + '</div></div>' +
+        '<div class="detail-item"><div class="k">Usia</div><div class="v">' + Utils.esc(usia) + '</div></div>' +
+        '<div class="detail-item"><div class="k">No. HP</div><div class="v">' + Utils.esc(u.no_hp || '-') + '</div></div>' +
+        '<div class="detail-item"><div class="k">ID Login</div><div class="v">' + Utils.esc(u.username) + '</div></div>' +
+        '<div class="detail-item"><div class="k">Status</div><div class="v">' + UI.statusBadge(u.status || 'aktif') + '</div></div>' +
+        '</div></div>' +
+        '<div class="card">' +
+        '<div class="card-title">' + UI.icon('save', 20) + 'Lisensi Pelatih</div>' +
+        (bisaUnduh
+          ? '<div class="file-chip">' +
+            (/^image\//.test(lis.tipe || '') ? '<img src="' + Utils.esc(lis.data) + '" alt="Lisensi pelatih">' : '') +
+            '<div><b>' + Utils.esc(lis.nama) + '</b>' +
+            '<div class="small muted">' + (/pdf/i.test(lis.tipe || '') ? 'PDF' : 'Gambar') + ' / ' + Math.round((lis.ukuran || 0) / 1024) + ' KB</div></div></div>' +
+            '<div class="flex gap-1 mt-2 flex-wrap">' +
+            '<a class="btn btn-sm btn-secondary" href="' + Utils.esc(lis.data) + '" target="_blank" rel="noopener">Lihat</a>' +
+            '<a class="btn btn-sm" href="' + Utils.esc(lis.data) + '" download="' + Utils.esc(lis.nama || 'lisensi') + '">Unduh</a>' +
+            '</div>'
+          : UI.emptyState('Lisensi pelatih belum diunggah.', 'alert')) +
+        '<div class="notice mt-2">' + UI.icon('info', 20) +
+        '<div>Untuk mengganti foto atau lisensi, gunakan tombol <b>Edit Profil</b>.</div></div>' +
+        '</div></div>';
     }
-    fillSelf();
-    tanggalInput.addEventListener('change', fillSelf);
 
-    UI.bindSubmit(selfForm, function () {
-      var d = Utils.formData(selfForm);
-      var tgl = tanggalInput.value || Utils.todayISO();
-      var rec = Store.findOne('attendance', function (r) {
-        return r.tanggal === tgl && r.id_pengguna === user.id && r.tipe === 'asisten';
-      });
-      var payload = {
-        tanggal: tgl,
-        id_pengguna: user.id,
-        id_atlet: null,
-        tipe: 'asisten',
-        status: d.status,
-        catatan: d.catatan || '',
-        jam_masuk: d.jam_masuk || '',
-        jam_pulang: d.jam_pulang || '',
-        input_oleh: user.id
-      };
-      suppressRender = true;
-      try {
-        if (rec) Store.update('attendance', rec.id, payload);
-        else Store.insert('attendance', payload);
-      } finally {
-        suppressRender = false;
+    render();
+
+    page.addEventListener('click', function (e) {
+      if (!e.target.closest('[data-edit-profil]')) return;
+      var u = Store.find('users', user.id) || user;
+      document.getElementById('modal-host').innerHTML =
+        UI.modalShell('m-profil', 'Edit Profil',
+          UI.backButton({ closeModal: 'm-profil' }) +
+          '<form id="form-profil" novalidate>' +
+          UI.field({ name: 'nama', label: 'Nama Lengkap', required: true, value: u.nama }) +
+          UI.field({ name: 'tgl_lahir', label: 'Tanggal Lahir', type: 'date', required: true, value: u.tgl_lahir || '' }) +
+          UI.field({ name: 'no_hp', label: 'No. HP', value: u.no_hp || '' }) +
+          '<div class="field"><label class="label">Foto Profil (opsional)</label>' +
+          '<div class="photo-upload"><div id="profil-foto-preview">' + UI.avatar(u, 56) + '</div>' +
+          '<input class="input" type="file" name="foto_file" accept="image/jpeg,image/png,image/jpg"></div></div>' +
+          '<div class="field"><label class="label">Lisensi Pelatih (opsional)</label>' +
+          '<input class="input" type="file" name="lisensi_file" accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png">' +
+          '<div class="file-preview" id="profil-lisensi-preview"></div>' +
+          '<div class="help">Kosongkan bila tidak diganti. Format PDF/JPG/PNG, maksimal 2 MB.</div></div>' +
+          '</form>',
+          '<button type="button" class="btn btn-ghost" data-back-close="m-profil">Batal</button>' +
+          '<button type="submit" class="btn" form="form-profil">Simpan Perubahan</button>');
+      UI.openModal('m-profil');
+
+      var form = document.getElementById('form-profil');
+      var fotoBaru = null;
+      var lisensiBaru = null;
+      var fotoInput = form.querySelector('[name="foto_file"]');
+      if (fotoInput) {
+        fotoInput.addEventListener('change', function () {
+          var f = fotoInput.files && fotoInput.files[0];
+          if (!f) return;
+          var pesanSalah = (typeof Cloud !== 'undefined' && Cloud && Cloud.validasiGambar)
+            ? Cloud.validasiGambar(f, 5 * 1024 * 1024) : '';
+          if (pesanSalah) {
+            Utils.toast(pesanSalah, 'danger');
+            fotoInput.value = '';
+            return;
+          }
+          var box = document.getElementById('profil-foto-preview');
+          if (box) box.innerHTML = '<div class="upload-loading">Mengunggah foto...</div>';
+          Utils.readImage(f, 256).then(function (d) {
+            return Utils.keCloud(d, 'foto/profil', f.name || 'foto-asisten.jpg');
+          }).then(function (hasil) {
+            fotoBaru = hasil;
+            var kotak = document.getElementById('profil-foto-preview');
+            if (kotak) kotak.innerHTML = UI.avatar({ nama: 'Foto', foto: hasil }, 56);
+            Utils.toast(/^https?:/.test(hasil) ? 'Foto tersimpan di cloud.' : 'Foto siap disimpan.', 'success');
+          }).catch(function (err) {
+            fotoBaru = null;
+            var kotak = document.getElementById('profil-foto-preview');
+            if (kotak) kotak.innerHTML = '';
+            Utils.toast(err.message, 'danger');
+            fotoInput.value = '';
+          });
+        });
       }
-      Utils.toast('Absen diri sendiri berhasil disimpan.', 'success');
-      fillSelf();
+      var lisInput = form.querySelector('[name="lisensi_file"]');
+      if (lisInput) {
+        lisInput.addEventListener('change', function () {
+          var f = lisInput.files && lisInput.files[0];
+          if (!f) return;
+          var pesanSalah = (typeof Cloud !== 'undefined' && Cloud && Cloud.validasiBerkas)
+            ? Cloud.validasiBerkas(f, 2 * 1024 * 1024) : '';
+          if (pesanSalah) {
+            Utils.toast(pesanSalah, 'danger');
+            lisInput.value = '';
+            return;
+          }
+          var kotak = document.getElementById('profil-lisensi-preview');
+          if (kotak) kotak.innerHTML = '<div class="upload-loading">Mengunggah lisensi...</div>';
+          var reader = new FileReader();
+          reader.onerror = function () {
+            if (kotak) kotak.innerHTML = '';
+            Utils.toast('Gagal membaca file lisensi.', 'danger');
+          };
+          reader.onload = function () {
+            Utils.keCloud(reader.result, 'foto/lisensi', f.name || 'lisensi.pdf').then(function (hasil) {
+              lisensiBaru = { nama: f.name, tipe: f.type || '', ukuran: f.size, data: hasil };
+              if (kotak) {
+                kotak.innerHTML = '<div class="file-chip">' +
+                  (/^image\//.test(f.type || '') ? '<img src="' + Utils.esc(hasil) + '" alt="Pratinjau lisensi">' : '') +
+                  '<div><b>' + Utils.esc(f.name) + '</b><div class="small muted">' +
+                  (/pdf/i.test(f.type || '') ? 'PDF' : 'Gambar') + ' / ' + Math.round(f.size / 1024) + ' KB</div></div></div>';
+              }
+              Utils.toast(/^https?:/.test(hasil) ? 'Lisensi tersimpan di cloud.' : 'Lisensi siap disimpan.', 'success');
+            });
+          };
+          reader.readAsDataURL(f);
+        });
+      }
+
+      UI.bindSubmit(form, function () {
+        Utils.clearErrors(form);
+        var d = Utils.formData(form);
+        var errors = {};
+        if (!d.nama) errors.nama = 'Nama lengkap wajib diisi.';
+        if (!d.tgl_lahir) errors.tgl_lahir = 'Tanggal lahir wajib diisi.';
+        if (Object.keys(errors).length) {
+          Utils.showErrors(form, errors);
+          Utils.toast('Mohon lengkapi isian yang ditandai.', 'danger');
+          return;
+        }
+        var patch = {
+          nama: d.nama,
+          tgl_lahir: d.tgl_lahir,
+          no_hp: d.no_hp || ''
+        };
+        if (fotoBaru) patch.foto = fotoBaru;
+        if (lisensiBaru) patch.lisensi = lisensiBaru;
+        Store.update('users', user.id, patch);
+        UI.closeModal('m-profil');
+        Utils.toast('Profil berhasil diperbarui.', 'success');
+        render();
+      });
     });
 
-    app.subscribe('attendance', function () {
-      if (suppressRender) return;
-      renderBody();
-      fillSelf();
-    });
-    app.subscribe('athletes', renderBody);
+    app.subscribe('users', render);
   }
 
   function logbookHarian(root, user, app) {
@@ -612,6 +723,11 @@ var PagesAssistant = (function () {
   }
 
   function register() {
+    App.register('profil-asisten', {
+      title: 'Profil Saya',
+      subtitle: 'Data diri & lisensi pelatih',
+      render: profilAsisten
+    });
     App.register('absensi', {
       title: 'Absensi Kehadiran',
       subtitle: 'Absen atlet dan diri sendiri',
