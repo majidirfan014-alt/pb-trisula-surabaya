@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0b3d91">
+  <meta name="description" content="Website monitoring atlet PB Trisula Surabaya: kehadiran, tes fisik, logbook latihan, dan hasil pertandingan.">
+  <link rel="icon" type="image/png" href="assets/favicon.png">
+  <title>PB TRISULA SURABAYA — Monitoring Atlet</title>
+  <link rel="stylesheet" href="css/style.css?v=8">
+</head>
+<body>
+
+  <div class="strip" id="strip"></div>
+
+  <header class="topbar">
+    <div class="container flex items-center justify-between" style="padding:0">
+      <a class="brand" href="index.html">
+        <img class="brand-logo" src="assets/logo-pb-trisula.png" alt="Logo PB Trisula Surabaya" width="46" height="46">
+        <div class="brand-text"><span id="brand-nama">PB TRISULA SURABAYA</span><small id="brand-sub">Monitoring Atlet</small></div>
+      </a>
+      <nav class="nav-links" aria-label="Navigasi utama">
+        <a class="nav-link" href="#beranda">Beranda</a>
+        <a class="nav-link" href="#tentang">Tentang</a>
+        <a class="nav-link" href="#galeri">Galeri</a>
+        <a class="nav-link" href="login.html">Masuk</a>
+      </nav>
+      <div class="flex items-center gap-1">
+        <a class="btn-cta" href="register.html"><span id="cta-navbar">Daftar</span></a>
+        <button class="icon-btn menu-toggle" id="menu-toggle" aria-label="Buka menu" aria-expanded="false">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h16"/><path d="M4 12h16"/><path d="M4 17h16"/></svg>
+        </button>
+      </div>
+    </div>
+    <div class="mobile-menu" id="mobile-menu" style="width:100%">
+        <a class="nav-link" href="#beranda">Beranda</a>
+        <a class="nav-link" href="#tentang">Tentang</a>
+        <a class="nav-link" href="#galeri">Galeri</a>
+        <a class="nav-link" href="login.html">Masuk</a>
+      </div>
+  </header>
+
+  <section class="hero" id="beranda">
+    <div class="titik titik-a" aria-hidden="true"></div>
+    <div class="titik titik-b" aria-hidden="true"></div>
+
+    <div class="container hero-grid">
+      <div class="hero-teks">
+        <div class="hero-tag animasi-naik">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 3l2.7 5.6 6.3.9-4.5 4.3 1.1 6.2-5.6-3-5.6 3 1.1-6.2L3 9.5l6.3-.9z"/></svg>
+          <span id="hero-badge">Klub Bulutangkis · Surabaya</span>
+        </div>
+
+        <h1 class="animasi-naik" style="animation-delay:.06s"><span id="hero-judul1">PB TRISULA</span> <span class="aksen-gradasi" id="hero-judul2">SURABAYA</span></h1>
+
+        <p class="hero-sub animasi-naik" id="hero-sub" style="animation-delay:.12s">Badminton School</p>
+
+        <p class="hero-lead animasi-naik" id="hero-deskripsi" style="animation-delay:.18s">Pantau kehadiran, kondisi fisik, logbook latihan, dan hasil pertandingan setiap atlet dalam satu tempat, sederhana, cepat, dan bisa dibuka dari HP.</p>
+
+        <div class="hero-actions animasi-naik" style="animation-delay:.24s">
+          <a class="btn btn-utama" href="register.html"><span id="hero-tombol-utama">Daftar Sekarang</span>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="M13 6l6 6-6 6"/></svg>
+          </a>
+          <a class="btn btn-garis" href="login.html"><span id="hero-tombol-kedua">Masuk</span>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="M13 6l6 6-6 6"/></svg>
+          </a>
+        </div>
+
+        <div class="hero-stats animasi-naik" style="animation-delay:.3s">
+          <div class="hero-stat">
+            <div class="hero-stat-icon" aria-hidden="true">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="3.5"/><path d="M5 20c0-3.6 3.1-6 7-6s7 2.4 7 6"/></svg>
+            </div>
+            <div class="hero-stat-isi">
+              <b id="summary-total-atlet">0</b>
+              <span>Atlet Terdaftar</span>
+            </div>
+          </div>
+          <div class="hero-stat">
+            <div class="hero-stat-icon" aria-hidden="true">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3"/><path d="M3 20c0-3 2.7-5 6-5s6 2 6 5"/><circle cx="17.5" cy="9" r="2.2"/><path d="M17.5 14c2.2 0 3.6 1.6 3.6 3.6"/></svg>
+            </div>
+            <div class="hero-stat-isi">
+              <b id="summary-total-asisten">0</b>
+              <span>Asisten Pelatih</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="hero-kolase animasi-naik" style="animation-delay:.15s" id="hero-kolase">
+        <figure class="kolase-foto kolase-a">
+          <div class="foto-media">
+            <div class="foto-placeholder"><svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="5" width="18" height="14" rx="3"/><circle cx="9" cy="10" r="2"/><path d="M4 18l5-4 3 2 3-3 5 5"/></svg><span>utama.jpg</span></div>
+            <img data-kolase="0" src="" alt="" loading="lazy" decoding="async">
+          </div>
+        </figure>
+        <figure class="kolase-foto kolase-b">
+          <div class="foto-media">
+            <div class="foto-placeholder"><svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="5" width="18" height="14" rx="3"/><circle cx="9" cy="10" r="2"/><path d="M4 18l5-4 3 2 3-3 5 5"/></svg><span>pelatih-1.jpg</span></div>
+            <img data-kolase="1" src="" alt="" loading="lazy" decoding="async">
+          </div>
+        </figure>
+        <figure class="kolase-foto kolase-c">
+          <div class="foto-media">
+            <div class="foto-placeholder"><svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="5" width="18" height="14" rx="3"/><circle cx="9" cy="10" r="2"/><path d="M4 18l5-4 3 2 3-3 5 5"/></svg><span>atlet-1.jpg</span></div>
+            <img data-kolase="2" src="" alt="" loading="lazy" decoding="async">
+          </div>
+        </figure>
+        <figure class="kolase-foto kolase-d">
+          <div class="foto-media">
+            <div class="foto-placeholder"><svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="5" width="18" height="14" rx="3"/><circle cx="9" cy="10" r="2"/><path d="M4 18l5-4 3 2 3-3 5 5"/></svg><span>atlet-2.jpg</span></div>
+            <img data-kolase="3" src="" alt="" loading="lazy" decoding="async">
+          </div>
+        </figure>
+
+        <div class="lencana-putar" aria-hidden="true">
+          <svg class="lencana-teks" viewBox="0 0 120 120">
+            <defs>
+              <path id="lingkaran-teks" d="M60,60 m-44,0 a44,44 0 1,1 88,0 a44,44 0 1,1 -88,0"></path>
+            </defs>
+            <text>
+              <textPath href="#lingkaran-teks" startOffset="0">PB TRISULA SURABAYA • BADMINTON SCHOOL • </textPath>
+            </text>
+          </svg>
+          <div class="lencana-inti">
+            <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M12 3v7"/><path d="M12 10c-3 2-5 5-5 8"/><path d="M12 10c3 2 5 5 5 8"/><path d="M8.5 6.5h7"/><path d="M12 21c-1.4 0-2.5-1-2.5-2.3"/><path d="M12 21c1.4 0 2.5-1 2.5-2.3"/>
+            </svg>
+          </div>
+        </div>
+
+        <span class="kilau kilau-1" aria-hidden="true">
+          <svg width="30" height="30" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l1.9 6.1L20 10l-6.1 1.9L12 18l-1.9-6.1L4 10l6.1-1.9z"/></svg>
+        </span>
+        <span class="kilau kilau-2" aria-hidden="true">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l1.9 6.1L20 10l-6.1 1.9L12 18l-1.9-6.1L4 10l6.1-1.9z"/></svg>
+        </span>
+      </div>
+    </div>
+  </section>
+
+  <div class="marquee" aria-hidden="true">
+    <div class="marquee-track" id="marquee-track"></div>
+  </div>
+
+  <section class="section" id="keluarga">
+    <div class="container">
+      <div class="section-head">
+        <h2>Keluarga Besar PB Trisula Surabaya</h2>
+        <p>Pelatih dan atlet yang berlatih, berjuang, dan berprestasi bersama.</p>
+      </div>
+      <div class="keluarga" id="keluarga-galeri"></div>
+    </div>
+  </section>
+
+  <section class="section section-alt" id="ringkasan">
+    <div class="container">
+      <div class="section-head">
+        <h2>Ringkasan langsung</h2>
+        <p>Data yang tampil di bawah ini diperbarui otomatis setiap kali ada input baru dari pelatih.</p>
+      </div>
+      <div class="summary-grid">
+        <div class="card kartu-aksen">
+          <div class="card-title">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="9" cy="8" r="3"/><path d="M3 20c0-3 2.7-5 6-5s6 2 6 5"/></svg>
+            Total Atlet
+          </div>
+          <div class="stat-value" id="summary-total-atlet-2">—</div>
+          <p class="muted small mb-0">Atlet aktif yang terdaftar di PB Trisula Surabaya.</p>
+        </div>
+        <div class="card kartu-aksen">
+          <div class="card-title">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18"/></svg>
+            Jadwal Latihan
+          </div>
+          <div class="stat-value" id="summary-jadwal-2">Selasa &amp; Jumat</div>
+          <p class="muted small mb-0">16.00 - 18.00 WIB di GOR Surabaya.</p>
+        </div>
+        <div class="card kartu-aksen">
+          <div class="card-title">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M8 4h8v5a4 4 0 0 1-8 0z"/><path d="M12 13v3"/><path d="M8 20h8"/></svg>
+            Pertandingan Terakhir
+          </div>
+          <div id="summary-pertandingan-detail" class="small">
+            <div class="muted">Belum ada catatan pertandingan.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="tentang">
+    <div class="container">
+      <div class="grid-2 equal">
+        <div>
+          <h2 id="tentang-judul">Tentang PB Trisula Surabaya</h2>
+          <p class="muted" id="tentang-teks1">PB Trisula Surabaya adalah klub bulutangkis yang membina atlet usia sekolah hingga junior. Kami percaya pembinaan yang baik lahir dari data yang rapi: siapa yang hadir, bagaimana kondisi fisiknya, apa yang dilatih hari ini, dan bagaimana hasil pertandingannya.</p>
+          <p class="muted" id="tentang-teks2">Website ini dibuat agar pelatih kepala, asisten pelatih, dan atlet memiliki satu sumber data yang sama — tanpa catatan manual yang tercecer.</p>
+          <a class="btn btn-secondary mt-2" href="register.html"><span id="tentang-tombol">Daftar sebagai Atlet</span></a>
+        </div>
+        <div class="card kartu-aksen">
+          <div class="card-title">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 11v6"/><path d="M12 7h.01"/></svg>
+            <span id="tentang-judul-kartu">Cara kerjanya</span>
+          </div>
+          <div class="list-rows">
+            <div class="list-row"><div class="grow"><b id="tentang-langkah1-judul">1. Daftar</b><span id="tentang-langkah1-isi">Calon atlet mengisi formulir, ID atlet (TRS001, dst.) langsung diberikan.</span></div></div>
+            <div class="list-row"><div class="grow"><b id="tentang-langkah2-judul">2. Latihan</b><span id="tentang-langkah2-isi">Asisten pelatih mengabsen dan mengisi logbook latihan harian.</span></div></div>
+            <div class="list-row"><div class="grow"><b id="tentang-langkah3-judul">3. Pantau</b><span id="tentang-langkah3-isi">Pelatih kepala memantau kondisi atlet, atlet melihat perkembangannya sendiri.</span></div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="section section-alt" id="galeri">
+    <div class="container">
+      <div class="section-head">
+        <h2>Galeri</h2>
+        <p>Atlet aktif yang sedang dibina di PB Trisula Surabaya.</p>
+      </div>
+      <div class="gallery-grid" id="public-gallery"></div>
+    </div>
+  </section>
+
+  <footer class="footer">
+    <div class="container">
+      <div class="footer-grid">
+        <div>
+          <div class="flex items-center gap-2 mb-2"><img class="brand-logo" src="assets/logo-pb-trisula.png" alt="Logo PB Trisula Surabaya" width="46" height="46"><h3 class="mb-0">PB TRISULA SURABAYA</h3></div>
+          <p class="small" id="footer-teks">Monitoring atlet: kehadiran, tes fisik, logbook latihan, dan hasil pertandingan dalam satu aplikasi sederhana.</p>
+        </div>
+        <div>
+          <h3>Kontak</h3>
+          <ul class="footer-list" id="footer-kontak"></ul>
+        </div>
+        <div>
+          <h3>Lokasi</h3>
+          <ul class="footer-list" id="footer-lokasi"></ul>
+          <div class="flex gap-1 mt-2">
+            <a class="btn btn-sm btn-outline-light" href="login.html">Masuk</a>
+            <a class="btn btn-sm btn-light" href="register.html">Daftar</a>
+          </div>
+        </div>
+      </div>
+      <div class="footer-bottom" id="footer-hak-cipta">
+        © 2026 PB Trisula Surabaya. Data disimpan di perangkat Anda untuk versi lokal ini.
+      </div>
+    </div>
+  </footer>
+
+  <script src="js/config.js?v=8"></script>
+  <script src="js/utils.js?v=8"></script>
+  <script src="js/store.js?v=8"></script>
+  <script src="js/auth.js?v=8"></script>
+  <script src="js/ui.js?v=8"></script>
+  <script src="js/landing-store.js?v=8"></script>
+  <script src="js/pages-public.js?v=8"></script>
+  <script>
+    (function () {
+      var jalan = false;
+      function boot() {
+        if (jalan) return;
+        jalan = true;
+        PagesPublic.init();
+        Store.init();
+      }
+      if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot);
+      else boot();
+    })();
+  </script>
+</body>
+</html>

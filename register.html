@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0b3d91">
+  <link rel="icon" type="image/png" href="assets/favicon.png">
+  <title>Daftar Atlet — PB TRISULA SURABAYA</title>
+  <link rel="stylesheet" href="css/style.css?v=8">
+</head>
+<body>
+  <div class="auth-wrap">
+    <header class="topbar" style="background:transparent;border:none">
+      <a class="brand" href="index.html" style="color:#fff">
+        <img class="brand-logo" src="assets/logo-pb-trisula.png" alt="Logo PB Trisula Surabaya" width="46" height="46">
+        <div class="brand-text" style="color:#fff">PB TRISULA SURABAYA<small style="color:rgba(255,255,255,.75)">Monitoring Atlet</small></div>
+      </a>
+      <a class="btn btn-sm btn-light" href="login.html">Masuk</a>
+    </header>
+
+    <main class="auth-main" id="register-wrap">
+      <div class="auth-card wide">
+        <div class="back-bar">
+          <button type="button" class="btn-back" data-pub-back="index.html">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5"/><path d="M11 6l-6 6 6 6"/></svg>
+            <span>Kembali</span>
+          </button>
+        </div>
+        <div class="auth-head">
+          <img class="brand-logo brand-logo-lg" src="assets/logo-pb-trisula.png" alt="Logo PB Trisula Surabaya" width="56" height="56">
+          <h1>Pendaftaran Atlet</h1>
+          <p>Isi data di bawah ini. ID atlet dibuat otomatis setelah pendaftaran selesai.</p>
+        </div>
+
+        <form id="register-form" novalidate>
+          <div class="form-grid cols-2">
+            <div>
+              <div class="field">
+                <label class="label" for="f-nama">Nama Atlet <span class="req">*</span></label>
+                <input class="input" type="text" id="f-nama" name="nama" placeholder="Nama lengkap" required>
+                <div class="field-error" data-error-for="nama"></div>
+              </div>
+
+              <div class="field">
+                <label class="label" for="f-tgl_lahir">Tanggal Lahir <span class="req">*</span></label>
+                <input class="input" type="date" id="f-tgl_lahir" name="tgl_lahir" required>
+                <div class="field-error" data-error-for="tgl_lahir"></div>
+              </div>
+
+              <div class="field">
+                <label class="label" for="f-nisn">NISN <span class="req">*</span></label>
+                <input class="input" type="text" inputmode="numeric" pattern="[0-9]*"
+                  id="f-nisn" name="nisn" placeholder="10 digit angka" autocomplete="off" required>
+                <div class="help">Tepat 10 digit angka, tidak boleh sama dengan atlet lain.</div>
+                <div class="field-error" data-error-for="nisn"></div>
+              </div>
+
+              <div class="field">
+                <label class="label" for="f-jk">Jenis Kelamin <span class="req">*</span></label>
+                <select class="input" id="f-jk" name="jk" required>
+                  <option value="">-- Pilih --</option>
+                  <option value="Laki-laki">Laki-laki</option>
+                  <option value="Perempuan">Perempuan</option>
+                </select>
+                <div class="field-error" data-error-for="jk"></div>
+              </div>
+
+              <div class="form-grid cols-2">
+                <div class="field">
+                  <label class="label" for="f-tinggi">Tinggi Badan (cm) <span class="req">*</span></label>
+                  <input class="input" type="number" id="f-tinggi" name="tinggi" min="80" max="230" step="0.5" placeholder="contoh: 168" required>
+                  <div class="field-error" data-error-for="tinggi"></div>
+                </div>
+                <div class="field">
+                  <label class="label" for="f-berat">Berat Badan (kg) <span class="req">*</span></label>
+                  <input class="input" type="number" id="f-berat" name="berat" min="20" max="200" step="0.5" placeholder="contoh: 58" required>
+                  <div class="field-error" data-error-for="berat"></div>
+                </div>
+              </div>
+
+              <div class="bmi-preview" id="bmi-preview">
+                <b>-</b>
+                <div><b class="fs-sm">BMI otomatis</b><div class="small muted">Isi tinggi &amp; berat badan.</div></div>
+              </div>
+            </div>
+
+            <div>
+              <div class="field">
+                <label class="label" for="f-sekolah">Asal Sekolah <span class="req">*</span></label>
+                <input class="input" type="text" id="f-sekolah" name="sekolah" placeholder="contoh: SMA Negeri 5 Surabaya" required>
+                <div class="field-error" data-error-for="sekolah"></div>
+              </div>
+
+              <div class="field">
+                <label class="label" for="f-asal_pb">Asal PB (opsional)</label>
+                <input class="input" type="text" id="f-asal_pb" name="asal_pb" placeholder="Kosongkan jika belum pernah">
+                <div class="field-error" data-error-for="asal_pb"></div>
+              </div>
+
+              <div class="field">
+                <label class="label" for="f-no_hp">No. HP Orang Tua / Atlet <span class="req">*</span></label>
+                <input class="input" type="tel" id="f-no_hp" name="no_hp" placeholder="contoh: 081234567890" required>
+                <div class="field-error" data-error-for="no_hp"></div>
+              </div>
+
+              <div class="field">
+                <label class="label">Foto Profil (opsional)</label>
+                <div class="photo-upload">
+                  <div id="photo-preview"></div>
+                  <input class="input" type="file" name="foto_file" accept="image/*">
+                </div>
+                <div class="help">Format JPG/PNG, maksimal 5 MB. Foto otomatis diperkecil.</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="notice">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 11v6"/><path d="M12 7h.01"/></svg>
+            <div>ID login dipakai untuk masuk. Anda bisa memakai ID atlet (TRS001) atau nama pengguna lain yang mudah diingat.</div>
+          </div>
+
+          <div class="form-grid cols-2">
+            <div class="field">
+              <label class="label" for="f-username">ID Login <span class="req">*</span></label>
+              <input class="input" type="text" id="f-username" name="username" placeholder="minimal 4 karakter, contoh: budi" autocomplete="username" required>
+              <div class="field-error" data-error-for="username"></div>
+            </div>
+            <div class="field">
+              <label class="label" for="f-password">Kata Sandi <span class="req">*</span></label>
+              <div class="pw-wrap">
+                <input class="input" type="password" id="f-password" name="password" placeholder="minimal 6 karakter" autocomplete="new-password" required>
+                <button type="button" class="pw-toggle" data-pw-toggle="f-password">Lihat</button>
+              </div>
+              <div class="field-error" data-error-for="password"></div>
+            </div>
+          </div>
+
+          <div class="field">
+            <label class="label" for="f-password2">Ulangi Kata Sandi <span class="req">*</span></label>
+            <div class="pw-wrap">
+              <input class="input" type="password" id="f-password2" name="password2" placeholder="Ketik ulang kata sandi" autocomplete="new-password" required>
+              <button type="button" class="pw-toggle" data-pw-toggle="f-password2">Lihat</button>
+            </div>
+            <div class="field-error" data-error-for="password2"></div>
+          </div>
+
+          <div id="docs-slot"></div>
+
+          <button class="btn btn-block" type="submit">Daftar Sekarang</button>
+          <div class="auth-foot">
+            Sudah punya akun? <a href="login.html">Masuk di sini</a><br>
+            <a href="index.html">← Kembali ke beranda</a>
+          </div>
+        </form>
+      </div>
+    </main>
+  </div>
+
+  <script src="js/config.js?v=8"></script>
+  <script src="js/utils.js?v=8"></script>
+  <script src="js/store.js?v=8"></script>
+  <script src="js/auth.js?v=8"></script>
+  <script src="js/ui.js?v=8"></script>
+  <script src="js/docs.js?v=8"></script>
+  <script src="js/pages-auth.js?v=8"></script>
+  <script>
+    (function () {
+      var jalan = false;
+      function boot() {
+        if (jalan) return;
+        jalan = true;
+        PagesAuth.initRegister();
+        Store.init();
+      }
+      if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot);
+      else boot();
+    })();
+  </script>
+</body>
+</html>

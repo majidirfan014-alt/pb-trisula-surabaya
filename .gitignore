@@ -1,0 +1,11 @@
+# Konfigurasi tool lokal
+.qodo/
+
+# Sampah sistem operasi
+Thumbs.db
+.DS_Store
+desktop.ini
+
+# Log & file sementara
+*.log
+*.tmp

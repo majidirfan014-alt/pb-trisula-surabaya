@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0b3d91">
+  <link rel="icon" type="image/png" href="assets/favicon.png">
+  <title>Dashboard — PB TRISULA SURABAYA</title>
+  <link rel="stylesheet" href="css/style.css?v=8">
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar" id="sidebar" aria-label="Menu samping"></aside>
+
+    <div class="app-main">
+      <header class="app-topbar">
+        <div class="flex items-center gap-1" style="min-width:0">
+          <img class="brand-logo brand-logo-sm" src="assets/logo-pb-trisula.png" alt="Logo PB Trisula Surabaya" width="38" height="38">
+          <button class="icon-btn menu-toggle" id="side-toggle" aria-label="Buka menu">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h16"/><path d="M4 12h16"/><path d="M4 17h16"/></svg>
+          </button>
+          <div style="min-width:0">
+            <div class="title" id="page-title">Beranda</div>
+            <div class="sub" id="page-sub">PB Trisula Surabaya</div>
+          </div>
+        </div>
+        <div class="topbar-right">
+          <button class="icon-btn" id="btn-refresh" aria-label="Muat ulang data">
+            <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M20 12a8 8 0 1 1-2.3-5.6"/><path d="M20 4v5h-5"/></svg>
+          </button>
+          <button class="btn btn-sm btn-ghost" id="btn-logout">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M14 4h5v16h-5"/><path d="M10 8l-4 4 4 4"/><path d="M6 12h10"/></svg>
+            Keluar
+          </button>
+        </div>
+      </header>
+
+      <main class="app-content" id="page-content"></main>
+    </div>
+
+    <nav class="bottom-nav" id="bottom-nav" aria-label="Navigasi bawah"></nav>
+    <div class="drawer-backdrop" id="drawer-backdrop" hidden></div>
+    <div id="modal-host"></div>
+  </div>
+
+  <script src="js/config.js?v=8"></script>
+  <script src="js/utils.js?v=8"></script>
+  <script src="js/store.js?v=8"></script>
+  <script src="js/auth.js?v=8"></script>
+  <script src="js/ui.js?v=8"></script>
+  <script src="js/charts.js?v=8"></script>
+  <script src="js/shared.js?v=8"></script>
+  <script src="js/docs.js?v=8"></script>
+  <script src="js/landing-store.js?v=8"></script>
+  <script src="js/pages-coach.js?v=8"></script>
+  <script src="js/pages-assistant.js?v=8"></script>
+  <script src="js/pages-athlete.js?v=8"></script>
+  <script src="js/pages-landing.js?v=8"></script>
+  <script src="js/pages-monitoring.js?v=8"></script>
+  <script src="js/kemajuan.js?v=8"></script>
+  <script src="js/app.js?v=8"></script>
+  <script>
+    document.addEventListener('DOMContentLoaded', function () {
+      Store.init().then(function () {
+        App.init();
+      });
+    });
+  </script>
+</body>
+</html>
