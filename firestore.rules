@@ -1,0 +1,20 @@
+rules_version = '2';
+
+// Aturan keamanan Firestore - PB Trisula Surabaya
+//
+// Kebijakan: WAJIB LOGIN.
+// Siapa pun yang sudah terautentikasi (Firebase Auth) boleh membaca dan
+// menulis seluruh koleksi. Pengunjung tanpa login tidak punya akses apa pun.
+//
+// Catatan: aturan ini sengaja longgar untuk tahap uji coba. Sebelum dipakai
+// produksi, pertimbangkan untuk membatasi per role, misalnya:
+//   allow read:  if request.auth != null;
+//   allow write: if request.auth != null
+//                  && request.auth.token.role in ['pelatih_kepala', 'asisten'];
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /{document=**} {
+      allow read, write: if request.auth != null;
+    }
+  }
+}

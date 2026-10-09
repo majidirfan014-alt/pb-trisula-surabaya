@@ -9,3 +9,7 @@ desktop.ini
 # Log & file sementara
 *.log
 *.tmp
+
+# Dataset hasil generate (berisi hash sandi demo) - dibuat ulang lewat
+# tools/gen-dataset.js, tidak perlu masuk repository publik
+tools/firestore-data.json

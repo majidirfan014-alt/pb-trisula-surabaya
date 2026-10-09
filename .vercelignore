@@ -1,0 +1,8 @@
+# Berkas konfigurasi & tooling - bukan bagian dari situs statis,
+# tidak perlu ikut ter-deploy ke Vercel.
+tools/
+firebase.json
+firestore.rules
+firestore.indexes.json
+.gitignore
+.vercelignore
