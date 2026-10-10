@@ -276,6 +276,11 @@ var PagesAthlete = (function () {
       '<div class="stat-grid" id="at-stats"></div>' +
       '<div id="at-kemajuan"></div>' +
       '<div class="card mt-2">' +
+      '<div class="card-title">' + UI.icon('clipboard', 20) + 'Program Latihan</div>' +
+      '<p class="small muted">Program yang dijalankan pada tiap sesi latihan (baca-saja).</p>' +
+      '<div id="at-program"></div>' +
+      '</div>' +
+      '<div class="card mt-2">' +
       '<div class="card-title">' + UI.icon('clipboard', 20) + 'Catatan dari Pelatih</div>' +
       '<div id="at-notes"></div>' +
       '</div></div>';
@@ -296,6 +301,21 @@ var PagesAthlete = (function () {
         UI.statCard('Tren Latihan', t ? t.label : '-', t ? 'dibanding periode sebelumnya' : 'belum cukup data', 'activity', t && t.tone === 'ok' ? 'ok' : t && t.tone === 'danger' ? 'danger' : 'primary') +
         UI.statCard('Total Pertandingan', matches.length, menang + ' menang / ' + (matches.length - menang) + ' kalah', 'trophy', 'blue') +
         UI.statCard('Tes Fisik', Shared.latestTests(athlete.id_atlet).length + ' jenis', 'hasil terakhir tercatat', 'target', 'primary');
+
+      var programHost = page.querySelector('#at-program');
+      if (programHost) {
+        var sesi = Shared.programAtlet(athlete.id_atlet).slice(0, 10);
+        programHost.innerHTML = sesi.length
+          ? '<div class="list-rows">' + sesi.map(function (s) {
+            return '<div class="list-row"><div class="grow">' +
+              '<b>' + Utils.esc(s.program) + '</b>' +
+              '<span>' + Utils.esc(s.kategori === 'fisik' ? 'Fisik' : s.kategori === 'teknik' ? 'Teknik' : 'Umum') + '</span>' +
+              '<div class="small muted">' + Utils.fmtDate(s.tanggal, true) +
+              (s.catatan ? ' / ' + Utils.esc(s.catatan) : '') +
+              ' / dari ' + Utils.esc(s.penginput) + '</div></div></div>';
+          }).join('') + '</div>'
+          : UI.emptyState('Belum ada program latihan yang tercatat.', 'clipboard');
+      }
 
       var notes = Shared.catatanAtlet(athlete.id_atlet).slice(0, 8);
       var noteHost = page.querySelector('#at-notes');
@@ -594,7 +614,7 @@ var PagesAthlete = (function () {
       }
       host.innerHTML = '<div class="list-rows">' + rows.map(function (m) {
         return '<div class="list-row">' +
-          '<div class="grow"><b>' + Utils.esc(m.turnamen) + '</b>' +
+          '<div class="grow"><b>' + Utils.esc(m.turnamen) + '</b> ' + Shared.badgeKategori(m.kategori) +
           '<span>vs ' + Utils.esc(m.lawan) + ' / ' + Utils.fmtDate(m.tanggal, true) + '</span>' +
           '<div class="small muted">' + (m.skor_set || []).map(function (s) {
             return Utils.esc(s);
@@ -619,6 +639,7 @@ var PagesAthlete = (function () {
         '<div class="detail-item"><div class="k">Tanggal</div><div class="v">' + Utils.fmtDate(m.tanggal, true) + '</div></div>' +
         '<div class="detail-item"><div class="k">Atlet</div><div class="v">' + Utils.esc(a ? a.nama : '-') + '</div></div>' +
         '<div class="detail-item"><div class="k">Turnamen</div><div class="v">' + Utils.esc(m.turnamen) + '</div></div>' +
+        '<div class="detail-item"><div class="k">Kategori</div><div class="v">' + Shared.badgeKategori(m.kategori) + '</div></div>' +
         '<div class="detail-item"><div class="k">Lawan</div><div class="v">' + Utils.esc(m.lawan) + '</div></div>' +
         '<div class="detail-item"><div class="k">Hasil</div><div class="v">' + UI.statusBadge(m.hasil) + '</div></div>' +
         '<div class="detail-item"><div class="k">Skor per Set</div><div class="v"><div class="score-pills">' +
@@ -676,10 +697,17 @@ var PagesAthlete = (function () {
       '</form>' +
       '<div class="notice mt-3">' + UI.icon('info', 20) +
       '<div>Perubahan data diri (tinggi, berat, sekolah) dilakukan oleh pelatih kepala. Hubungi pelatih bila ada data yang perlu diperbarui.</div></div>' +
-      '</div></div></div>';
+      '</div></div>' +
+      '<div class="card mt-2">' +
+      '<div class="card-title">' + UI.icon('user', 20) + 'Kartu Atlet</div>' +
+      '<div id="kartu-atlet-host"></div>' +
+      '</div></div>';
 
     var page = root.querySelector('.page');
     Docs.bindViewer(page, athlete.dokumen || {});
+    if (typeof KartuAtlet !== 'undefined' && KartuAtlet && KartuAtlet.render) {
+      KartuAtlet.render(page.querySelector('#kartu-atlet-host'), athlete);
+    }
     var form = page.querySelector('#form-pw');
     UI.bindSubmit(form, function () {
       Utils.clearErrors(form);

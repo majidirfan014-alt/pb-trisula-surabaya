@@ -3801,6 +3801,48 @@ section[id],
   color: var(--muted);
 }
 
+.mon-tingkat {
+  margin-top: 8px;
+  min-height: 24px;
+}
+
+.int-badge {
+  display: inline-block;
+  padding: 3px 12px;
+  border-radius: 999px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+
+.int-rendah { background: #dcfce7; color: #15803d; }
+.int-sedang { background: #fef3c7; color: #92400e; }
+.int-tinggi { background: #ffedd5; color: #c2410c; }
+.int-sangat { background: #fee2e2; color: #b91c1c; }
+.int-kosong { background: #f1f5f9; color: var(--muted); }
+
+.int-mini {
+  font-size: 0.72rem;
+  opacity: 0.85;
+  font-weight: 600;
+  margin-left: 3px;
+}
+
+.mon-konversi {
+  margin-top: 6px;
+  padding: 6px 10px;
+  border-radius: 8px;
+  background: #fef3c7;
+  color: #92400e;
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.mon-slider {
+  min-width: 140px;
+}
+
 .mon-scroll {
   overflow-x: auto;
   overflow-y: hidden;
@@ -4203,5 +4245,342 @@ section[id],
     right: 10px;
     font-size: 0.72rem;
     padding: 6px 11px;
+  }
+}
+
+/* ============ Kartu Atlet (85,6 x 54 mm, landscape) ============ */
+/* Catatan: tinggi kartu berasal dari aspect-ratio, karena itu header
+   memakai flex-basis (persen tinggi) dan isi memakai flex:1. Jangan pakai
+   padding-top persen - persen padding dihitung dari LEBAR kartu sehingga
+   isi terdorong ke bawah dan terpotong. */
+.kartu-atlet {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  max-width: 420px;
+  aspect-ratio: 85.6 / 54;
+  border-radius: 16px;
+  overflow: hidden;
+  background: #ffffff;
+  border: 1px solid var(--line);
+  box-shadow: var(--shadow-lg);
+  margin: 0 auto 16px;
+  box-sizing: border-box;
+}
+
+.kartu-atlet .kartu-strip {
+  flex: 0 0 22%;
+  background: linear-gradient(120deg, #07265e 0%, #0b3d91 52%, #1565d8 100%);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 14px;
+  min-height: 0;
+}
+
+.kartu-atlet .kartu-logo {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: #fff;
+  padding: 2px;
+  flex-shrink: 0;
+  object-fit: contain;
+}
+
+.kartu-atlet .kartu-brand {
+  color: #fff;
+  line-height: 1.15;
+  min-width: 0;
+}
+
+.kartu-atlet .kartu-brand b {
+  display: block;
+  font-size: 0.92rem;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.kartu-atlet .kartu-brand span {
+  display: block;
+  color: rgba(255, 255, 255, 0.82);
+  font-size: 0.7rem;
+  font-weight: 600;
+}
+
+.kartu-atlet .kartu-aksen {
+  flex: 0 0 3px;
+  background: var(--accent);
+}
+
+.kartu-atlet .kartu-isi {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: 24% minmax(0, 1fr) 20%;
+  gap: 12px;
+  align-items: center;
+  padding: 12px 14px;
+  box-sizing: border-box;
+  overflow: hidden;
+}
+
+.kartu-atlet .kartu-foto {
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  border-radius: 12px;
+  overflow: hidden;
+  border: 3px solid var(--primary-700);
+  background: var(--primary-50);
+  justify-self: center;
+}
+
+.kartu-atlet .kartu-foto-isi {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.kartu-atlet .kartu-foto-kosong {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(140deg, var(--primary-100), var(--primary-50));
+  color: var(--primary-700);
+  font-size: clamp(1.2rem, 5vw, 1.9rem);
+  font-weight: 800;
+}
+
+.kartu-atlet .kartu-kanan {
+  min-width: 0;
+  overflow: hidden;
+}
+
+.kartu-atlet .kartu-nama {
+  font-size: clamp(0.8rem, 3.4vw, 1.06rem);
+  font-weight: 800;
+  color: var(--ink);
+  line-height: 1.2;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.kartu-atlet .kartu-id {
+  display: inline-block;
+  margin: 4px 0 6px;
+  padding: 2px 12px;
+  border-radius: 999px;
+  background: var(--accent);
+  color: #fff;
+  font-size: clamp(0.72rem, 3vw, 0.92rem);
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.kartu-atlet .kartu-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 3px 10px;
+}
+
+.kartu-atlet .kartu-grid span {
+  display: block;
+  font-size: clamp(0.52rem, 2.1vw, 0.62rem);
+  color: var(--muted);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.kartu-atlet .kartu-grid b {
+  display: block;
+  font-size: clamp(0.66rem, 2.7vw, 0.82rem);
+  color: var(--ink);
+  font-weight: 700;
+  line-height: 1.25;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.kartu-atlet .kartu-qr {
+  justify-self: center;
+  text-align: center;
+  min-width: 0;
+}
+
+.kartu-atlet .kartu-qr-box {
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  border-radius: 10px;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  background: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.kartu-atlet .kartu-qr-box img,
+.kartu-atlet .kartu-qr-box canvas {
+  display: block;
+  width: 100% !important;
+  height: 100% !important;
+}
+
+.kartu-atlet .kartu-qr-teks {
+  margin-top: 3px;
+  font-size: 0.6rem;
+  color: var(--muted);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.kartu-atlet .kartu-foot {
+  flex: 0 0 4px;
+  background: linear-gradient(90deg, #0b3d91 0%, #1565d8 45%, #d62839 100%);
+}
+
+.kartu-atlet.kartu-belakang .kartu-belakang-isi {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 12px;
+  text-align: center;
+  background: linear-gradient(160deg, #ffffff 0%, #eef2f9 100%);
+}
+
+.kartu-atlet .kartu-logo-besar {
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  object-fit: contain;
+}
+
+.kartu-atlet .kartu-belakang-nama {
+  font-size: 1.02rem;
+  font-weight: 800;
+  color: var(--primary-800);
+  letter-spacing: 0.02em;
+}
+
+.kartu-atlet .kartu-belakang-sub {
+  font-size: 0.78rem;
+  color: var(--muted);
+  font-weight: 600;
+}
+
+.kartu-atlet .kartu-belakang-kontak {
+  font-size: 0.72rem;
+  color: var(--muted);
+  margin-top: 4px;
+}
+
+.kartu-atlet .kartu-aksi {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  justify-content: center;
+  margin-bottom: 8px;
+}
+
+.kartu-atlet .kartu-aksi .btn {
+  flex: 1 1 150px;
+  min-height: 46px;
+  white-space: nowrap;
+}
+
+@media (max-width: 640px) {
+  .kartu-atlet { max-width: 100%; }
+  .kartu-atlet .kartu-isi { gap: 8px; padding: 10px; }
+  .kartu-atlet .kartu-logo { width: 30px; height: 30px; }
+  .kartu-atlet .kartu-aksi .btn { flex: 1 1 100%; }
+}
+
+/* ---------- cetak kartu (hanya kartu yang tampil) ---------- */
+#cetak-area { display: none; }
+
+@media print {
+  @page {
+    size: A4;
+    margin: 10mm;
+  }
+
+  body.mode-cetak {
+    background: #fff !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  body.mode-cetak > *:not(#cetak-area) {
+    display: none !important;
+  }
+
+  body.mode-cetak #cetak-area {
+    display: block !important;
+    width: 100%;
+  }
+
+  body.mode-cetak .cetak-halaman {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: calc(210mm - 20mm);
+    page-break-inside: avoid;
+    break-inside: avoid;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  body.mode-cetak .cetak-halaman + .cetak-halaman {
+    page-break-before: always;
+    break-before: page;
+  }
+
+  body.mode-cetak #cetak-area .kartu-atlet {
+    width: 85.6mm;
+    height: 54mm;
+    max-width: none;
+    aspect-ratio: auto;
+    border-radius: 3mm;
+    box-shadow: none;
+    margin: 0;
+    outline: 1px dashed #9aa8bb;
+    outline-offset: 3mm;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+    page-break-inside: avoid;
+    break-inside: avoid;
+  }
+
+  body.mode-cetak #cetak-area .kartu-atlet .kartu-brand b { font-size: 8.5pt; }
+  body.mode-cetak #cetak-area .kartu-atlet .kartu-brand span { font-size: 6pt; }
+  body.mode-cetak #cetak-area .kartu-atlet .kartu-nama { font-size: 11pt; }
+  body.mode-cetak #cetak-area .kartu-atlet .kartu-id { font-size: 9pt; }
+  body.mode-cetak #cetak-area .kartu-atlet .kartu-grid span { font-size: 5.5pt; }
+  body.mode-cetak #cetak-area .kartu-atlet .kartu-grid b { font-size: 7.5pt; }
+  body.mode-cetak #cetak-area .kartu-atlet .kartu-qr-teks { font-size: 5.5pt; }
+
+  body.mode-cetak #cetak-area .kartu-aksi,
+  body.mode-cetak #cetak-area .small {
+    display: none !important;
   }
 }

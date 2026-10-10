@@ -78,6 +78,7 @@ var CONFIG = {
   GENDER: ['Laki-laki', 'Perempuan'],
   AGAMA: ['Islam', 'Kristen', 'Katolik', 'Hindu', 'Buddha', 'Konghucu', 'Lainnya'],
   KATEGORI_PEMBAYARAN: ['SPP', 'Pertandingan', 'Persahabatan'],
+  KATEGORI_PERTANDINGAN: ['Tournament', 'Friendly Match'],
   STATUS_PEMBAYARAN: [
     { value: 'lunas', label: 'Lunas' },
     { value: 'belum', label: 'Belum Lunas' }

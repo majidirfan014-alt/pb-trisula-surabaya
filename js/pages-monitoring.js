@@ -4,22 +4,22 @@ var PagesMonitoring = (function () {
     {
       key: 'fisik', label: 'Fisik', judul: 'Program Latihan Fisik', warna: '#E53935',
       contoh: 'daya tahan, kekuatan, kecepatan, kelincahan',
-      slider: 'Slider nilai capaian fisik'
+      slider: 'Slider intensitas latihan fisik'
     },
     {
       key: 'teknik', label: 'Teknik', judul: 'Program Latihan Teknik', warna: '#43A047',
       contoh: 'footwork, smash, drop shot, servis, netting',
-      slider: 'Slider nilai capaian teknik'
+      slider: 'Slider intensitas latihan teknik'
     },
     {
       key: 'taktik', label: 'Taktik', judul: 'Program Latihan Taktik / Pola Permainan', warna: '#FB8C00',
       contoh: 'pola serangan, pola bertahan, rotasi ganda, pola tunggal',
-      slider: 'Slider nilai capaian taktik'
+      slider: 'Slider intensitas latihan taktik'
     },
     {
       key: 'mental', label: 'Mental', judul: 'Program Mental', warna: '#EC407A',
       contoh: 'fokus, percaya diri, mengelola tekanan, visualisasi',
-      slider: 'Slider nilai capaian mental'
+      slider: 'Slider intensitas latihan mental'
     }
   ];
 
@@ -87,21 +87,100 @@ var PagesMonitoring = (function () {
     }), 'tanggalMulai', 'asc');
   }
 
+  // Migrasi data lama: field `nilai` (skala 0-100) dipetakan menjadi
+  // `intensitas` (skala 1-10) lalu ditandai `konversi: true` supaya Pelatih
+  // Kepala dapat memeriksa dan mengubahnya. Data asli tidak dihapus.
+  function migrasiIntensitas() {
+    var berubah = 0;
+    Store.all(KOLEKSI).forEach(function (r) {
+      var patch = null;
+      ASPESK.forEach(function (a) {
+        var s = r[a.key];
+        if (!s || typeof s !== 'object') return;
+        var sudah = s.intensitas;
+        if (sudah !== undefined && sudah !== null && sudah !== '') return;
+        if (s.nilai === undefined || s.nilai === null || s.nilai === '') return;
+        if (!patch) patch = {};
+        patch[a.key] = {
+          program: s.program || '',
+          durasi: s.durasi || '',
+          intensitas: Math.max(1, Math.round(Number(s.nilai) / 10)),
+          konversi: true,
+          catatan: s.catatan || '',
+          nilai: s.nilai
+        };
+      });
+      if (patch) {
+        Store.update(KOLEKSI, r.id, patch);
+        berubah++;
+      }
+    });
+    return berubah;
+  }
+
+  var sudahMigrasiIntensitas = false;
+  function migrasiIntensitasSekali() {
+    if (sudahMigrasiIntensitas) return 0;
+    sudahMigrasiIntensitas = true;
+    try {
+      return migrasiIntensitas();
+    } catch (e) {
+      return 0;
+    }
+  }
+
   function rowsUntukMinggu(tgl) {
     return Store.where(KOLEKSI, function (m) {
       return m.tanggalMulai === tgl;
     });
   }
 
+  // Tingkat intensitas latihan (skala 1-10) beserta label & warna badge-nya.
+  function tingkatIntensitas(nilai) {
+    var n = Number(nilai);
+    if (nilai === null || nilai === undefined || nilai === '' || isNaN(n)) return null;
+    n = Math.round(n);
+    if (n >= 9) return { label: 'Sangat Tinggi', kelas: 'int-sangat' };
+    if (n >= 7) return { label: 'Tinggi', kelas: 'int-tinggi' };
+    if (n >= 4) return { label: 'Sedang', kelas: 'int-sedang' };
+    return { label: 'Rendah', kelas: 'int-rendah' };
+  }
+
+  // Memperbarui label badge tingkat di bawah slider saat nilai berubah.
+  function perbaruiTingkat(form, namaField) {
+    if (!form || !namaField) return;
+    var key = namaField.replace(/_intensitas$/, '');
+    var badge = form.querySelector('[data-tingkat="' + key + '"]');
+    if (!badge) return;
+    var num = form.querySelector('[name="' + namaField + '"]');
+    var t = tingkatIntensitas(num ? num.value : '');
+    badge.className = 'int-badge ' + (t ? t.kelas : 'int-kosong');
+    badge.textContent = t ? t.label : 'Belum diisi';
+  }
+
+  // Normalisasi satu bagian program: memakai field `intensitas` (1-10).
+  // Data lama yang masih menyimpan `nilai` (0-100) otomatis dibaca sebagai
+  // intensitas agar tidak hilang, dan ditandai `konversi`.
   function bacaAspek(row, key) {
     var s = (row && row[key]) || {};
-    var nilai = s.nilai;
-    if (nilai === null || nilai === undefined || nilai === '' || isNaN(Number(nilai))) nilai = null;
-    else nilai = Number(nilai);
+    var intensitas = s.intensitas;
+    var konversi = false;
+    if (intensitas === null || intensitas === undefined || intensitas === '' || isNaN(Number(intensitas))) {
+      if (s.nilai !== null && s.nilai !== undefined && s.nilai !== '' && !isNaN(Number(s.nilai))) {
+        intensitas = Math.max(1, Math.round(Number(s.nilai) / 10));
+        konversi = true;
+      } else {
+        intensitas = null;
+      }
+    } else {
+      intensitas = Number(intensitas);
+      konversi = !!s.konversi;
+    }
     return {
       program: s.program || '',
       durasi: s.durasi || '',
-      nilai: nilai,
+      intensitas: intensitas,
+      konversi: konversi,
       catatan: s.catatan || ''
     };
   }
@@ -109,13 +188,13 @@ var PagesMonitoring = (function () {
   function aspekKosong() {
     var o = {};
     ASPESK.forEach(function (a) {
-      o[a.key] = { program: '', durasi: '', nilai: null, catatan: '' };
+      o[a.key] = { program: '', durasi: '', intensitas: null, catatan: '' };
     });
     return o;
   }
 
-  function nilaiDari(row, key) {
-    return bacaAspek(row, key).nilai;
+  function intensitasDari(row, key) {
+    return bacaAspek(row, key).intensitas;
   }
 
   function namaAtlet(idAtlet) {
@@ -144,6 +223,7 @@ var PagesMonitoring = (function () {
     var model = {
       idAtlet: idAtlet,
       rata: !idAtlet || idAtlet === '*',
+      satuanPeriode: 'minggu ini',
       minggu: minggu,
       labels: [],
       judul: [],
@@ -175,7 +255,7 @@ var PagesMonitoring = (function () {
         model.jumlahAtlet.push(target ? 1 : 0);
         ASPESK.forEach(function (a) {
           var info = bacaAspek(target, a.key);
-          model.seri[a.key].push(info.nilai);
+          model.seri[a.key].push(info.intensitas);
           model.program[a.key].push(info.program);
         });
         return;
@@ -189,9 +269,9 @@ var PagesMonitoring = (function () {
       }).filter(Boolean);
       model.catatan.push(catatanAda.length ? catatanAda[0] : '');
       ASPESK.forEach(function (a) {
-        var nilai = rows.map(function (r) {
-          return nilaiDari(r, a.key);
-        }).filter(function (v) {
+      var nilai = rows.map(function (r) {
+        return intensitasDari(r, a.key);
+      }).filter(function (v) {
           return v !== null;
         });
         if (nilai.length) {
@@ -252,6 +332,10 @@ var PagesMonitoring = (function () {
       return '<div class="mon-ringkas-item" style="--mon-warna:' + a.warna + '">' +
         '<div class="k">' + Utils.esc(a.label) + '</div>' +
         '<div class="v" style="color:' + a.warna + '">' + (terakhir === null ? '-' : terakhir) + '</div>' +
+        (function () {
+          var t = tingkatIntensitas(terakhir);
+          return t ? '<div class="mt-1"><span class="int-badge ' + t.kelas + '">' + Utils.esc(t.label) + '</span></div>' : '';
+        })() +
         '<div class="mon-delta ' + arah + '">' + simbol + ' ' + Utils.esc(teks) + '</div>' +
         '</div>';
     }).join('') + '</div>';
@@ -283,46 +367,103 @@ var PagesMonitoring = (function () {
       return akhir[a.key] !== null;
     });
 
-    if (berisi.length) {
-      var tertinggi = berisi[0];
-      var terendah = berisi[0];
-      berisi.forEach(function (a) {
-        if (akhir[a.key] > akhir[tertinggi.key]) tertinggi = a;
-        if (akhir[a.key] < akhir[terendah.key]) terendah = a;
-      });
-      if (berisi.length > 1) {
-        hasil.push('Aspek tertinggi saat ini adalah ' + tertinggi.label + ' dengan nilai capaian ' +
-          akhir[tertinggi.key] + '. Aspek terendah adalah ' + terendah.label + ' dengan nilai capaian ' +
-          akhir[terendah.key] + '.');
-      } else {
-        hasil.push('Saat ini baru tercatat nilai untuk aspek ' + tertinggi.label + ' yaitu ' +
-          akhir[tertinggi.key] + '.');
-      }
-
-      ASPESK.forEach(function (a) {
-        var t = trenDari(model.seri[a.key]);
-        if (!t) return;
-        var arahTeks = t.arah === 'naik' ? 'naik' : t.arah === 'turun' ? 'turun' : 'stabil';
-        hasil.push('Tren ' + a.label + ' beberapa minggu terakhir ' + t.label + ' (' + arahTeks + ', ' +
-          (t.delta > 0 ? '+' : '') + t.delta + ' poin).');
-      });
-
-      var idxAkhir = model.minggu.length - 1;
-      ASPESK.forEach(function (a) {
-        var prog = model.program[a.key][idxAkhir] || '';
-        var row = model.sumber[model.minggu[idxAkhir]];
-        var durasi = '';
-        if (!model.rata && row) durasi = bacaAspek(row, a.key).durasi;
-        if (!prog) {
-          hasil.push('Program ' + a.label + ' minggu terbaru belum diisi.');
-          return;
-        }
-        hasil.push('Program ' + a.label + ' minggu terbaru: ' + prog +
-          (durasi ? ' (' + durasi + ')' : '') + '.');
-      });
-    } else {
-      hasil.push('Belum ada nilai capaian yang tercatat pada periode ini.');
+    if (!berisi.length) {
+      hasil.push('Belum ada intensitas latihan yang tercatat pada periode ini.');
+      return hasil;
     }
+
+    var tertinggi = berisi[0];
+    var terendah = berisi[0];
+    berisi.forEach(function (a) {
+      if (akhir[a.key] > akhir[tertinggi.key]) tertinggi = a;
+      if (akhir[a.key] < akhir[terendah.key]) terendah = a;
+    });
+    var tTinggi = tingkatIntensitas(akhir[tertinggi.key]);
+    hasil.push('Intensitas tertinggi pekan ini: ' + tertinggi.label + ' (' + akhir[tertinggi.key] +
+      ' - ' + (tTinggi ? tTinggi.label : '-') + ').');
+    if (terendah.key !== tertinggi.key) {
+      var tEndah = tingkatIntensitas(akhir[terendah.key]);
+      hasil.push('Intensitas terendah: ' + terendah.label + ' (' + akhir[terendah.key] +
+        ' - ' + (tEndah ? tEndah.label : '-') + ').');
+    }
+
+    // rata-rata intensitas keseluruhan
+    var gabung = [];
+    ASPESK.forEach(function (a) {
+      model.seri[a.key].forEach(function (v) {
+        if (v !== null && v !== undefined) gabung.push(v);
+      });
+    });
+    if (gabung.length) {
+      var rata = Math.round((gabung.reduce(function (s, v) {
+        return s + v;
+      }, 0) / gabung.length) * 10) / 10;
+      var tRata = tingkatIntensitas(rata);
+      hasil.push('Rata-rata intensitas ' + model.satuanPeriode.toLowerCase() + ': ' + rata +
+        (tRata ? ' (' + tRata.label + ')' : '') + '.');
+    }
+
+    var trenNaik = [];
+    var trenTurun = [];
+    ASPESK.forEach(function (a) {
+      var t = trenDari(model.seri[a.key]);
+      if (!t || t.arah === 'tetap') return;
+      if (t.arah === 'naik') trenNaik.push(a.label);
+      else trenTurun.push(a.label);
+    });
+    if (trenNaik.length) hasil.push('Tren naik: ' + trenNaik.join(', ') + '.');
+    if (trenTurun.length) hasil.push('Tren turun: ' + trenTurun.join(', ') + '.');
+
+    // peringatan: intensitas tinggi 3 minggu berturut-turut
+    var terlaluTinggi = [];
+    ASPESK.forEach(function (a) {
+      var s = model.seri[a.key];
+      if (s.length >= 3) {
+        var tiga = s.slice(-3);
+        if (tiga.every(function (v) {
+          return v !== null && v !== undefined && v >= 8;
+        })) terlaluTinggi.push(a.label);
+      }
+    });
+    if (terlaluTinggi.length) {
+      hasil.push('Perhatian: intensitas ' + terlaluTinggi.join(', ') +
+        ' sudah tinggi (8 ke atas) selama 3 minggu berturut-turut. Pertimbangkan menambah waktu pemulihan.');
+    }
+
+    // peringatan: seluruh program rendah terlalu lama
+    var rataPerMinggu = model.minggu.map(function (_, i) {
+      var v = ASPESK.map(function (a) {
+        return model.seri[a.key][i];
+      }).filter(function (x) {
+        return x !== null && x !== undefined;
+      });
+      return v.length ? (v.reduce(function (s, x) {
+        return s + x;
+      }, 0) / v.length) : null;
+    });
+    var tigaAkhir = rataPerMinggu.slice(-3).filter(function (v) {
+      return v !== null;
+    });
+    if (tigaAkhir.length === 3 && tigaAkhir.every(function (v) {
+      return v <= 3;
+    })) {
+      hasil.push('Perhatikan keseimbangan beban latihan dan waktu pemulihan: seluruh program berintensitas rendah selama 3 minggu terakhir.');
+    }
+
+    // program minggu terbaru
+    var idxAkhir = model.minggu.length - 1;
+    ASPESK.forEach(function (a) {
+      var prog = model.program[a.key][idxAkhir] || '';
+      var row = model.sumber[model.minggu[idxAkhir]];
+      var durasi = '';
+      if (!model.rata && row) durasi = bacaAspek(row, a.key).durasi;
+      if (!prog) {
+        hasil.push('Program ' + a.label + ' minggu ini belum diisi.');
+        return;
+      }
+      hasil.push('Program ' + a.label + ' minggu ini: ' + prog +
+        (durasi ? ' (' + durasi + ')' : '') + '.');
+    });
 
     return hasil;
   }
@@ -338,6 +479,31 @@ var PagesMonitoring = (function () {
   }
 
   /* ============================ grafik ============================ */
+
+  // Pita latar tipis: 1-3 Rendah, 4-6 Sedang, 7-8 Tinggi, 9-10 Sangat Tinggi.
+  var pitaIntensitas = {
+    id: 'pitaIntensitas',
+    beforeDatasetsDraw: function (chart) {
+      var y = chart.scales && chart.scales.y;
+      var x = chart.scales && chart.scales.x;
+      if (!y || !x) return;
+      var ctx = chart.ctx;
+      var pita = [
+        { bawah: 0, atas: 3, warna: 'rgba(22, 163, 74, 0.09)' },
+        { bawah: 3, atas: 6, warna: 'rgba(234, 179, 8, 0.09)' },
+        { bawah: 6, atas: 8, warna: 'rgba(251, 146, 60, 0.09)' },
+        { bawah: 8, atas: 10, warna: 'rgba(239, 68, 68, 0.09)' }
+      ];
+      ctx.save();
+      pita.forEach(function (p) {
+        var yAtas = y.getPixelForValue(p.atas);
+        var yBawah = y.getPixelForValue(p.bawah);
+        ctx.fillStyle = p.warna;
+        ctx.fillRect(x.left, yAtas, x.right - x.left, yBawah - yAtas);
+      });
+      ctx.restore();
+    }
+  };
 
   function gambarGrafik(canvas, model) {
     return Charts.load().then(function (Chart) {
@@ -372,6 +538,7 @@ var PagesMonitoring = (function () {
       canvas._chart = new Chart(canvas.getContext('2d'), {
         type: 'line',
         data: { labels: model.labels, datasets: datasets },
+        plugins: [pitaIntensitas],
         options: {
           responsive: true,
           maintainAspectRatio: false,
@@ -403,7 +570,9 @@ var PagesMonitoring = (function () {
                   var a = ASPESK[ctx.datasetIndex];
                   if (!a) return '';
                   var nilai = model.seri[a.key][i];
-                  var teks = a.label + ': ' + (nilai === null || nilai === undefined ? 'belum diisi' : nilai);
+                  if (nilai === null || nilai === undefined) return a.label + ': belum diisi';
+                  var t = tingkatIntensitas(nilai);
+                  var teks = a.label + ': ' + nilai + (t ? ' (' + t.label + ')' : '');
                   var prog = model.program[a.key][i];
                   if (prog) teks += ' - ' + potong(prog, 42);
                   return teks;
@@ -425,13 +594,13 @@ var PagesMonitoring = (function () {
             },
             y: {
               min: 0,
-              max: 100,
+              max: 10,
               beginAtZero: true,
               grid: { color: '#e2e8f0' },
-              ticks: { color: '#64748b', font: { size: 11 }, stepSize: 20 },
+              ticks: { color: '#64748b', font: { size: 11 }, stepSize: 1, precision: 0 },
               title: {
                 display: true,
-                text: 'Nilai Capaian',
+                text: 'Intensitas Latihan (1-10)',
                 color: '#64748b',
                 font: { size: 11 }
               }
@@ -539,20 +708,20 @@ var PagesMonitoring = (function () {
   ];
 
   function nilaiContoh(aspekIdx, atletIdx, mingguIdx, total) {
-    var basis = [58, 62, 55, 60][aspekIdx];
-    var bakat = [7, -2, 3][atletIdx % 3];
-    var naik = total > 1 ? Math.round((mingguIdx / (total - 1)) * 16) : 0;
-    var variasi = ((aspekIdx * 3 + atletIdx * 2 + mingguIdx * 5) % 5) - 2;
-    return Math.max(35, Math.min(95, basis + bakat + naik + variasi));
+    var basis = [6, 7, 5, 6][aspekIdx];
+    var bakat = [1, -1, 0][atletIdx % 3];
+    var naik = total > 1 ? Math.round((mingguIdx / (total - 1)) * 3) : 0;
+    var variasi = ((aspekIdx * 3 + atletIdx * 2 + mingguIdx * 5) % 3) - 1;
+    return Math.max(1, Math.min(10, basis + bakat + naik + variasi));
   }
 
   function contohAspek(nama, aspekIdx, atletIdx, mingguIdx, total, isiKosong) {
-    if (isiKosong) return { program: '', durasi: '', nilai: null, catatan: '' };
+    if (isiKosong) return { program: '', durasi: '', intensitas: null, catatan: '' };
     var pilih = CONTOH_PROGRAM[nama][mingguIdx % CONTOH_PROGRAM[nama].length];
     return {
       program: pilih[0],
       durasi: pilih[1],
-      nilai: nilaiContoh(aspekIdx, atletIdx, mingguIdx, total),
+      intensitas: nilaiContoh(aspekIdx, atletIdx, mingguIdx, total),
       catatan: CONTOH_CATATAN_ASPESK[nama][mingguIdx % CONTOH_CATATAN_ASPESK[nama].length] || ''
     };
   }
@@ -615,9 +784,10 @@ var PagesMonitoring = (function () {
   /* ============================ tab: input program ============================ */
 
   function kartuAspek(a, data) {
-    var isi = (data.aspek && data.aspek[a.key]) || { program: '', durasi: '', nilai: null, catatan: '' };
-    var nilai = isi.nilai;
-    var nilaiTeks = nilai === null || nilai === undefined ? '' : nilai;
+    var isi = (data.aspek && data.aspek[a.key]) || { program: '', durasi: '', intensitas: null, catatan: '', konversi: false };
+    var n = isi.intensitas;
+    var nTeks = (n === null || n === undefined) ? '' : n;
+    var tingkat = tingkatIntensitas(n);
     return '<div class="mon-aspek" style="--mon-warna:' + a.warna + '">' +
       '<div class="mon-aspek-head"><span class="mon-dot"></span><h4>' + Utils.esc(a.judul) + '</h4></div>' +
       '<div class="form-grid cols-2">' +
@@ -631,15 +801,20 @@ var PagesMonitoring = (function () {
       }) +
       '</div>' +
       '<div class="field">' +
-      '<label class="label" for="f-' + a.key + '_nilai">Nilai Capaian (0-100) <span class="req">*</span></label>' +
+      '<label class="label" for="f-' + a.key + '_intensitas">Intensitas Latihan</label>' +
       '<div class="mon-nilai-row">' +
-      '<input class="input" type="number" name="' + a.key + '_nilai" id="f-' + a.key + '_nilai"' +
-      ' min="0" max="100" step="1" placeholder="0 - 100" value="' + Utils.esc(nilaiTeks) + '">' +
-      '<input class="mon-slider" type="range" min="0" max="100" step="1"' +
-      ' data-slider="' + a.key + '_nilai" value="' + (nilai === null || nilai === undefined ? 0 : nilai) + '"' +
-      ' aria-label="' + Utils.esc(a.slider) + '">' +
+      '<input class="mon-slider" type="range" min="1" max="10" step="1"' +
+      ' data-slider="' + a.key + '_intensitas" value="' + (n === null || n === undefined ? 5 : n) + '"' +
+      ' aria-label="Intensitas latihan ' + Utils.esc(a.label) + '">' +
+      '<input class="input" type="number" name="' + a.key + '_intensitas" id="f-' + a.key + '_intensitas"' +
+      ' min="1" max="10" step="1" placeholder="1 - 10" value="' + Utils.esc(nTeks) + '"' +
+      ' aria-label="Angka intensitas latihan ' + Utils.esc(a.label) + '">' +
       '</div>' +
-      '<div class="field-error" data-error-for="' + a.key + '_nilai"></div>' +
+      '<div class="mon-tingkat"><span class="int-badge ' + (tingkat ? tingkat.kelas : 'int-kosong') + '"' +
+      ' data-tingkat="' + a.key + '">' + (tingkat ? Utils.esc(tingkat.label) : 'Belum diisi') + '</span></div>' +
+      '<div class="help">Seberapa berat latihan minggu ini? 1 = sangat ringan, 10 = sangat berat.</div>' +
+      (isi.konversi ? '<div class="mon-konversi">Hasil konversi dari data lama. Silakan periksa dan ubah bila perlu.</div>' : '') +
+      '<div class="field-error" data-error-for="' + a.key + '_intensitas"></div>' +
       '</div>' +
       UI.field({
         name: a.key + '_catatan', label: 'Catatan', type: 'textarea', rows: 2,
@@ -703,8 +878,9 @@ var PagesMonitoring = (function () {
     if (nilai === null || nilai === undefined) {
       return '<span class="score-pill" style="opacity:.55">-</span>';
     }
+    var t = tingkatIntensitas(nilai);
     return '<span class="score-pill" style="border-color:' + warna + ';color:' + warna + '">' +
-      Utils.esc(nilai) + '</span>';
+      Utils.esc(nilai) + (t ? ' <span class="int-mini">' + Utils.esc(t.label) + '</span>' : '') + '</span>';
   }
 
   function riwayatHtml(rows, peta) {
@@ -721,10 +897,10 @@ var PagesMonitoring = (function () {
           '<div class="small muted">' + Utils.esc(r.idAtlet) + '</div></td>' +
           '<td>Minggu ' + (peta[r.tanggalMulai] || 1) +
           '<div class="small muted">' + Utils.esc(rentangTeks(r.tanggalMulai)) + '</div></td>' +
-          '<td class="align-center">' + isiBarisPil(nilaiDari(r, 'fisik'), '#E53935') + '</td>' +
-          '<td class="align-center">' + isiBarisPil(nilaiDari(r, 'teknik'), '#43A047') + '</td>' +
-          '<td class="align-center">' + isiBarisPil(nilaiDari(r, 'taktik'), '#FB8C00') + '</td>' +
-          '<td class="align-center">' + isiBarisPil(nilaiDari(r, 'mental'), '#EC407A') + '</td>' +
+          '<td class="align-center">' + isiBarisPil(intensitasDari(r, 'fisik'), '#E53935') + '</td>' +
+          '<td class="align-center">' + isiBarisPil(intensitasDari(r, 'teknik'), '#43A047') + '</td>' +
+          '<td class="align-center">' + isiBarisPil(intensitasDari(r, 'taktik'), '#FB8C00') + '</td>' +
+          '<td class="align-center">' + isiBarisPil(intensitasDari(r, 'mental'), '#EC407A') + '</td>' +
           '<td class="small">' + Utils.esc(potong(r.catatanPelatih, 60) || '-') + '</td>' +
           '<td class="align-center"><div class="flex gap-1" style="justify-content:center">' +
           '<button type="button" class="btn btn-sm btn-secondary" data-mon-edit="' + Utils.esc(r.id) + '">Edit</button>' +
@@ -763,11 +939,12 @@ var PagesMonitoring = (function () {
   /* ============================ halaman pelatih ============================ */
 
   function monitoringCoach(root, user, app) {
+    migrasiIntensitasSekali();
     isiDataContoh(user && user.id);
 
     root.innerHTML =
       '<div class="page">' +
-      UI.pageHeader('Monitoring', 'Program latihan mingguan, nilai capaian, dan grafik perkembangan atlet.') +
+      UI.pageHeader('Monitoring', 'Program latihan mingguan, intensitas latihan, dan grafik perkembangan atlet.') +
       '<div class="card">' +
       UI.tabs([
         { id: 'input', label: 'Input Program' },
@@ -819,13 +996,14 @@ var PagesMonitoring = (function () {
       form.querySelector('[name="tanggal"]').value = data.tanggal;
       form.querySelector('[name="catatan_pelatih"]').value = data.catatan_pelatih;
       ASPESK.forEach(function (a) {
-        var info = data.aspek[a.key];
+        var info = (data.aspek && data.aspek[a.key]) || bacaAspek(data, a.key);
         form.querySelector('[name="' + a.key + '_program"]').value = info.program;
         form.querySelector('[name="' + a.key + '_durasi"]').value = info.durasi;
-        form.querySelector('[name="' + a.key + '_nilai"]').value = info.nilai === null ? '' : info.nilai;
+        form.querySelector('[name="' + a.key + '_intensitas"]').value = info.intensitas === null ? '' : info.intensitas;
         form.querySelector('[name="' + a.key + '_catatan"]').value = info.catatan;
-        var slider = form.querySelector('[data-slider="' + a.key + '_nilai"]');
-        if (slider) slider.value = info.nilai === null ? 0 : info.nilai;
+        var slider = form.querySelector('[data-slider="' + a.key + '_intensitas"]');
+        if (slider) slider.value = info.intensitas === null ? 5 : info.intensitas;
+        perbaruiTingkat(form, a.key + '_intensitas');
       });
       Utils.clearErrors(form);
       refreshMingguInfo();
@@ -880,11 +1058,13 @@ var PagesMonitoring = (function () {
         if (slider) {
           var num = form.querySelector('[name="' + slider.getAttribute('data-slider') + '"]');
           if (num) num.value = slider.value;
+          perbaruiTingkat(form, slider.getAttribute('data-slider'));
           return;
         }
-        if (e.target.name && e.target.name.indexOf('_nilai') === e.target.name.length - 6) {
+        if (e.target.name && /_intensitas$/.test(e.target.name)) {
           var slider2 = form.querySelector('[data-slider="' + e.target.name + '"]');
-          if (slider2 && e.target.value !== '') slider2.value = e.target.value;
+          if (slider2) slider2.value = e.target.value === '' ? 5 : e.target.value;
+          perbaruiTingkat(form, e.target.name);
         }
       });
 
@@ -907,27 +1087,22 @@ var PagesMonitoring = (function () {
           var program = isi[a.key + '_program'] || '';
           var durasi = isi[a.key + '_durasi'] || '';
           var catatan = isi[a.key + '_catatan'] || '';
-          var nilaiTeks = isi[a.key + '_nilai'];
-          var aktif = !!(program.trim() || durasi.trim() || catatan.trim() || nilaiTeks !== '');
+          var intensitasTeks = isi[a.key + '_intensitas'];
+          var aktif = !!(program.trim() || durasi.trim() || catatan.trim() || intensitasTeks !== '');
           if (!aktif) return;
           adaBagian = true;
-          if (nilaiTeks === '' || nilaiTeks === undefined) {
-            errors[a.key + '_nilai'] = 'Nilai capaian wajib diisi.';
-            return;
-          }
-          var n = Number(nilaiTeks);
-          if (isNaN(n)) {
-            errors[a.key + '_nilai'] = 'Nilai capaian harus berupa angka 0 sampai 100.';
-            return;
-          }
-          if (n < 0 || n > 100) {
-            errors[a.key + '_nilai'] = 'Nilai capaian harus antara 0 sampai 100.';
-            return;
+          var n = null;
+          if (intensitasTeks !== '' && intensitasTeks !== undefined) {
+            n = Number(intensitasTeks);
+            if (isNaN(n) || n !== Math.round(n) || n < 1 || n > 10) {
+              errors[a.key + '_intensitas'] = 'Intensitas latihan harus berupa angka bulat 1 sampai 10.';
+              return;
+            }
           }
           payload[a.key] = {
             program: program,
             durasi: durasi,
-            nilai: n,
+            intensitas: n,
             catatan: catatan
           };
         });
@@ -1119,10 +1294,11 @@ var PagesMonitoring = (function () {
           ASPESK.forEach(function (a) {
             form.querySelector('[name="' + a.key + '_program"]').value = '';
             form.querySelector('[name="' + a.key + '_durasi"]').value = '';
-            form.querySelector('[name="' + a.key + '_nilai"]').value = '';
+            form.querySelector('[name="' + a.key + '_intensitas"]').value = '';
             form.querySelector('[name="' + a.key + '_catatan"]').value = '';
-            var slider = form.querySelector('[data-slider="' + a.key + '_nilai"]');
-            if (slider) slider.value = 0;
+            var slider = form.querySelector('[data-slider="' + a.key + '_intensitas"]');
+            if (slider) slider.value = 5;
+            perbaruiTingkat(form, a.key + '_intensitas');
           });
           form.querySelector('[name="catatan_pelatih"]').value = '';
           Utils.clearErrors(form);
@@ -1213,6 +1389,7 @@ var PagesMonitoring = (function () {
   /* ============================ halaman atlet ============================ */
 
   function monitoringAtlet(root, user, app) {
+    migrasiIntensitasSekali();
     var athlete = Store.findOne('athletes', function (a) {
       return a.id_atlet === user.id_atlet || a.user_id === user.id;
     });
@@ -1223,7 +1400,7 @@ var PagesMonitoring = (function () {
 
     root.innerHTML =
       '<div class="page">' +
-      UI.pageHeader('Monitoring Saya', 'Grafik capaian program latihan dan catatan pelatih untuk ' + athlete.nama + '.') +
+      UI.pageHeader('Monitoring Saya', 'Grafik intensitas latihan dan catatan pelatih untuk ' + athlete.nama + '.') +
       '<div id="mon-isi"></div>' +
       '</div>';
 
@@ -1328,12 +1505,12 @@ var PagesMonitoring = (function () {
   function register() {
     App.register('monitoring', {
       title: 'Monitoring',
-      subtitle: 'Program mingguan dan grafik capaian atlet',
+      subtitle: 'Program mingguan dan grafik intensitas latihan',
       render: monitoringCoach
     });
     App.register('monitoring-saya', {
       title: 'Monitoring Saya',
-      subtitle: 'Grafik capaian program latihan Anda',
+      subtitle: 'Grafik intensitas latihan Anda',
       render: monitoringAtlet
     });
   }
@@ -1344,6 +1521,8 @@ var PagesMonitoring = (function () {
     seninDari: seninDari,
     bangunModel: bangunModel,
     penjelasan: penjelasan,
+    tingkatIntensitas: tingkatIntensitas,
+    migrasiIntensitas: migrasiIntensitas,
     isiDataContoh: isiDataContoh
   };
 })();

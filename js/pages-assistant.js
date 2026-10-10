@@ -410,7 +410,11 @@ var PagesAssistant = (function () {
       var html = '<form id="form-lh" novalidate><div class="form-grid cols-2">' +
         UI.selectAthlete('id_atlet', '', { label: 'Atlet' }) +
         UI.field({ name: 'tanggal', label: 'Tanggal', type: 'date', required: true, value: Utils.todayISO() }) +
-        '</div>';
+        '</div>' +
+        UI.field({
+          name: 'program', label: 'Program Latihan', type: 'textarea', rows: 2, required: true,
+          placeholder: 'contoh: Pemanasan, footwork 6 titik, smash, pendinginan'
+        });
       if (!params.length) {
         html += UI.emptyState('Belum ada parameter ' + mode + ' aktif. Hubungi pelatih kepala untuk menambahkannya.', 'settings');
       } else {
@@ -432,6 +436,7 @@ var PagesAssistant = (function () {
         var errors = {};
         if (!data.id_atlet) errors.id_atlet = 'Pilih atlet.';
         if (!data.tanggal) errors.tanggal = 'Tanggal wajib diisi.';
+        if (!String(data.program || '').trim()) errors.program = 'Program latihan wajib diisi.';
         var ps = Shared.activeParameters(mode);
         if (!ps.length) {
           Utils.toast('Tidak ada parameter aktif.', 'danger');
@@ -462,6 +467,7 @@ var PagesAssistant = (function () {
             satuan: p.satuan,
             kategori: p.kategori,
             nilai: Number(val),
+            program: data.program || '',
             catatan: data.catatan || '',
             input_oleh: user.id,
             input_peran: CONFIG.ROLE_LABEL[user.role] || ''
@@ -491,7 +497,7 @@ var PagesAssistant = (function () {
       });
       var keys = Object.keys(grouped).sort().reverse();
       listHost.innerHTML = '<div class="table-wrap"><table class="table"><thead><tr>' +
-        '<th>Tanggal</th><th>Atlet</th><th>Ringkasan</th><th>Catatan</th><th>Input Oleh</th><th class="align-center">Aksi</th>' +
+        '<th>Tanggal</th><th>Atlet</th><th>Program Latihan</th><th>Ringkasan</th><th>Catatan</th><th>Input Oleh</th><th class="align-center">Aksi</th>' +
         '</tr></thead><tbody>' +
         keys.slice(0, 30).map(function (k) {
           var g = grouped[k];
@@ -500,6 +506,7 @@ var PagesAssistant = (function () {
           return '<tr>' +
             '<td>' + Utils.fmtDate(g.tanggal) + '</td>' +
             '<td><b>' + Utils.esc(a ? a.nama : '-') + '</b></td>' +
+            '<td class="small">' + Utils.esc(Shared.programLatihan(g.items[0])) + '</td>' +
             '<td><div class="score-pills">' + g.items.map(function (i) {
               return '<span class="score-pill">' + Utils.esc(Shared.namaParameter(i)) + ': ' + Utils.esc(i.nilai) + '</span>';
             }).join('') + '</div></td>' +
@@ -597,6 +604,14 @@ var PagesAssistant = (function () {
       '</div>' +
       '<div class="card mt-2">' +
       '<div class="card-title">' + UI.icon('trophy', 20) + 'Riwayat Input</div>' +
+      '<div class="filter-bar">' +
+      '<select class="input" id="ip-kategori" style="max-width:220px" aria-label="Filter kategori pertandingan">' +
+      '<option value="">Semua kategori</option>' +
+      '<option value="Tournament">Tournament</option>' +
+      '<option value="Friendly Match">Friendly Match</option>' +
+      '<option value="__belum">Belum dikategorikan</option>' +
+      '</select>' +
+      '</div>' +
       '<div id="ip-list"></div>' +
       '</div></div>';
 
@@ -610,6 +625,13 @@ var PagesAssistant = (function () {
         UI.selectAthlete('id_atlet', '', { label: 'Atlet' }) +
         UI.field({ name: 'tanggal', label: 'Tanggal', type: 'date', required: true, value: Utils.todayISO() }) +
         UI.field({ name: 'turnamen', label: 'Turnamen', required: true, placeholder: 'contoh: Surabaya Open 2026' }) +
+        UI.field({
+          name: 'kategori', label: 'Kategori Pertandingan', type: 'select', required: true, value: '',
+          options: [{ value: '', label: '-- Pilih kategori --' }].concat(
+            (CONFIG.KATEGORI_PERTANDINGAN || []).map(function (k) {
+              return { value: k, label: k };
+            }))
+        }) +
         UI.field({ name: 'lawan', label: 'Lawan', required: true, placeholder: 'contoh: PB Djarum Kudus' }) +
         UI.field({ name: 'hasil', label: 'Hasil', type: 'select', value: 'Menang', options: ['Menang', 'Kalah'] }) +
         UI.field({ name: 'catatan', label: 'Catatan', type: 'textarea', rows: 2, placeholder: 'Opsional' }) +
@@ -650,6 +672,7 @@ var PagesAssistant = (function () {
         if (!data.id_atlet) errors.id_atlet = 'Atlet wajib dipilih.';
         if (!data.tanggal) errors.tanggal = 'Tanggal wajib diisi.';
         if (!data.turnamen) errors.turnamen = 'Turnamen wajib diisi.';
+        if (!data.kategori) errors.kategori = 'Kategori pertandingan wajib dipilih.';
         if (!data.lawan) errors.lawan = 'Lawan wajib diisi.';
         if (!data.hasil) errors.hasil = 'Hasil wajib dipilih.';
 
@@ -679,6 +702,7 @@ var PagesAssistant = (function () {
           id_atlet: data.id_atlet,
           tanggal: data.tanggal,
           turnamen: data.turnamen,
+          kategori: data.kategori || '',
           lawan: data.lawan,
           skor_set: sets,
           hasil: data.hasil,
@@ -692,19 +716,25 @@ var PagesAssistant = (function () {
     }
 
     function refreshList() {
-      var rows = Utils.sortBy(Store.all('matches'), 'tanggal', 'desc');
+      var filterKat = page.querySelector('#ip-kategori') ? page.querySelector('#ip-kategori').value : '';
+      var rows = Utils.sortBy(Store.all('matches').filter(function (m) {
+        if (filterKat === '__belum') return !m.kategori;
+        if (filterKat) return m.kategori === filterKat;
+        return true;
+      }), 'tanggal', 'desc');
       if (!rows.length) {
         listHost.innerHTML = UI.emptyState('Belum ada data pertandingan.', 'trophy');
         return;
       }
       listHost.innerHTML = '<div class="table-wrap"><table class="table"><thead><tr>' +
-        '<th>Tanggal</th><th>Atlet</th><th>Turnamen</th><th>Lawan</th><th>Skor</th><th>Hasil</th><th>Input Oleh</th>' +
+        '<th>Tanggal</th><th>Atlet</th><th>Kategori</th><th>Turnamen</th><th>Lawan</th><th>Skor</th><th>Hasil</th><th>Input Oleh</th>' +
         '</tr></thead><tbody>' +
         rows.slice(0, 30).map(function (m) {
           var a = UI.athleteById(m.id_atlet);
           return '<tr>' +
             '<td>' + Utils.fmtDate(m.tanggal) + '</td>' +
             '<td><b>' + Utils.esc(a ? a.nama : '-') + '</b></td>' +
+            '<td>' + Shared.badgeKategori(m.kategori) + '</td>' +
             '<td>' + Utils.esc(m.turnamen) + '</td>' +
             '<td>' + Utils.esc(m.lawan) + '</td>' +
             '<td><div class="score-pills">' + (m.skor_set || []).map(function (s) {
@@ -717,6 +747,10 @@ var PagesAssistant = (function () {
 
     renderForm();
     refreshList();
+
+    page.addEventListener('change', function (e) {
+      if (e.target.id === 'ip-kategori') refreshList();
+    });
 
     app.subscribe('matches', refreshList);
     app.subscribe('athletes', renderForm);

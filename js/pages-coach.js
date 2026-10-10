@@ -269,6 +269,7 @@ var PagesCoach = (function () {
     }
 
     body += '<div id="m-detail-kemajuan"></div>';
+    body += '<h4 class="mt-3">Kartu Atlet</h4><div id="m-detail-kartu"></div>';
     body += '<h4 class="mt-3">Dokumen Pendaftaran</h4>' + Docs.viewerHtml(a.dokumen || {});
 
     document.getElementById('modal-host').innerHTML =
@@ -280,6 +281,9 @@ var PagesCoach = (function () {
 
     if (typeof Kemajuan !== 'undefined' && Kemajuan && Kemajuan.render) {
       Kemajuan.render(document.getElementById('m-detail-kemajuan'), { idAtlet: a.id_atlet });
+    }
+    if (typeof KartuAtlet !== 'undefined' && KartuAtlet && KartuAtlet.render) {
+      KartuAtlet.render(document.getElementById('m-detail-kartu'), a);
     }
 
     Docs.bindViewer(document.getElementById('m-detail-body'), a.dokumen || {});
@@ -583,10 +587,228 @@ var PagesCoach = (function () {
     app.subscribe('attendance', refresh);
   }
 
+  /* ---------- Ekspor kehadiran (khusus Pelatih Kepala) ---------- */
+  function kumpulkanKehadiran(periode, mulai, akhir, jenis) {
+    function dalamRentang(tgl) {
+      if (!tgl) return false;
+      if (mulai && tgl < mulai) return false;
+      if (akhir && tgl > akhir) return false;
+      return true;
+    }
+    var hasil = [];
+    if (jenis !== 'asisten') {
+      Store.where('attendance', function (r) {
+        return r.tipe === 'atlet' && dalamRentang(r.tanggal);
+      }).forEach(function (r) {
+        var a = UI.athleteById(r.id_atlet);
+        hasil.push({
+          id: r.id_atlet,
+          nama: a ? a.nama : '-',
+          peran: 'Atlet',
+          tanggal: r.tanggal,
+          status: r.status || '-',
+          jam_masuk: r.jam_masuk || '',
+          catatan: r.catatan || '',
+          input: UI.userName(r.input_oleh)
+        });
+      });
+    }
+    if (jenis !== 'atlet') {
+      var statusAsisten = {};
+      Store.where('attendance', function (r) {
+        return r.tipe === 'asisten' && dalamRentang(r.tanggal);
+      }).forEach(function (r) {
+        statusAsisten[(r.id_pengguna || r.id_atlet) + '|' + r.tanggal] = r;
+      });
+      Store.all('absensi_asisten').forEach(function (r) {
+        if (!dalamRentang(r.tanggal)) return;
+        var u = Store.find('users', r.id_asisten);
+        var legacy = statusAsisten[r.id_asisten + '|' + r.tanggal];
+        var atlet = (r.atlet || []).map(function (id) {
+          var a = UI.athleteById(id);
+          return a ? a.nama : id;
+        }).join(', ');
+        var catatan = [];
+        if (r.lokasi) catatan.push('Lokasi: ' + r.lokasi);
+        if (r.program) catatan.push('Program: ' + r.program);
+        if (atlet) catatan.push('Atlet: ' + atlet);
+        hasil.push({
+          id: r.id_asisten,
+          nama: (u && u.nama) || r.nama_asisten || '-',
+          peran: 'Asisten Pelatih',
+          tanggal: r.tanggal,
+          status: (legacy && legacy.status) || 'Hadir',
+          jam_masuk: (legacy && legacy.jam_masuk) || '',
+          catatan: catatan.join(' / '),
+          input: (u && u.nama) || r.nama_asisten || '-'
+        });
+      });
+    }
+    return hasil.sort(function (a, b) {
+      if (a.tanggal !== b.tanggal) return a.tanggal < b.tanggal ? 1 : -1;
+      return String(a.nama) < String(b.nama) ? -1 : 1;
+    });
+  }
+
+  function ringkasanKehadiran(rows) {
+    var per = {};
+    rows.forEach(function (r) {
+      var k = r.id + '|' + r.peran;
+      if (!per[k]) per[k] = { nama: r.nama, id: r.id, peran: r.peran, Hadir: 0, Izin: 0, Sakit: 0, 'Tidak Hadir': 0, total: 0 };
+      per[k].total++;
+      if (per[k][r.status] !== undefined) per[k][r.status]++;
+    });
+    return Object.keys(per).map(function (k) {
+      var p = per[k];
+      return [
+        p.nama, p.id, p.peran,
+        p.Hadir, p.Izin, p.Sakit, p['Tidak Hadir'],
+        p.total, Utils.pct(p.Hadir, p.total)
+      ];
+    });
+  }
+
+  function bukaEkspor(user, filterAwal) {
+    var terkunci = false;
+    document.getElementById('modal-host').innerHTML =
+      UI.modalShell('m-ekspor', 'Ekspor Data Kehadiran',
+        UI.backButton({ closeModal: 'm-ekspor' }) +
+        '<form id="form-ekspor" novalidate>' +
+        UI.field({
+          name: 'periode', label: 'Periode', type: 'select', required: true,
+          value: (filterAwal && filterAwal.periode) || 'semua',
+          options: [
+            { value: 'hari', label: 'Hari ini' },
+            { value: 'minggu', label: 'Minggu ini' },
+            { value: 'bulan', label: 'Bulan ini' },
+            { value: 'rentang', label: 'Rentang tanggal' },
+            { value: 'semua', label: 'Semua data' }
+          ]
+        }) +
+        '<div class="form-grid cols-2" id="ekspor-rentang" hidden>' +
+        UI.field({ name: 'mulai', label: 'Tanggal Mulai', type: 'date' }) +
+        UI.field({ name: 'akhir', label: 'Tanggal Akhir', type: 'date' }) +
+        '</div>' +
+        UI.field({
+          name: 'jenis', label: 'Data', type: 'select', required: true,
+          value: (filterAwal && filterAwal.jenis) || 'semua',
+          options: [
+            { value: 'atlet', label: 'Atlet' },
+            { value: 'asisten', label: 'Asisten Pelatih' },
+            { value: 'semua', label: 'Keduanya' }
+          ]
+        }) +
+        UI.field({
+          name: 'format', label: 'Format', type: 'select', required: true, value: 'xlsx',
+          options: [{ value: 'xlsx', label: 'Unduh Excel (.xlsx)' }, { value: 'csv', label: 'Unduh CSV (.csv)' }]
+        }) +
+        '<p class="small muted mb-0">Data mengikuti periode dan jenis yang dipilih. Bila tidak ada data, file tidak akan diunduh.</p>' +
+        '</form>',
+        '<button type="button" class="btn btn-ghost" data-back-close="m-ekspor">Batal</button>' +
+        '<button type="submit" class="btn" form="form-ekspor">' + UI.icon('save', 20) + ' Unduh Sekarang</button>');
+    UI.openModal('m-ekspor');
+
+    var form = document.getElementById('form-ekspor');
+    function segarkanRentang() {
+      var box = document.getElementById('ekspor-rentang');
+      if (box) box.hidden = form.querySelector('[name="periode"]').value !== 'rentang';
+    }
+    form.querySelector('[name="periode"]').addEventListener('change', segarkanRentang);
+    segarkanRentang();
+
+    UI.bindSubmit(form, function () {
+      if (terkunci) return;
+      terkunci = true;
+      var d = Utils.formData(form);
+      var errors = {};
+      if (!d.periode) errors.periode = 'Periode wajib dipilih.';
+      if (!d.jenis) errors.jenis = 'Data wajib dipilih.';
+      if (!d.format) errors.format = 'Format wajib dipilih.';
+      if (d.periode === 'rentang' && (!d.mulai || !d.akhir)) errors.mulai = 'Isi tanggal mulai dan tanggal akhir.';
+      if (d.periode === 'rentang' && d.mulai && d.akhir && d.mulai > d.akhir) errors.akhir = 'Tanggal akhir tidak boleh sebelum tanggal mulai.';
+      if (Object.keys(errors).length) {
+        terkunci = false;
+        Utils.showErrors(form, errors);
+        Utils.toast('Mohon lengkapi isian yang ditandai.', 'danger');
+        return;
+      }
+
+      var mulai = '';
+      var akhir = '';
+      var hariIni = Utils.todayISO();
+      function seninDari(iso) {
+        var d = Utils.parseISO(iso);
+        var hari = d.getDay();
+        d.setDate(d.getDate() + (hari === 0 ? -6 : 1 - hari));
+        return Utils.toISODate(d);
+      }
+      if (d.periode === 'hari') {
+        mulai = hariIni;
+        akhir = hariIni;
+      } else if (d.periode === 'minggu') {
+        mulai = seninDari(hariIni);
+        akhir = Utils.addDaysISO(mulai, 6);
+      } else if (d.periode === 'bulan') {
+        mulai = Utils.monthKey(hariIni) + '-01';
+        var t = Utils.parseISO(mulai);
+        akhir = Utils.toISODate(new Date(t.getFullYear(), t.getMonth() + 1, 0));
+      } else if (d.periode === 'rentang') {
+        mulai = d.mulai;
+        akhir = d.akhir;
+      }
+
+      var rows = kumpulkanKehadiran(d.periode, mulai, akhir, d.jenis);
+      if (!rows.length) {
+        terkunci = false;
+        Utils.toast('Tidak ada data untuk diekspor.', 'danger');
+        return;
+      }
+
+      var kolom = ['No', 'ID Atlet/ID Pengguna', 'Nama', 'Peran', 'Tanggal', 'Hari', 'Status',
+        'Jam Masuk', 'Catatan', 'Diinput Oleh'];
+      var baris = rows.map(function (r, i) {
+        return [
+          i + 1, r.id, r.nama, r.peran,
+          Ekspor.tanggalIndo(r.tanggal), Ekspor.hariIndo(r.tanggal), r.status,
+          r.jam_masuk || '-', r.catatan || '-', r.input || '-'
+        ];
+      });
+
+      var labelJenis = d.jenis === 'atlet' ? 'Atlet' : d.jenis === 'asisten' ? 'Asisten' : 'Semua';
+      var namaFile = 'Kehadiran_PB-Trisula_' + labelJenis + '_' + hariIni;
+      var paket = {
+        judul: 'REKAP KEHADIRAN PB TRISULA SURABAYA',
+        periode: d.periode === 'hari' ? 'Hari ini (' + Ekspor.tanggalIndo(hariIni) + ')'
+          : d.periode === 'minggu' ? 'Minggu ini (' + Ekspor.tanggalIndo(mulai) + ' - ' + Ekspor.tanggalIndo(akhir) + ')'
+            : d.periode === 'bulan' ? 'Bulan ini (' + Utils.fmtDate(mulai + '-01', true) + ')'
+              : d.periode === 'rentang' ? Ekspor.tanggalIndo(mulai) + ' - ' + Ekspor.tanggalIndo(akhir)
+                : 'Seluruh data',
+        kolom: kolom,
+        baris: baris,
+        kolomRingkasan: ['Nama', 'ID', 'Peran', 'Hadir', 'Izin', 'Sakit', 'Tidak Hadir', 'Total Pertemuan', 'Persentase Kehadiran (%)'],
+        ringkasan: ringkasanKehadiran(rows)
+      };
+
+      var janji = d.format === 'csv'
+        ? Ekspor.unduhCsv(paket, namaFile + '.csv')
+        : Ekspor.unduhXlsx(paket, namaFile + '.xlsx');
+
+      janji.then(function () {
+        terkunci = false;
+        UI.closeModal('m-ekspor');
+        Utils.toast('File berhasil diunduh.', 'success');
+      }, function (err) {
+        terkunci = false;
+        Utils.toast(err && err.message ? err.message : 'Gagal membuat file ekspor.', 'danger');
+      });
+    });
+  }
+
   function kehadiran(root, user, app) {
     root.innerHTML =
       '<div class="page">' +
-      UI.pageHeader('Kehadiran', 'Pantau kehadiran atlet dan jurnal asisten pelatih.') +
+      UI.pageHeader('Kehadiran', 'Pantau kehadiran atlet dan jurnal asisten pelatih.',
+        '<button type="button" class="btn" data-ekspor-kehadiran>' + UI.icon('save', 20) + ' Ekspor</button>') +
       '<div class="card">' +
       '<div class="tabs" role="tablist" id="kh-jurnal">' +
       '<button type="button" class="tab active" data-jurnal="atlet" role="tab">Jurnal Kehadiran Atlet</button>' +
@@ -778,6 +1000,10 @@ var PagesCoach = (function () {
     refresh();
 
     page.addEventListener('click', function (e) {
+      if (e.target.closest('[data-ekspor-kehadiran]')) {
+        bukaEkspor(user, { jenis: jurnal === 'asisten' ? 'asisten' : 'atlet' });
+        return;
+      }
       var tombolJurnal = e.target.closest('[data-jurnal]');
       if (tombolJurnal) {
         jurnal = tombolJurnal.getAttribute('data-jurnal');
@@ -1030,7 +1256,11 @@ var PagesCoach = (function () {
         '<div class="form-grid cols-2">' +
         UI.selectAthlete('id_atlet', '', { label: 'Atlet' }) +
         UI.field({ name: 'tanggal', label: 'Tanggal', type: 'date', required: true, value: Utils.todayISO() }) +
-        '</div>';
+        '</div>' +
+        UI.field({
+          name: 'program', label: 'Program Latihan', type: 'textarea', rows: 2, required: true,
+          placeholder: 'contoh: Pemanasan, footwork 6 titik, smash, pendinginan'
+        });
       if (!params.length) {
         html += UI.emptyState('Belum ada parameter ' + kategori + ' yang aktif. Tambahkan melalui tab Pengaturan Parameter.', 'settings');
       } else {
@@ -1093,7 +1323,7 @@ var PagesCoach = (function () {
       });
       var keys = Object.keys(grouped).sort().reverse();
       listHost.innerHTML = '<div class="table-wrap"><table class="table"><thead><tr>' +
-        '<th>Tanggal</th><th>Atlet</th><th>Ringkasan</th><th>Catatan</th><th>Input Oleh</th><th class="align-center">Aksi</th>' +
+        '<th>Tanggal</th><th>Atlet</th><th>Program Latihan</th><th>Ringkasan</th><th>Catatan</th><th>Input Oleh</th><th class="align-center">Aksi</th>' +
         '</tr></thead><tbody>' +
         keys.slice(0, 40).map(function (k) {
           var g = grouped[k];
@@ -1105,6 +1335,7 @@ var PagesCoach = (function () {
           return '<tr>' +
             '<td>' + Utils.fmtDate(g.tanggal) + '</td>' +
             '<td><b>' + Utils.esc(a ? a.nama : '-') + '</b></td>' +
+            '<td class="small">' + Utils.esc(Shared.programLatihan(g.items[0])) + '</td>' +
             '<td><div class="score-pills">' + pills + '</div></td>' +
             '<td class="small">' + Utils.esc(g.catatan || '-') + '</td>' +
             '<td class="small">' + Utils.esc(Shared.labelPenginput(g.items[0])) + '</td>' +
@@ -1132,6 +1363,7 @@ var PagesCoach = (function () {
           var errors = {};
           if (!data.id_atlet) errors.id_atlet = 'Pilih atlet.';
           if (!data.tanggal) errors.tanggal = 'Tanggal wajib diisi.';
+          if (!String(data.program || '').trim()) errors.program = 'Program latihan wajib diisi.';
           var params = Shared.activeParameters(mode);
           if (!params.length) {
             Utils.toast('Tidak ada parameter aktif. Tambahkan dulu di tab Pengaturan Parameter.', 'danger');
@@ -1162,6 +1394,7 @@ var PagesCoach = (function () {
               satuan: p.satuan,
               kategori: p.kategori,
               nilai: Number(val),
+              program: data.program || '',
               catatan: data.catatan || '',
               input_oleh: user.id,
               input_peran: CONFIG.ROLE_LABEL[user.role] || ''
@@ -1293,6 +1526,14 @@ var PagesCoach = (function () {
       UI.selectAthlete('id_atlet', m.id_atlet || presetIdAtlet || '', { label: 'Atlet' }) +
       UI.field({ name: 'tanggal', label: 'Tanggal', type: 'date', required: true, value: m.tanggal || Utils.todayISO() }) +
       UI.field({ name: 'turnamen', label: 'Turnamen', required: true, value: m.turnamen, placeholder: 'contoh: Surabaya Open 2026' }) +
+      UI.field({
+        name: 'kategori', label: 'Kategori Pertandingan', type: 'select', required: true,
+        value: m.kategori || '',
+        options: [{ value: '', label: '-- Pilih kategori --' }].concat(
+          (CONFIG.KATEGORI_PERTANDINGAN || []).map(function (k) {
+            return { value: k, label: k };
+          }))
+      }) +
       UI.field({ name: 'lawan', label: 'Lawan', required: true, value: m.lawan, placeholder: 'contoh: PB Jaya Raya' }) +
       UI.field({ name: 'hasil', label: 'Hasil', type: 'select', required: true, value: m.hasil || 'Menang', options: ['Menang', 'Kalah'] }) +
       UI.field({ name: 'catatan', label: 'Catatan', type: 'textarea', value: m.catatan, rows: 2, placeholder: 'Opsional' }) +
@@ -1351,6 +1592,7 @@ var PagesCoach = (function () {
       if (!data.id_atlet) errors.id_atlet = 'Atlet wajib dipilih.';
       if (!data.tanggal) errors.tanggal = 'Tanggal wajib diisi.';
       if (!data.turnamen) errors.turnamen = 'Turnamen wajib diisi.';
+      if (!data.kategori) errors.kategori = 'Kategori pertandingan wajib dipilih.';
       if (!data.lawan) errors.lawan = 'Lawan wajib diisi.';
       if (!data.hasil) errors.hasil = 'Hasil wajib dipilih.';
 
@@ -1382,6 +1624,7 @@ var PagesCoach = (function () {
         id_atlet: data.id_atlet,
         tanggal: data.tanggal,
         turnamen: data.turnamen,
+        kategori: data.kategori || '',
         lawan: data.lawan,
         skor_set: sets,
         hasil: data.hasil,
@@ -1408,6 +1651,12 @@ var PagesCoach = (function () {
         return '<option value="' + Utils.esc(a.id_atlet) + '">' + Utils.esc(a.nama) + '</option>';
       }).join('') + '</select>' +
       '<select class="input" id="pg-hasil" style="max-width:180px"><option value="">Semua hasil</option><option>Menang</option><option>Kalah</option></select>' +
+      '<select class="input" id="pg-kategori" style="max-width:200px" aria-label="Filter kategori pertandingan">' +
+      '<option value="">Semua kategori</option>' +
+      '<option value="Tournament">Tournament</option>' +
+      '<option value="Friendly Match">Friendly Match</option>' +
+      '<option value="__belum">Belum dikategorikan</option>' +
+      '</select>' +
       '</div>' +
       '<div id="pg-list"></div>' +
       '</div></div>';
@@ -1418,21 +1667,27 @@ var PagesCoach = (function () {
     function refresh() {
       var idAtlet = page.querySelector('#pg-atlet').value;
       var hasil = page.querySelector('#pg-hasil').value;
+      var kategori = page.querySelector('#pg-kategori').value;
       var rows = Shared.matchesFor(idAtlet || null).filter(function (m) {
-        return !hasil || m.hasil === hasil;
+        if (hasil && m.hasil !== hasil) return false;
+        if (kategori === '__belum') {
+          if (m.kategori) return false;
+        } else if (kategori && m.kategori !== kategori) return false;
+        return true;
       });
       if (!rows.length) {
         list.innerHTML = UI.emptyState('Belum ada data pertandingan.', 'trophy');
         return;
       }
       list.innerHTML = '<div class="table-wrap"><table class="table"><thead><tr>' +
-        '<th>Tanggal</th><th>Atlet</th><th>Turnamen</th><th>Lawan</th><th>Skor</th><th>Hasil</th><th class="align-center">Aksi</th>' +
+        '<th>Tanggal</th><th>Atlet</th><th>Kategori</th><th>Turnamen</th><th>Lawan</th><th>Skor</th><th>Hasil</th><th class="align-center">Aksi</th>' +
         '</tr></thead><tbody>' +
         rows.map(function (m) {
           var a = UI.athleteById(m.id_atlet);
           return '<tr>' +
             '<td>' + Utils.fmtDate(m.tanggal) + '</td>' +
             '<td><b>' + Utils.esc(a ? a.nama : '-') + '</b></td>' +
+            '<td>' + Shared.badgeKategori(m.kategori) + '</td>' +
             '<td>' + Utils.esc(m.turnamen) + '</td>' +
             '<td>' + Utils.esc(m.lawan) + '</td>' +
             '<td><div class="score-pills">' + (m.skor_set || []).map(function (s) {
@@ -1449,7 +1704,7 @@ var PagesCoach = (function () {
     refresh();
 
     page.addEventListener('change', function (e) {
-      if (e.target.id === 'pg-atlet' || e.target.id === 'pg-hasil') refresh();
+      if (e.target.id === 'pg-atlet' || e.target.id === 'pg-hasil' || e.target.id === 'pg-kategori') refresh();
     });
 
     page.addEventListener('click', function (e) {

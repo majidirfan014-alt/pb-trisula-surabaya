@@ -203,6 +203,22 @@ var Shared = (function () {
     });
   }
 
+  // Badge kategori pertandingan dengan warna berbeda.
+  // Data lama yang belum punya kategori tetap tampil dengan label
+  // "Belum dikategorikan" dan dapat diedit.
+  function badgeKategori(kategori) {
+    var k = String(kategori || '').trim();
+    if (!k) return UI.badge('Belum dikategorikan', 'muted');
+    if (k === 'Tournament') return UI.badge('Tournament', 'primary');
+    return UI.badge(k, 'ok');
+  }
+
+  // Program latihan sebuah entri logbook. Data lama tanpa program tampil "-".
+  function programLatihan(entri) {
+    var p = entri && entri.program ? String(entri.program).trim() : '';
+    return p || '-';
+  }
+
   function parameterById(id) {
     if (!id) return null;
     return Store.find('log_parameters', id) || null;
@@ -249,6 +265,36 @@ var Shared = (function () {
     }));
   }
 
+  // Program latihan milik satu atlet, dikelompokkan per sesi
+  // (satu tanggal + satu kategori = satu program). Tampil read-only di
+  // halaman atlet. Sesi tanpa program tidak disertakan.
+  function programAtlet(idAtlet) {
+    var grup = {};
+    entriesFor(idAtlet).forEach(function (e) {
+      var p = String(e.program || '').trim();
+      if (!p) return;
+      var k = e.tanggal + '|' + (e.kategori || '');
+      if (!grup[k]) {
+        grup[k] = {
+          tanggal: e.tanggal,
+          kategori: e.kategori || '',
+          program: p,
+          catatan: String(e.catatan || '').trim(),
+          penginput: labelPenginput(e),
+          dibuat: e.dibuat_pada || ''
+        };
+      } else {
+        if (!grup[k].catatan && e.catatan) grup[k].catatan = String(e.catatan).trim();
+      }
+    });
+    return Object.keys(grup).map(function (k) {
+      return grup[k];
+    }).sort(function (a, b) {
+      if (a.tanggal !== b.tanggal) return a.tanggal < b.tanggal ? 1 : -1;
+      return String(a.kategori) < String(b.kategori) ? -1 : 1;
+    });
+  }
+
   // Simpan sekelompok entri logbook (satu atlet + satu tanggal + satu kategori).
   // Nilai kosong = entri dihapus, nilai berubah = entri diperbarui,
   // nilai baru = entri ditambah. Mengembalikan jumlah baris yang disimpan.
@@ -279,6 +325,7 @@ var Shared = (function () {
         satuan: p.satuan,
         kategori: p.kategori,
         nilai: nilai,
+        program: konteks.program || '',
         catatan: konteks.catatan || '',
         input_oleh: (konteks.user && konteks.user.id) || '',
         input_peran: (konteks.user && CONFIG.ROLE_LABEL[konteks.user.role]) || ''
@@ -298,11 +345,13 @@ var Shared = (function () {
     });
     var nilai = {};
     var catatan = '';
+    var program = '';
     Store.where('logbook_entries', function (e) {
       return e.id_atlet === konteks.idAtlet && e.tanggal === konteks.tanggal && e.kategori === konteks.kategori;
     }).forEach(function (e) {
       if (e.id_parameter) nilai[e.id_parameter] = e.nilai;
       if (e.catatan) catatan = e.catatan;
+      if (e.program) program = e.program;
     });
 
     var a = Store.findOne('athletes', function (x) {
@@ -323,6 +372,10 @@ var Shared = (function () {
             '<div class="field-error" data-error-for="p_' + Utils.esc(p.id) + '"></div></div>';
         }).join('') + '</div>'
         : UI.emptyState('Tidak ada parameter ' + konteks.kategori + ' yang terdaftar.', 'settings')) +
+      UI.field({
+        name: 'program', label: 'Program Latihan', type: 'textarea', rows: 2, required: true,
+        value: program, placeholder: 'contoh: Pemanasan, footwork 6 titik, smash, pendinginan'
+      }) +
       UI.field({ name: 'catatan', label: 'Catatan untuk atlet', type: 'textarea', rows: 2, value: catatan }) +
       '<p class="small muted mb-0">Kosongkan nilai untuk menghapus penilaian parameter tersebut.</p>' +
       '</form>';
@@ -361,6 +414,7 @@ var Shared = (function () {
         tanggal: konteks.tanggal,
         kategori: konteks.kategori,
         nilai: nilaiBaru,
+        program: d.program || '',
         catatan: d.catatan || '',
         user: konteks.user
       });
@@ -399,12 +453,15 @@ var Shared = (function () {
     attentionList: attentionList,
     lastMatch: lastMatch,
     activeParameters: activeParameters,
+    badgeKategori: badgeKategori,
+    programLatihan: programLatihan,
     parameterById: parameterById,
     namaParameter: namaParameter,
     satuanParameter: satuanParameter,
     labelPenginput: labelPenginput,
     urutTerbaru: urutTerbaru,
     catatanAtlet: catatanAtlet,
+    programAtlet: programAtlet,
     simpanGrupLogbook: simpanGrupLogbook,
     bukaEditorLogbook: bukaEditorLogbook,
     hapusGrupLogbook: hapusGrupLogbook,

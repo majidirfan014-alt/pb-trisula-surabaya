@@ -226,14 +226,25 @@ var Cloud = (function () {
     return muatSdk().then(function (ok) {
       if (!ok) return false;
       var db = window.firebase.firestore();
-      var batch = db.batch();
       var daftar = Array.isArray(items) ? items : [items];
-      daftar.forEach(function (it) {
-        if (!it) return;
-        var id = it.id || 'config';
-        batch.set(db.collection(nama).doc(String(id)), bersih(it));
-      });
-      return batch.commit().then(function () {
+      var ref = db.collection(nama);
+      // dokumen yang sudah ada di cloud tapi tidak ada lagi secara lokal ikut
+      // dihapus agar penghapusan juga tersinkron antar perangkat
+      return ref.get().then(function (snap) {
+        var batch = db.batch();
+        var lokal = {};
+        daftar.forEach(function (it) {
+          if (it) lokal[String(it.id || 'config')] = true;
+        });
+        snap.forEach(function (d) {
+          if (!lokal[d.id]) batch.delete(ref.doc(d.id));
+        });
+        daftar.forEach(function (it) {
+          if (!it) return;
+          batch.set(ref.doc(String(it.id || 'config')), bersih(it));
+        });
+        return batch.commit();
+      }).then(function () {
         return true;
       }, function () {
         return false;
@@ -254,7 +265,7 @@ var Cloud = (function () {
   }
 
   /* ---------- sinkronisasi koleksi yang memuat foto ---------- */
-  var KOLEKSI_SINKRON = ['users', 'athletes'];
+  var KOLEKSI_SINKRON = ['users', 'athletes', 'matches', 'logbook_entries'];
 
   function muatDariCloud() {
     KOLEKSI_SINKRON.forEach(function (nama) {
