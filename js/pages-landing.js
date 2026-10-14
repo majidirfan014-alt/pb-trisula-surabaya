@@ -65,15 +65,17 @@ var PagesLanding = (function () {
       '<div class="lp-foto-kosong">' + UI.icon('users', 26) + '<span>Belum ada foto</span>' +
       '<span class="lp-foto-seret">atau seret foto ke area ini</span></div>' +
       (ada ? '<img data-lp-img src="' + Utils.esc(src) + '" alt="' + Utils.esc(label || 'Foto') + '">' : '') +
-      '<div class="lp-foto-proses" data-lp-proses="' + key + '" hidden>Memproses...</div>' +
+      '<div class="lp-foto-proses" data-lp-proses="' + key + '" hidden>' +
+      '<div class="lp-spinner" aria-hidden="true"></div>' +
+      '<span data-lp-proses-teks="1">Memproses...</span></div>' +
       '</div>';
     return '<div class="lp-foto" data-lp-foto="' + key + '">' +
       '<div class="lp-foto-label">' + Utils.esc(label) + '</div>' +
       media +
       '<div class="lp-foto-aksi">' +
-      '<label class="btn lp-btn-unggah">' + IKON_UNGGAH + '<span>' + (ada ? 'Ganti Foto' : 'Unggah Foto') + '</span>' +
+      '<label class="btn lp-btn-unggah">' + IKON_UNGGAH + '<span data-lp-teks-unggah>' + (ada ? 'Ganti Foto' : 'Unggah Foto') + '</span>' +
       '<input type="file" hidden accept="image/jpeg,image/jpg,image/png,image/webp" data-lp-file="' + key + '"></label>' +
-      '<button type="button" class="btn lp-btn-hapus"' + (ada ? '' : ' disabled') + ' data-lp-hapus="' + key + '">Hapus</button>' +
+      '<button type="button" class="btn lp-btn-hapus"' + (ada ? '' : ' disabled') + ' data-lp-hapus="' + key + '"><span data-lp-teks-hapus>Hapus</span></button>' +
       '</div>' +
       '<div class="lp-foto-info"' + (info ? '' : ' hidden') + ' data-lp-info="' + key + '">' + Utils.esc(info || '') + '</div>' +
       (hideCaption ? '' : UI.field({ name: 'caption_' + key, label: 'Caption singkat', value: caption || '' })) +
@@ -106,9 +108,58 @@ var PagesLanding = (function () {
     }
   }
 
-  function tampilkanProses(key, tampil) {
+  // ---- Status proses per slot (cegah ganda, batal, & overlay macet) ----------
+  var prosesAktif = {};   // key -> { batal: bool }
+
+  function mulaiProsesUI(key, teks) {
     var el = document.querySelector('[data-lp-proses="' + key + '"]');
-    if (el) el.hidden = !tampil;
+    if (el) {
+      el.hidden = false;
+      var t = el.querySelector('[data-lp-proses-teks]');
+      if (t) t.textContent = teks || 'Memproses...';
+    }
+    var slot = document.querySelector('[data-lp-foto="' + key + '"]');
+    if (slot) {
+      var media = slot.querySelector('.lp-foto-media');
+      if (media) media.classList.add('memproses');
+      var label = slot.querySelector('.lp-btn-unggah');
+      if (label) label.classList.add('nonaktif');
+      var input = slot.querySelector('input[type="file"]');
+      if (input) input.disabled = true;
+      var teksUnggah = slot.querySelector('[data-lp-teks-unggah]');
+      if (teksUnggah) teksUnggah.textContent = 'Memproses...';
+      var tombolHapus = slot.querySelector('.lp-btn-hapus');
+      if (tombolHapus) {
+        tombolHapus.disabled = false;
+        var teksHapus = tombolHapus.querySelector('[data-lp-teks-hapus]');
+        if (teksHapus) teksHapus.textContent = 'Batalkan';
+      }
+    }
+  }
+
+  function ubahProsesUI(key, teks) {
+    var t = document.querySelector('[data-lp-proses="' + key + '"] [data-lp-proses-teks]');
+    if (t) t.textContent = teks || 'Memproses...';
+    var el = document.querySelector('[data-lp-proses="' + key + '"]');
+    if (el && el.hidden) el.hidden = false;
+  }
+
+  function selesaiProsesUI(key) {
+    var el = document.querySelector('[data-lp-proses="' + key + '"]');
+    if (el) {
+      el.hidden = true;
+      var t = el.querySelector('[data-lp-proses-teks]');
+      if (t) t.textContent = 'Memproses...';
+    }
+    var slot = document.querySelector('[data-lp-foto="' + key + '"]');
+    if (slot) {
+      var media = slot.querySelector('.lp-foto-media');
+      if (media) media.classList.remove('memproses');
+      var label = slot.querySelector('.lp-btn-unggah');
+      if (label) label.classList.remove('nonaktif');
+      var input = slot.querySelector('input[type="file"]');
+      if (input) input.disabled = false;
+    }
   }
 
   function tampilkanError(key, pesan) {
@@ -119,6 +170,74 @@ var PagesLanding = (function () {
 
   function bersihkanError(key) {
     tampilkanError(key, '');
+  }
+
+  function withTimeout(janji, ms) {
+    return new Promise(function (resolve, reject) {
+      var t = setTimeout(function () {
+        reject(new Error('Proses terlalu lama, coba foto yang lebih kecil.'));
+      }, ms);
+      janji.then(function (v) {
+        clearTimeout(t);
+        resolve(v);
+      }, function (e) {
+        clearTimeout(t);
+        reject(e);
+      });
+    });
+  }
+
+  // Perbarui HANYA satu slot (tanpa render ulang tab) supaya cepat.
+  function perbaruiSlot(key) {
+    var slot = document.querySelector('[data-lp-foto="' + key + '"]');
+    if (!slot) return;
+    var d = ambil();
+    var file = '';
+    var info = '';
+    if (key === 'logo') {
+      file = d.merek.logo;
+      info = d.merek.logo_info;
+    } else if (key.indexOf('kolase_') === 0) {
+      var i = parseInt(key.split('_')[1], 10);
+      var k = (d.kolase || [])[i] || {};
+      file = k.file;
+      info = k.file_info;
+    }
+    var src = LandingStore.urlFoto(file);
+    var media = slot.querySelector('.lp-foto-media');
+    var img = slot.querySelector('img[data-lp-img]');
+    if (src) {
+      if (!img && media) {
+        img = document.createElement('img');
+        img.setAttribute('data-lp-img', '');
+        img.alt = 'Foto';
+        media.insertBefore(img, media.querySelector('.lp-foto-proses'));
+      }
+      if (img) {
+        img.src = src;
+        img.style.display = '';
+        img.classList.add('siap');
+      }
+      if (media) media.classList.add('ada');
+    } else {
+      if (img && img.parentNode) img.parentNode.removeChild(img);
+      if (media) media.classList.remove('ada');
+    }
+    var teksUnggah = slot.querySelector('[data-lp-teks-unggah]');
+    if (teksUnggah) teksUnggah.textContent = src ? 'Ganti Foto' : 'Unggah Foto';
+    var tombolHapus = slot.querySelector('.lp-btn-hapus');
+    if (tombolHapus && !prosesAktif[key]) {
+      tombolHapus.disabled = !src;
+      var teksHapus = tombolHapus.querySelector('[data-lp-teks-hapus]');
+      if (teksHapus) teksHapus.textContent = 'Hapus';
+    }
+    var infoEl = slot.querySelector('[data-lp-info]');
+    if (infoEl) {
+      infoEl.textContent = info || '';
+      infoEl.hidden = !info;
+    }
+    var errEl = slot.querySelector('[data-lp-error]');
+    if (errEl && !errEl.textContent) errEl.textContent = '';
   }
 
   function render(root, user, app) {
@@ -180,19 +299,28 @@ var PagesLanding = (function () {
       var hapus = e.target.closest('[data-lp-hapus]');
       if (hapus && !hapus.disabled) {
         var key = hapus.getAttribute('data-lp-hapus');
+        if (prosesAktif[key]) {
+          // Tombol berubah jadi "Batalkan" selama proses.
+          prosesAktif[key].batal = true;
+          delete prosesAktif[key];
+          selesaiProsesUI(key);
+          perbaruiSlot(key);
+          Utils.toast('Proses foto dibatalkan.', 'info');
+          return;
+        }
         if (key.indexOf('kolase_') === 0) {
           var idx = parseInt(key.split('_')[1], 10);
           LandingStore.hapusFotoRef(ambil().kolase[idx].file);
           ambil().kolase[idx].file = '';
           ambil().kolase[idx].file_info = '';
           tandaiBelumSimpan();
-          renderTab();
+          perbaruiSlot(key);
         } else if (key === 'logo') {
           LandingStore.hapusFotoRef(ambil().merek.logo);
           ambil().merek.logo = '';
           ambil().merek.logo_info = '';
           tandaiBelumSimpan();
-          renderTab();
+          perbaruiSlot(key);
         } else if (key.indexOf('galeri_') === 0) {
           hapusGaleri(key.split('_')[1]);
         } else if (key.indexOf('marquee_') === 0) {
@@ -331,6 +459,58 @@ var PagesLanding = (function () {
     renderTab();
   }
 
+  function kartuGaleriHtml(g, i) {
+    var srcG = LandingStore.urlFoto(g.src || g.file);
+    return '<div class="lp-galeri-item" data-lp-galeri-item="' + Utils.esc(g.id) + '">' +
+      '<div class="lp-galeri-thumb' + (srcG ? ' ada' : '') + '">' +
+      '<div class="lp-foto-kosong">' + UI.icon('users', 22) + '<span>Tanpa foto</span></div>' +
+      (srcG ? '<img data-lp-img src="' + Utils.esc(srcG) + '" alt="">' : '') +
+      '</div>' +
+      '<div class="lp-galeri-isi">' +
+      '<input class="input" data-lp-judul="' + Utils.esc(g.id) + '" value="' + Utils.esc(g.judul || g.caption || '') + '" placeholder="Judul foto (contoh: Pelatih: Coach Budi)" aria-label="Judul foto">' +
+      '<input class="input" data-lp-keterangan="' + Utils.esc(g.id) + '" value="' + Utils.esc(g.keterangan || '') + '" placeholder="Keterangan kecil (contoh: Pelatih Kepala)" aria-label="Keterangan foto">' +
+      (g.file_info ? '<div class="lp-foto-info">' + Utils.esc(g.file_info) + '</div>' : '') +
+      '<select class="input lp-galeri-kategori" data-lp-kategori="' + Utils.esc(g.id) + '" aria-label="Kategori foto">' +
+      (CONFIG.LANDING_KATEGORI || []).map(function (k) {
+        return '<option value="' + Utils.esc(k) + '"' + (g.kategori === k ? ' selected' : '') + '>' + Utils.esc(k) + '</option>';
+      }).join('') + '</select>' +
+      '<div class="lp-galeri-aksi">' +
+      '<button type="button" class="btn btn-sm btn-ghost" data-lp-naik="galeri" data-lp-idx="' + i + '" aria-label="Naik">↑</button>' +
+      '<button type="button" class="btn btn-sm btn-ghost" data-lp-turun="galeri" data-lp-idx="' + i + '" aria-label="Turun">↓</button>' +
+      '<button type="button" class="btn btn-sm btn-secondary" data-lp-utama="' + Utils.esc(g.id) + '">' + (g.utama ? 'Foto Utama' : 'Jadikan Utama') + '</button>' +
+      '<button type="button" class="btn btn-sm btn-danger" data-lp-hapus="galeri_' + Utils.esc(g.id) + '">Hapus</button>' +
+      '</div></div></div>';
+  }
+
+  // Tambahkan satu kartu galeri tanpa render ulang seluruh tab.
+  function tambahKartuGaleri(g, idx) {
+    var list = document.querySelector('.lp-galeri-list');
+    if (!list) return;
+    var wrap = document.createElement('div');
+    wrap.innerHTML = kartuGaleriHtml(g, idx);
+    var node = wrap.firstChild;
+    if (node) {
+      list.appendChild(node);
+      pasangGambarLP(node);
+    }
+  }
+
+  // Apakah referensi foto masih dipakai oleh data yang sudah tersimpan?
+  // (agar foto yang dibebaskan tidak merusak data tersimpan)
+  function refDiDataTersimpan(ref) {
+    var t = tersimpan || {};
+    if (!ref) return false;
+    if (t.merek && t.merek.logo === ref) return true;
+    var dipakai = false;
+    (t.kolase || []).forEach(function (k) {
+      if (k && k.file === ref) dipakai = true;
+    });
+    (t.galeri || []).forEach(function (g) {
+      if (g && (g.src === ref || g.file === ref)) dipakai = true;
+    });
+    return dipakai;
+  }
+
   function unggahSatu(input) {
     var file = input.files && input.files[0];
     if (!file) return;
@@ -339,38 +519,95 @@ var PagesLanding = (function () {
     unggahDariBerkas(key, file);
   }
 
+  // Unggah ke cloud di latar belakang (tidak memblokir pratinjau).
+  // Hanya dijalankan bila layanan cloud sudah siap; gagal = tetap lokal.
+  function unggahKeCloudDiam(hasil, key, file, folder) {
+    try {
+      if (typeof Cloud === 'undefined' || !Cloud || !Cloud.siap || !Cloud.siap() || !Cloud.unggahFoto) return;
+      if (!hasil || !hasil.blob) return;
+      if (/^https?:/.test(String(hasil.nilai))) return;
+      var nama = (file && file.name) || 'foto.jpg';
+      var fileBaru = typeof File === 'function'
+        ? new File([hasil.blob], nama, { type: hasil.blob.type || 'image/jpeg' })
+        : hasil.blob;
+      withTimeout(Cloud.unggahFoto(fileBaru, folder || 'foto/landing'), 5000).then(function (res) {
+        if (!res || !res.url) return;
+        var d = ambil();
+        if (key === 'logo') {
+          if (d.merek.logo !== hasil.nilai) return;
+          d.merek.logo = res.url;
+        } else if (key.indexOf('kolase_') === 0) {
+          var i = parseInt(key.split('_')[1], 10);
+          if (!d.kolase[i] || d.kolase[i].file !== hasil.nilai) return;
+          d.kolase[i].file = res.url;
+        } else if (key.indexOf('galeri_') === 0) {
+          var item = cariGaleri(key.slice(7));
+          if (!item || item.src !== hasil.nilai) return;
+          item.src = res.url;
+        } else {
+          return;
+        }
+        perbaruiSlot(key);
+      }, function () {});
+    } catch (e) {}
+  }
+
   function unggahDariBerkas(key, file) {
     if (!file) return;
+    if (prosesAktif[key]) return;   // cegah proses ganda pada slot yang sama
+    var token = { batal: false };
+    prosesAktif[key] = token;
     bersihkanError(key);
-    tampilkanProses(key, true);
-    LandingStore.bacaFoto(file).then(function (f) {
-      return Utils.keCloud(f.data, 'foto/landing', f.nama || file.name || 'foto.jpg').then(function (src) {
-        // URL cloud disimpan apa adanya; foto lokal disimpan ke IndexedDB
-        // dan konfigurasi hanya menyimpan referensinya.
-        return LandingStore.simpanFoto(src).then(function (nilai) {
-          return { nilai: nilai, info: infoBerkas(f.nama || file.name, f.ukuran) };
-        });
+    mulaiProsesUI(key, 'Membaca foto...');
+
+    var janji = LandingStore.bacaFoto(file, {
+      onTahap: function (t) {
+        if (!token.batal) ubahProsesUI(key, t);
+      }
+    }).then(function (f) {
+      if (token.batal) throw new Error('DIBATALKAN');
+      ubahProsesUI(key, 'Menyimpan...');
+      return LandingStore.simpanFoto(f.blob).then(function (nilai) {
+        return { nilai: nilai, info: infoBerkas(f.nama || file.name, f.ukuran), blob: f.blob };
       });
     }).then(function (hasil) {
-      tampilkanProses(key, false);
+      if (token.batal) {
+        LandingStore.hapusFotoRef(hasil.nilai);
+        return;
+      }
       var d = ambil();
       if (key === 'logo') {
+        if (d.merek.logo && d.merek.logo !== hasil.nilai) LandingStore.hapusFotoRef(d.merek.logo);
         d.merek.logo = hasil.nilai;
         d.merek.logo_info = hasil.info;
       } else if (key.indexOf('kolase_') === 0) {
         var i = parseInt(key.split('_')[1], 10);
         if (!d.kolase[i]) d.kolase[i] = { file: '', caption: '', alt: '' };
+        // Foto lama yang diganti dibebaskan agar object URL & penyimpanan
+        // tidak bocor (foto yang masih dipakai data tersimpan tidak disentuh).
+        if (d.kolase[i].file && d.kolase[i].file !== hasil.nilai && !refDiDataTersimpan(d.kolase[i].file)) {
+          LandingStore.hapusFotoRef(d.kolase[i].file);
+        }
         d.kolase[i].file = hasil.nilai;
         d.kolase[i].file_info = hasil.info;
         if (!d.kolase[i].caption) d.kolase[i].caption = String(file.name || '').replace(/\.[^.]+$/, '');
         if (!d.kolase[i].alt) d.kolase[i].alt = file.name || '';
       }
       tandaiBelumSimpan();
-      renderTab();
-      Utils.toast(/^https?:/.test(hasil.nilai) ? 'Foto tersimpan di cloud.' : 'Foto berhasil dipilih.', 'success');
-    }).catch(function (err) {
-      tampilkanProses(key, false);
+      perbaruiSlot(key);   // hanya slot ini yang diperbarui
+      Utils.toast('Foto berhasil dipilih.', 'success');
+      unggahKeCloudDiam(hasil, key, file, 'foto/landing');
+    });
+
+    withTimeout(janji, 15000).catch(function (err) {
+      if (err && err.message === 'DIBATALKAN') return;
+      if (err && /terlalu lama/.test(err.message)) token.batal = true;
       tampilkanError(key, err && err.message ? err.message : 'Gagal memproses foto.');
+    }).then(function () {
+      // finally: overlay & tombol SELALU dikembalikan, baik sukses/gagal/batal
+      if (prosesAktif[key] === token) delete prosesAktif[key];
+      selesaiProsesUI(key);
+      perbaruiSlot(key);
     });
   }
 
@@ -380,39 +617,88 @@ var PagesLanding = (function () {
     unggahBanyakFotos(files);
   }
 
+  function mulaiProsesGaleri(teks) {
+    var el = document.querySelector('[data-lp-proses="galeri"]');
+    if (el) {
+      el.hidden = false;
+      var t = el.querySelector('[data-lp-proses-teks]');
+      if (t) t.textContent = teks;
+    }
+  }
+
+  function ubahProsesGaleri(teks) {
+    var t = document.querySelector('[data-lp-proses="galeri"] [data-lp-proses-teks]');
+    if (t) t.textContent = teks;
+  }
+
+  function selesaiProsesGaleri() {
+    var el = document.querySelector('[data-lp-proses="galeri"]');
+    if (el) {
+      el.hidden = true;
+      var t = el.querySelector('[data-lp-proses-teks]');
+      if (t) t.textContent = 'Memproses...';
+    }
+  }
+
   function unggahBanyakFotos(files) {
     if (!files || !files.length) return;
+    if (prosesAktif['galeri']) return;
+    var token = { batal: false };
+    prosesAktif['galeri'] = token;
     bersihkanError('galeri');
-    tampilkanProses('galeri', true);
-    var d = ambil();
+    var total = files.length;
+    var berjalan = 0;
     var gagal = [];
-    var janji = files.map(function (f) {
+    mulaiProsesGaleri('Memproses 0 dari ' + total);
+
+    function satu(f) {
+      if (token.batal) return Promise.resolve();
+      berjalan++;
+      ubahProsesGaleri('Memproses ' + berjalan + ' dari ' + total);
       return LandingStore.bacaFoto(f).then(function (res) {
-        return Utils.keCloud(res.data, 'foto/galeri', res.nama || f.name || 'galeri.jpg').then(function (src) {
-          return LandingStore.simpanFoto(src).then(function (nilai) {
-            d.galeri.push({
-              id: 'g' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
-              src: nilai,
-              file_info: infoBerkas(res.nama || f.name, res.ukuran),
-              judul: String(res.nama || f.name || '').replace(/\.[^.]+$/, ''),
-              keterangan: '',
-              kategori: 'Atlet'
-            });
-          });
+        if (token.batal) return null;
+        return LandingStore.simpanFoto(res.blob).then(function (nilai) {
+          return { nilai: nilai, res: res };
         });
+      }).then(function (hasil) {
+        if (!hasil) return;
+        if (token.batal) {
+          LandingStore.hapusFotoRef(hasil.nilai);
+          return;
+        }
+        var d = ambil();
+        var item = {
+          id: 'g' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
+          src: hasil.nilai,
+          file_info: infoBerkas(hasil.res.nama || f.name, hasil.res.ukuran),
+          judul: String(hasil.res.nama || f.name || '').replace(/\.[^.]+$/, ''),
+          keterangan: '',
+          kategori: 'Atlet'
+        };
+        d.galeri.push(item);
+        tandaiBelumSimpan();
+        tambahKartuGaleri(item, d.galeri.length - 1);
+        unggahKeCloudDiam({ nilai: item.src, blob: hasil.res.blob, info: item.file_info }, 'galeri_' + item.id, f, 'foto/galeri');
       }).catch(function (err) {
         gagal.push((f && f.name ? f.name : 'foto') + ': ' + (err && err.message ? err.message : 'gagal diproses'));
       });
-    });
-    Promise.all(janji).then(function () {
-      tampilkanProses('galeri', false);
-      tandaiBelumSimpan();
-      renderTab();
-      if (gagal.length) {
-        tampilkanError('galeri', gagal.join(' | '));
-      }
-      var sukses = files.length - gagal.length;
-      if (sukses > 0) {
+    }
+
+    // Paralel terbatas: maksimal 2 foto sekaligus.
+    var antre = files.slice();
+    function pekerja() {
+      if (token.batal || !antre.length) return Promise.resolve();
+      var f = antre.shift();
+      return satu(f).then(pekerja);
+    }
+    Promise.all([pekerja(), pekerja()]).then(function () {
+      if (prosesAktif['galeri'] === token) delete prosesAktif['galeri'];
+      selesaiProsesGaleri();
+      if (gagal.length) tampilkanError('galeri', gagal.join(' | '));
+      var sukses = total - gagal.length;
+      if (token.batal) {
+        Utils.toast('Pengunggahan foto galeri dibatalkan.', 'info');
+      } else if (sukses > 0) {
         Utils.toast(sukses + ' foto galeri berhasil ditambahkan.' + (gagal.length ? ' ' + gagal.length + ' gagal.' : ''), gagal.length ? 'info' : 'success');
       }
     });
@@ -634,7 +920,7 @@ var PagesLanding = (function () {
     } else if (tabAktif === 'kolase') {
       html += '<div class="card lp-kartu">' +
         '<div class="card-title">' + UI.icon('users', 20) + 'Foto Kolase Hero (4 Foto)</div>' +
-        '<p class="muted small">Format JPG, JPEG, PNG, atau WEBP. Maksimal 2 MB per foto, otomatis diperkecil (maks. lebar 1600px). Bisa juga menyeret foto ke area pratinjau.</p>' +
+        '<p class="muted small">Format JPG, JPEG, PNG, atau WEBP. Ukuran file asli maksimal 10 MB, otomatis dikompres hingga hasil di bawah 2 MB (maks. lebar 1600px). Bisa juga menyeret foto ke area pratinjau.</p>' +
         '<div class="lp-foto-grid">' +
         (d.kolase || []).map(function (k, i) {
           return slotFoto('kolase_' + i, k.file, k.caption, 'Foto ' + (i + 1) + (i === 0 ? ' (Utama)' : ''), false, k.file_info);
@@ -648,32 +934,15 @@ var PagesLanding = (function () {
         '<label class="btn btn-secondary">' + IKON_UNGGAH + '<span>Tambah Foto (boleh lebih dari satu)</span>' +
         '<input type="file" hidden multiple accept="image/jpeg,image/jpg,image/png,image/webp" data-lp-file-galeri id="lp-file-galeri"></label>' +
         '<button type="button" class="btn btn-ghost" data-lp-tambah-galeri>Pilih dari Penjelajah</button>' +
-        '<div class="lp-foto-proses lp-proses-inline" data-lp-proses="galeri" hidden>Memproses...</div>' +
+        '<div class="lp-foto-proses lp-proses-inline" data-lp-proses="galeri" hidden>' +
+        '<div class="lp-spinner" aria-hidden="true"></div>' +
+        '<span data-lp-proses-teks>Memproses...</span></div>' +
         '</div>' +
-        '<p class="muted small">Format JPG, JPEG, PNG, WEBP. Maksimal 2 MB per foto. Bisa juga menyeret foto ke daftar di bawah.</p>' +
+        '<p class="muted small">Format JPG, JPEG, PNG, WEBP. Ukuran file asli maksimal 10 MB per foto, otomatis dikompres hingga hasil di bawah 2 MB. Bisa juga menyeret foto ke daftar di bawah.</p>' +
         '<div class="field-error" data-lp-error="galeri"></div>' +
         '<div class="lp-galeri-list" data-lp-drop="galeri">' +
         (d.galeri || []).map(function (g, i) {
-          var srcG = LandingStore.urlFoto(g.src || g.file);
-          return '<div class="lp-galeri-item">' +
-            '<div class="lp-galeri-thumb' + (srcG ? ' ada' : '') + '">' +
-            '<div class="lp-foto-kosong">' + UI.icon('users', 22) + '<span>Tanpa foto</span></div>' +
-            (srcG ? '<img data-lp-img src="' + Utils.esc(srcG) + '" alt="">' : '') +
-            '</div>' +
-            '<div class="lp-galeri-isi">' +
-            '<input class="input" data-lp-judul="' + Utils.esc(g.id) + '" value="' + Utils.esc(g.judul || g.caption || '') + '" placeholder="Judul foto (contoh: Pelatih: Coach Budi)" aria-label="Judul foto">' +
-            '<input class="input" data-lp-keterangan="' + Utils.esc(g.id) + '" value="' + Utils.esc(g.keterangan || '') + '" placeholder="Keterangan kecil (contoh: Pelatih Kepala)" aria-label="Keterangan foto">' +
-            (g.file_info ? '<div class="lp-foto-info">' + Utils.esc(g.file_info) + '</div>' : '') +
-            '<select class="input lp-galeri-kategori" data-lp-kategori="' + Utils.esc(g.id) + '" aria-label="Kategori foto">' +
-            (CONFIG.LANDING_KATEGORI || []).map(function (k) {
-              return '<option value="' + Utils.esc(k) + '"' + (g.kategori === k ? ' selected' : '') + '>' + Utils.esc(k) + '</option>';
-            }).join('') + '</select>' +
-            '<div class="lp-galeri-aksi">' +
-            '<button type="button" class="btn btn-sm btn-ghost" data-lp-naik="galeri" data-lp-idx="' + i + '" aria-label="Naik">↑</button>' +
-            '<button type="button" class="btn btn-sm btn-ghost" data-lp-turun="galeri" data-lp-idx="' + i + '" aria-label="Turun">↓</button>' +
-            '<button type="button" class="btn btn-sm btn-secondary" data-lp-utama="' + Utils.esc(g.id) + '">' + (g.utama ? 'Foto Utama' : 'Jadikan Utama') + '</button>' +
-            '<button type="button" class="btn btn-sm btn-danger" data-lp-hapus="galeri_' + Utils.esc(g.id) + '">Hapus</button>' +
-            '</div></div></div>';
+          return kartuGaleriHtml(g, i);
         }).join('') +
         '</div></div>' + barSimpan();
 

@@ -4,11 +4,16 @@ var LandingStore = (function () {
   var TOKOH = 'idb:';
   var listeners = [];
 
-  // Foto disimpan di IndexedDB; konfigurasi cukup menyimpan referensi
-  // "idb:xxx" (atau URL https bila diunggah ke cloud) sehingga kuota
-  // localStorage tidak terlampaui oleh base64 foto.
-  var cacheFoto = {};
+  // Foto disimpan sebagai Blob di IndexedDB; konfigurasi cukup menyimpan
+  // referensi "idb:xxx" (atau URL https bila diunggah ke cloud) sehingga
+  // kuota localStorage tidak terlampaui dan unggah tetap ringan.
+  var cacheFoto = {};   // id -> Blob (atau data URL untuk data lama)
+  var cacheUrl = {};    // id -> object URL yang sedang dipakai
   var janjiDb = null;
+
+  var MAKS_ASLI = 10 * 1024 * 1024;    // file asli yang diterima
+  var MAKS_HASIL = 2 * 1024 * 1024;    // batas ukuran hasil kompresi
+  var MAKS_LEBAR = 1600;               // lebar maksimum hasil
 
   function idbTersedia() {
     try {
@@ -62,12 +67,14 @@ var LandingStore = (function () {
     });
   }
 
-  function fotoTulis(id, data) {
+  // Simpan satu record foto ({ id, blob } untuk data baru, atau
+  // { id, data } untuk data lama) — hanya record ini yang ditulis.
+  function fotoTulis(id, isi) {
     return bukaDb().then(function (db) {
       if (!db) return false;
       return new Promise(function (resolve) {
         try {
-          var req = db.transaction('foto', 'readwrite').objectStore('foto').put({ id: id, data: data });
+          var req = db.transaction('foto', 'readwrite').objectStore('foto').put({ id: id, blob: isi.blob, data: isi.data });
           req.onsuccess = function () {
             resolve(true);
           };
@@ -100,24 +107,77 @@ var LandingStore = (function () {
     });
   }
 
+  function buatObjectUrl(blob) {
+    try {
+      if (typeof URL !== 'undefined' && URL.createObjectURL) return URL.createObjectURL(blob);
+    } catch (e) {}
+    return '';
+  }
+
+  function buangObjectUrl(id) {
+    var u = cacheUrl[id];
+    if (u) {
+      try {
+        if (typeof URL !== 'undefined' && URL.revokeObjectURL) URL.revokeObjectURL(u);
+      } catch (e) {}
+      delete cacheUrl[id];
+    }
+  }
+
   // Ubah nilai foto di konfigurasi menjadi sumber yang bisa dipakai <img src>.
-  // Referensi "idb:xxx" diubah menjadi data URL dari cache; URL/path diteruskan.
+  // Referensi "idb:xxx" diubah menjadi object URL (cepat, tanpa base64);
+  // URL/path diteruskan apa adanya.
   function urlFoto(v) {
     var s = String(v || '');
     if (s.indexOf(TOKOH) !== 0) return s;
-    return cacheFoto[s.slice(TOKOH.length)] || '';
+    var id = s.slice(TOKOH.length);
+    if (cacheUrl[id]) return cacheUrl[id];
+    var isi = cacheFoto[id];
+    if (!isi) return '';
+    if (typeof isi === 'string') return isi;       // data lama (data URL)
+    var url = buatObjectUrl(isi);
+    if (url) cacheUrl[id] = url;
+    return url;
   }
 
-  // Simpan data URL foto ke IndexedDB dan kembalikan referensinya.
-  // Bila IndexedDB tidak tersedia/gagal, kembalikan data URL apa adanya.
-  function simpanFoto(dataUrl) {
-    var s = String(dataUrl || '');
-    if (s.indexOf('data:') !== 0) return Promise.resolve(s);
-    if (!idbTersedia()) return Promise.resolve(s);
+  // Ubah data URL lama menjadi Blob (dipakai migrasi; bukan jalur unggah).
+  function dataUrlKeBlob(dataUrl) {
+    var potongan = String(dataUrl).split(',');
+    var meta = potongan[0] || '';
+    var isi = potongan[1] || '';
+    var tipe = /data:([^;]+)/.exec(meta);
+    var biner = atob(isi);
+    var arr = new Uint8Array(biner.length);
+    for (var i = 0; i < biner.length; i++) arr[i] = biner.charCodeAt(i);
+    return new Blob([arr], { type: (tipe && tipe[1]) || 'image/jpeg' });
+  }
+
+  // Simpan foto ke IndexedDB (sebagai Blob) dan kembalikan referensinya.
+  // Menerima Blob (jalur baru) atau data URL (jalur lama). URL https tidak
+  // disimpan ulang, langsung dikembalikan apa adanya.
+  function simpanFoto(sumber) {
+    if (!sumber) return Promise.resolve('');
+    if (typeof sumber === 'string') {
+      if (sumber.indexOf('data:') !== 0) return Promise.resolve(sumber);
+      if (!idbTersedia()) return Promise.resolve(sumber);
+      try {
+        sumber = dataUrlKeBlob(sumber);
+      } catch (e) {
+        return Promise.resolve(sumber);
+      }
+    }
+    if (!idbTersedia()) {
+      // Tanpa IndexedDB, tampilkan langsung sebagai object URL bila memungkinkan.
+      var urlDarat = buatObjectUrl(sumber);
+      return Promise.resolve(urlDarat || '');
+    }
     var id = 'f' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
-    return fotoTulis(id, s).then(function (ok) {
-      if (!ok) return s;
-      cacheFoto[id] = s;
+    return fotoTulis(id, { blob: sumber }).then(function (ok) {
+      if (!ok) {
+        var cadangan = buatObjectUrl(sumber);
+        return cadangan || '';
+      }
+      cacheFoto[id] = sumber;
       return TOKOH + id;
     });
   }
@@ -127,6 +187,7 @@ var LandingStore = (function () {
     var s = String(v || '');
     if (s.indexOf(TOKOH) !== 0) return Promise.resolve(false);
     var id = s.slice(TOKOH.length);
+    buangObjectUrl(id);
     delete cacheFoto[id];
     return fotoBuang(id);
   }
@@ -242,88 +303,197 @@ var LandingStore = (function () {
     return /^[0-9+\-() .]{6,25}$/.test(String(s || '').trim());
   }
 
-  function bacaFoto(file, opts) {
-    opts = opts || {};
-    var maksUkuran = opts.maksUkuran || 2 * 1024 * 1024;
-    var maksLebar = opts.maksLebar || 1600;
-    return new Promise(function (resolve, reject) {
-      if (!file) {
-        reject(new Error('Pilih file foto terlebih dahulu.'));
-        return;
-      }
-      var tipeOk = /^image\/(jpeg|jpg|png|webp)$/i.test(file.type || '');
-      var extOk = /\.(jpe?g|png|webp)$/i.test(file.name || '');
-      if (!tipeOk && !extOk) {
-        reject(new Error('Format foto harus JPG, JPEG, PNG, atau WEBP.'));
-        return;
-      }
-      if (file.size > maksUkuran) {
-        reject(new Error('Ukuran foto maksimal 2 MB.'));
-        return;
-      }
-      var reader = new FileReader();
-      reader.onerror = function () {
-        reject(new Error('Gagal membaca file foto.'));
-      };
-      reader.onload = function () {
+  // ---- Pengolahan foto yang cepat -------------------------------------------
+  // 1. Validasi ringan (format + ukuran asli) dilakukan lebih dulu.
+  // 2. Decode memakai createImageBitmap (fallback: Image + object URL,
+  //    tanpa base64 sama sekali).
+  // 3. Perkecil sekali ke lebar maksimal 1600px (rasio tetap) lalu kompres
+  //    sekali lewat canvas.toBlob / OffscreenCanvas.convertToBlob.
+  //    Bila hasil masih > 2 MB, kualitas diturunkan maksimal dua kali lagi.
+  // Hasil akhir berupa Blob (bukan data URL) agar penyimpanan & pratinjau
+  // tidak memakai base64 yang berat.
+  function decodeGambar(file) {
+    function lewatGambar() {
+      return new Promise(function (resolve, reject) {
+        var url = '';
+        try {
+          url = URL.createObjectURL(file);
+        } catch (e) {
+          reject(new Error('File foto tidak dapat dibuka.'));
+          return;
+        }
         var img = new Image();
         img.onerror = function () {
+          try {
+            URL.revokeObjectURL(url);
+          } catch (e2) {}
           reject(new Error('File foto tidak dapat dibuka.'));
         };
         img.onload = function () {
-          var lebar = img.width;
-          var tinggi = img.height;
-          if (lebar > maksLebar) {
-            tinggi = Math.round(tinggi * (maksLebar / lebar));
-            lebar = maksLebar;
-          }
-          var canvas = document.createElement('canvas');
-          canvas.width = lebar;
-          canvas.height = tinggi;
-          var ctx = canvas.getContext('2d');
-          if (!ctx) {
-            resolve({
-              nama: file.name,
-              tipe: file.type || 'image/jpeg',
-              ukuran: file.size,
-              data: reader.result
-            });
-            return;
-          }
-          ctx.drawImage(img, 0, 0, lebar, tinggi);
-          var png = /png/i.test(file.type || '') || /\.png$/i.test(file.name || '');
-          var out;
-          try {
-            out = canvas.toDataURL(png ? 'image/png' : 'image/jpeg', 0.8);
-          } catch (e) {
-            out = reader.result;
-          }
-          // Jaga agar ukuran hasil tidak meledak (terutama saat foto masih
-          // disimpan sebagai base64): perkecil ulang bila terlalu besar.
-          if (!png && out && out.length > 450000 && lebar > 1200) {
-            try {
-              var lebar2 = 1200;
-              var tinggi2 = Math.round(tinggi * (lebar2 / lebar));
-              var canvas2 = document.createElement('canvas');
-              canvas2.width = lebar2;
-              canvas2.height = tinggi2;
-              var ctx2 = canvas2.getContext('2d');
-              if (ctx2) {
-                ctx2.drawImage(img, 0, 0, lebar2, tinggi2);
-                out = canvas2.toDataURL('image/jpeg', 0.75);
-              }
-            } catch (e2) {}
-          }
           resolve({
-            nama: file.name,
-            tipe: png ? 'image/png' : 'image/jpeg',
-            ukuran: Math.round(out.length * 0.75),
-            data: out
+            sumber: img,
+            lebar: img.naturalWidth || img.width,
+            tinggi: img.naturalHeight || img.height,
+            bersihkan: function () {
+              try {
+                URL.revokeObjectURL(url);
+              } catch (e2) {}
+            }
           });
         };
-        img.src = reader.result;
-      };
-      reader.readAsDataURL(file);
+        img.src = url;
+      });
+    }
+    if (typeof createImageBitmap === 'function') {
+      return Promise.resolve().then(function () {
+        return createImageBitmap(file);
+      }).then(function (bitmap) {
+        return {
+          sumber: bitmap,
+          lebar: bitmap.width,
+          tinggi: bitmap.height,
+          bersihkan: function () {
+            try {
+              if (bitmap.close) bitmap.close();
+            } catch (e) {}
+          }
+        };
+      }).catch(function () {
+        return lewatGambar();
+      });
+    }
+    return lewatGambar();
+  }
+
+  function buatKanvas(lebar, tinggi) {
+    if (typeof OffscreenCanvas !== 'undefined') {
+      try {
+        return { kanvas: new OffscreenCanvas(lebar, tinggi), luring: true };
+      } catch (e) {}
+    }
+    var kanvas = document.createElement('canvas');
+    kanvas.width = lebar;
+    kanvas.height = tinggi;
+    return { kanvas: kanvas, luring: false };
+  }
+
+  function kanvasKeBlob(wadah, tipe, kualitas) {
+    return new Promise(function (resolve, reject) {
+      var kanvas = wadah.kanvas;
+      if (wadah.luring && kanvas.convertToBlob) {
+        kanvas.convertToBlob({ type: tipe, quality: kualitas }).then(resolve, function () {
+          reject(new Error('Gagal mengolah foto.'));
+        });
+        return;
+      }
+      if (!kanvas.toBlob) {
+        // Browser sangat lama: cadangan terakhir memakai data URL.
+        try {
+          resolve(dataUrlKeBlob(kanvas.toDataURL(tipe, kualitas)));
+        } catch (e) {
+          reject(new Error('Gagal mengolah foto.'));
+        }
+        return;
+      }
+      kanvas.toBlob(function (blob) {
+        if (!blob) reject(new Error('Gagal mengolah foto.'));
+        else resolve(blob);
+      }, tipe, kualitas);
+    });
+  }
+
+  // Kompres sekali; bila hasil masih melebihi batas, turunkan kualitas
+  // maksimal dua kali (total maksimal tiga kali encode, bukan loop).
+  function kompres(sumber, lebar, tinggi, png, maksHasil) {
+    var wadah = buatKanvas(lebar, tinggi);
+    var ctx = wadah.kanvas.getContext && wadah.kanvas.getContext('2d');
+    if (!ctx) {
+      // Canvas tidak tersedia (browser lama) — pakai file apa adanya.
+      return Promise.resolve(null);
+    }
+    try {
+      ctx.drawImage(sumber, 0, 0, lebar, tinggi);
+    } catch (e) {
+      return Promise.reject(new Error('Gagal mengolah foto.'));
+    }
+    var percobaan = [
+      { tipe: png ? 'image/png' : 'image/jpeg', q: 0.8, lebar: lebar, tinggi: tinggi },
+      { tipe: 'image/jpeg', q: 0.75, lebar: lebar, tinggi: tinggi },
+      { tipe: 'image/jpeg', q: 0.7, lebar: Math.round(lebar * 0.8), tinggi: Math.round(tinggi * 0.8) }
+    ];
+    var janji = Promise.resolve(null);
+    percobaan.forEach(function (p, i) {
+      janji = janji.then(function (hasil) {
+        if (hasil && hasil.size <= maksHasil) return hasil;
+        if (i > 0) {
+          // gambar ulang dimensi baru hanya bila perlu
+          var w = buatKanvas(p.lebar, p.tinggi);
+          var c2 = w.kanvas.getContext && w.kanvas.getContext('2d');
+          if (!c2) return hasil;
+          try {
+            c2.drawImage(sumber, 0, 0, p.lebar, p.tinggi);
+          } catch (e) {
+            return hasil;
+          }
+          wadah = w;
+        }
+        return kanvasKeBlob(wadah, p.tipe, p.q);
+      });
+    });
+    return janji.then(function (hasil) {
+      if (!hasil) return null;
+      if (hasil.size > maksHasil) {
+        throw new Error('Ukuran foto tetap di atas 2 MB setelah dikompresi. Coba foto lain.');
+      }
+      return hasil;
+    });
+  }
+
+  // opts: { maksUkuran, maksLebar, maksHasil, onTahap(teks) }
+  function bacaFoto(file, opts) {
+    opts = opts || {};
+    var maksUkuran = opts.maksUkuran || MAKS_ASLI;
+    var maksLebar = opts.maksLebar || MAKS_LEBAR;
+    var maksHasil = opts.maksHasil || MAKS_HASIL;
+    var tahap = typeof opts.onTahap === 'function' ? opts.onTahap : function () {};
+
+    // Validasi ringan dulu (sebelum operasi berat apa pun).
+    if (!file) return Promise.reject(new Error('Pilih file foto terlebih dahulu.'));
+    var tipeOk = /^image\/(jpeg|jpg|png|webp)$/i.test(file.type || '');
+    var extOk = /\.(jpe?g|png|webp)$/i.test(file.name || '');
+    if (!tipeOk && !extOk) {
+      return Promise.reject(new Error('Format foto harus JPG, JPEG, PNG, atau WEBP.'));
+    }
+    if (file.size > maksUkuran) {
+      return Promise.reject(new Error('Ukuran file asli maksimal 10 MB.'));
+    }
+    if (!file.size) {
+      return Promise.reject(new Error('File foto kosong atau rusak.'));
+    }
+
+    tahap('Membaca foto...');
+    return decodeGambar(file).then(function (hasil) {
+      if (!hasil.lebar || !hasil.tinggi) {
+        hasil.bersihkan();
+        throw new Error('File foto tidak dapat dibuka.');
+      }
+      tahap('Mengecilkan...');
+      var rasio = hasil.lebar > maksLebar ? maksLebar / hasil.lebar : 1;
+      var lebar = Math.max(1, Math.round(hasil.lebar * rasio));
+      var tinggi = Math.max(1, Math.round(hasil.tinggi * rasio));
+      var png = /png/i.test(file.type || '') || /\.png$/i.test(file.name || '');
+      return kompres(hasil.sumber, lebar, tinggi, png, maksHasil).then(function (blob) {
+        hasil.bersihkan();
+        return {
+          nama: file.name,
+          tipe: (blob && blob.type) || 'image/jpeg',
+          ukuran: (blob && blob.size) || file.size,
+          blob: blob || file
+        };
+      }, function (err) {
+        hasil.bersihkan();
+        throw err;
+      });
     });
   }
 
@@ -343,14 +513,38 @@ var LandingStore = (function () {
     return errors;
   }
 
-  // Muat semua foto dari IndexedDB ke cache, lalu pindahkan foto lama yang
-  // masih berupa base64 di konfigurasi menjadi referensi IndexedDB.
-  // Aman diulang; foto yang sudah tersimpan tidak pernah dihapus.
+  // Muat semua foto dari IndexedDB ke cache, migrasi record lama (data URL)
+  // menjadi Blob, lalu pindahkan foto base64 yang masih di konfigurasi
+  // menjadi referensi IndexedDB. Aman diulang; foto tidak pernah dihapus.
   function hidupkan() {
     return fotoSemua().then(function (rows) {
+      var perluUbah = [];
       (rows || []).forEach(function (row) {
-        if (row && row.id && row.data) cacheFoto[row.id] = row.data;
+        if (!row || !row.id) return;
+        if (row.blob) {
+          cacheFoto[row.id] = row.blob;
+        } else if (row.data) {
+          cacheFoto[row.id] = row.data;
+          perluUbah.push(row);
+        }
       });
+      // Migrasi record lama -> Blob, ID tetap sama agar referensi lama
+      // di konfigurasi tidak rusak.
+      var janji = Promise.resolve();
+      perluUbah.forEach(function (row) {
+        janji = janji.then(function () {
+          try {
+            var blob = dataUrlKeBlob(row.data);
+            return fotoTulis(row.id, { blob: blob }).then(function (ok) {
+              if (ok) cacheFoto[row.id] = blob;
+            });
+          } catch (e) {
+            return null;
+          }
+        });
+      });
+      return janji;
+    }).then(function () {
       return migrasiPenyimpanan();
     }).then(function (n) {
       // Beri tahu halaman yang sudah terlanjur render dengan referensi
