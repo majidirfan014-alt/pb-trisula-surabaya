@@ -110,7 +110,7 @@ var PagesCoach = (function () {
         }).then(function (hasil) {
           photoData = hasil;
           if (photoPreview) photoPreview.innerHTML = UI.avatar({ nama: 'Foto', foto: hasil }, 56);
-          Utils.toast(/^https?:/.test(hasil) ? 'Foto tersimpan di cloud.' : 'Foto siap disimpan.', 'success');
+          Utils.toast(/^https?:/.test(hasil) ? 'Foto tersimpan di cloud.' : 'Foto dipakai lokal — belum terunggah ke cloud.', 'success');
         }).catch(function (err) {
           photoData = athlete && athlete.foto ? athlete.foto : '';
           if (photoPreview) photoPreview.innerHTML = photoData ? UI.avatar({ nama: 'Foto', foto: photoData }, 56) : '';

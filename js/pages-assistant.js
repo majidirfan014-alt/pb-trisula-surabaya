@@ -385,7 +385,7 @@ var PagesAssistant = (function () {
             fotoBaru = hasil;
             var kotak = document.getElementById('profil-foto-preview');
             if (kotak) kotak.innerHTML = UI.avatar({ nama: 'Foto', foto: hasil }, 56);
-            Utils.toast(/^https?:/.test(hasil) ? 'Foto tersimpan di cloud.' : 'Foto siap disimpan.', 'success');
+            Utils.toast(/^https?:/.test(hasil) ? 'Foto tersimpan di cloud.' : 'Foto dipakai lokal — belum terunggah ke cloud.', 'success');
           }).catch(function (err) {
             fotoBaru = null;
             var kotak = document.getElementById('profil-foto-preview');
@@ -423,7 +423,7 @@ var PagesAssistant = (function () {
                   '<div><b>' + Utils.esc(f.name) + '</b><div class="small muted">' +
                   (/pdf/i.test(f.type || '') ? 'PDF' : 'Gambar') + ' / ' + Math.round(f.size / 1024) + ' KB</div></div></div>';
               }
-              Utils.toast(/^https?:/.test(hasil) ? 'Lisensi tersimpan di cloud.' : 'Lisensi siap disimpan.', 'success');
+              Utils.toast(/^https?:/.test(hasil) ? 'Lisensi tersimpan di cloud.' : 'Lisensi dipakai lokal — belum terunggah ke cloud.', 'success');
             });
           };
           reader.readAsDataURL(f);

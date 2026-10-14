@@ -1,15 +1,10 @@
 var PagesAuth = (function () {
   var docsApi = null;
 
-  // Unggah hasil kompresi lokal ke Firebase Storage. Bila cloud tidak
-  // tersedia / gagal, mengembalikan data URL lokal sebagai cadangan.
+  // Unggah hasil kompresi lokal ke Firebase Storage. Bila gagal, pesan
+  // penyebab aslinya ditampilkan (lihat Utils.keCloud) dan foto dipakai lokal.
   function unggahKeCloud(dataUrl, folder, nama) {
-    if (typeof Cloud === 'undefined' || !Cloud || !Cloud.unggahDataUrl) return Promise.resolve(dataUrl);
-    return Cloud.unggahDataUrl(dataUrl, folder, nama).then(function (url) {
-      return url || dataUrl;
-    }, function () {
-      return dataUrl;
-    });
+    return Utils.keCloud(dataUrl, folder, nama);
   }
 
   function statusCloud() {
@@ -241,7 +236,7 @@ var PagesAuth = (function () {
           }).then(function (hasil) {
             photoData = hasil;
             if (photoPreview) photoPreview.innerHTML = UI.avatar({ nama: 'Foto', foto: hasil }, 64);
-            Utils.toast(/^https?:/.test(hasil) ? 'Foto tersimpan di cloud.' : 'Foto siap diunggah.', 'success');
+            Utils.toast(/^https?:/.test(hasil) ? 'Foto tersimpan di cloud.' : 'Foto dipakai lokal — belum terunggah ke cloud.', 'success');
           }).catch(function (err) {
             photoData = '';
             if (photoPreview) photoPreview.innerHTML = '';
@@ -351,7 +346,7 @@ var PagesAuth = (function () {
                 '<div class="small muted">' + (gambar ? 'Gambar' : 'PDF') + ' / ' +
                 Math.round(hasil.ukuran / 1024) + ' KB</div></div></div>';
             }
-            Utils.toast(/^https?:/.test(hasil.data) ? 'Lisensi tersimpan di cloud.' : 'Lisensi pelatih siap diunggah.', 'success');
+            Utils.toast(/^https?:/.test(hasil.data) ? 'Lisensi tersimpan di cloud.' : 'Lisensi dipakai lokal — belum terunggah ke cloud.', 'success');
           }).catch(function (err) {
             lisensiData = null;
             if (lisensiPreview) lisensiPreview.innerHTML = '';
@@ -384,7 +379,7 @@ var PagesAuth = (function () {
           }).then(function (hasil) {
             fotoAsistenData = hasil;
             if (fotoAsistenPreview) fotoAsistenPreview.innerHTML = UI.avatar({ nama: 'Foto', foto: hasil }, 64);
-            Utils.toast(/^https?:/.test(hasil) ? 'Foto tersimpan di cloud.' : 'Foto siap diunggah.', 'success');
+            Utils.toast(/^https?:/.test(hasil) ? 'Foto tersimpan di cloud.' : 'Foto dipakai lokal — belum terunggah ke cloud.', 'success');
           }).catch(function (err) {
             fotoAsistenData = '';
             if (fotoAsistenPreview) fotoAsistenPreview.innerHTML = '';

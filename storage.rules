@@ -1,0 +1,17 @@
+rules_version = '2';
+
+// Aturan Firebase Storage untuk PB Trisula Surabaya.
+// - Dibaca publik: landing page diakses pengunjung umum (URL gambar langsung
+//   tampil tanpa login).
+// - Ditulis publik: aplikasi memakai sistem login sendiri (bukan Firebase
+//   Auth), jadi unggah foto dilakukan tanpa token Firebase. Bila kelak Anda
+//   mengaktifkan Authentication (Anonymous) di Firebase Console, ganti baris
+//   write menjadi:  allow write: if request.auth != null;
+service firebase.storage {
+  match /b/{bucket}/o {
+    match /{allPaths=**} {
+      allow read: if true;
+      allow write: if true;
+    }
+  }
+}

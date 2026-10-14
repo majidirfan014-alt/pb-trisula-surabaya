@@ -34,10 +34,55 @@ var Cloud = (function () {
   var janjiSiap = null;
   var sudahSinkron = false;
   var sudahMigrasi = false;
+  var galatMuat = '';       // penyebab SDK/init gagal (asli)
+  var galatAuth = '';       // penyebab auth anonim gagal (asli)
+
+  // Error dengan pesan jelas + kode/status asli (untuk ditampilkan & di-log).
+  function galat(kode, pesan, detail) {
+    var e = new Error(pesan);
+    e.kode = kode || 'unknown';
+    e.detail = detail || '';
+    try {
+      console.error('[Cloud]', e.kode, pesan, detail || '');
+    } catch (e2) {}
+    return e;
+  }
+
+  function terjemahkanGalatStorage(err, konteks) {
+    var kode = String((err && (err.code || err.name)) || '').replace(/^storage\//, '');
+    var asli = String((err && err.message) || err || '');
+    var pesan;
+    if (/unauthorized|not-authorized/i.test(kode) || /unauthorized/i.test(asli)) {
+      pesan = 'Tidak punya izin upload ke Firebase Storage (atur Storage Rules agar mengizinkan tulis).';
+    } else if (/bucket-not-found|no-default-bucket|invalid-bucket/i.test(kode) || /bucket/i.test(asli) && /not found/i.test(asli)) {
+      pesan = 'Bucket Firebase Storage tidak ditemukan — periksa nama bucket di js/cloud.js atau buat bucket-nya.';
+    } else if (/object-not-found/i.test(kode)) {
+      pesan = 'Objek tidak ditemukan di Firebase Storage.';
+    } else if (/retry-limit|network|unavailable|deadline/i.test(kode) || /network/i.test(asli)) {
+      pesan = 'Koneksi ke cloud gagal (jaringan/CORS) — coba lagi beberapa saat.';
+    } else if (/quota/i.test(kode) || /quota/i.test(asli)) {
+      pesan = 'Kuota Firebase Storage terlampaui.';
+    } else if (/canceled/i.test(kode)) {
+      pesan = 'Unggah dibatalkan.';
+    } else if (/invalid-argument|unsupported|cannot-slice/i.test(kode)) {
+      pesan = 'File tidak didukung untuk diunggah.';
+    } else {
+      pesan = 'Gagal unggah ke cloud' + (konteks ? ' (' + konteks + ')' : '') + '.';
+    }
+    return galat('storage/' + (kode || 'unknown'), pesan + ' [kode: ' + (kode || 'unknown') + ']', asli);
+  }
 
   function sdkTersedia() {
     return typeof window.firebase !== 'undefined' &&
       window.firebase.storage && window.firebase.firestore;
+  }
+
+  function validasiKONFIG() {
+    var kurang = [];
+    ['apiKey', 'authDomain', 'projectId', 'storageBucket', 'appId'].forEach(function (k) {
+      if (!KONFIG[k] || !String(KONFIG[k]).trim()) kurang.push(k);
+    });
+    return kurang;
   }
 
   function muatSdk() {
@@ -56,10 +101,20 @@ var Cloud = (function () {
       }
       // batas waktu: bila CDN Firebase tidak terjangkau, kembali ke mode lokal
       setTimeout(function () {
-        status = 'gagal';
-        akhir(false);
+        if (status === 'memuat') {
+          status = 'gagal';
+          galatMuat = galatMuat || 'Batas waktu memuat SDK Firebase (CDN tidak terjangkau).';
+        }
+        akhir(status === 'siap');
       }, 15000);
-      var berkas = ['firebase-app-compat', 'firebase-storage-compat', 'firebase-firestore-compat'];
+      var kurang = validasiKONFIG();
+      if (kurang.length) {
+        status = 'gagal';
+        galatMuat = 'Konfigurasi Firebase belum lengkap: ' + kurang.join(', ') + ' (lihat js/cloud.js).';
+        akhir(false);
+        return;
+      }
+      var berkas = ['firebase-app-compat', 'firebase-auth-compat', 'firebase-storage-compat', 'firebase-firestore-compat'];
       var indeks = 0;
       function berikutnya() {
         if (indeks >= berkas.length) {
@@ -71,6 +126,7 @@ var Cloud = (function () {
             akhir(true);
           } catch (e) {
             status = 'gagal';
+            galatMuat = 'initializeApp gagal: ' + ((e && e.message) || e);
             akhir(false);
           }
           return;
@@ -81,6 +137,7 @@ var Cloud = (function () {
         skrip.onload = berikutnya;
         skrip.onerror = function () {
           status = 'gagal';
+          galatMuat = 'Gagal memuat ' + nama + '.js dari CDN gstatic (diblokir jaringan/CORS?).';
           akhir(false);
         };
         document.head.appendChild(skrip);
@@ -88,6 +145,39 @@ var Cloud = (function () {
       berikutnya();
     });
     return janjiSiap;
+  }
+
+  // Auth anonim membantu bila Storage Rules meminta request.auth != null.
+  // Gagalnya auth TIDAK menggagalkan unggah — hasilnya dicatat untuk laporan.
+  function siapkanAuth() {
+    try {
+      if (typeof window.firebase === 'undefined' || !window.firebase || !window.firebase.auth) {
+        return Promise.resolve(false);
+      }
+      if (window.firebase.auth().currentUser) return Promise.resolve(true);
+      return Promise.resolve(window.firebase.auth().signInAnonymously()).then(function () {
+        return true;
+      }, function (e) {
+        galatAuth = String((e && (e.code || e.message)) || e);
+        return false;
+      });
+    } catch (e) {
+      galatAuth = String((e && e.message) || e);
+      return Promise.resolve(false);
+    }
+  }
+
+  // Laporan koneksi cloud untuk keperluan diagnosis (ditampilkan/di-log).
+  function diagnosa() {
+    return {
+      status: status,
+      sdkTersedia: sdkTersedia(),
+      konfigKurang: validasiKONFIG(),
+      proyek: KONFIG.projectId || '',
+      bucket: KONFIG.storageBucket || '',
+      galatMuat: galatMuat,
+      galatAuth: galatAuth
+    };
   }
 
   function init() {
@@ -130,25 +220,64 @@ var Cloud = (function () {
   /* ---------- unggah foto / berkas ke Firebase Storage ---------- */
   function unggah(file, folder, validasi) {
     var pesan = validasi ? validasi(file) : '';
-    if (pesan) return Promise.reject(new Error(pesan));
+    if (pesan) return Promise.reject(galat('validasi', pesan, file && file.name));
     return muatSdk().then(function (ok) {
-      if (!ok) throw new Error('Layanan cloud tidak tersedia. Foto disimpan secara lokal.');
-      var aman = String(file.name || 'berkas').replace(/[^\w.\-]+/g, '-').slice(-60);
-      var namaFile = Date.now().toString(36) + '-' + aman;
-      var ref = window.firebase.storage().ref(folder + '/' + namaFile);
-      return ref.put(file, { contentType: file.type || undefined }).then(function (snap) {
-        return snap.ref.getDownloadURL();
-      }).then(function (url) {
-        return {
-          url: url,
-          nama: file.name || namaFile,
-          tipe: file.type || '',
-          ukuran: file.size || 0
-        };
-      }).catch(function (e) {
-        throw new Error('Gagal mengunggah ke cloud: ' + (e && e.message ? e.message : 'kesalahan jaringan'));
+      if (!ok) {
+        throw galat('sdk', 'Layanan cloud tidak tersedia: ' + (galatMuat || 'SDK Firebase gagal dimuat.'), JSON.stringify(diagnosa()));
+      }
+      return siapkanAuth().then(function () {
+        var aman = String(file.name || 'berkas').replace(/[^\w.\-]+/g, '-').slice(-60);
+        var namaFile = Date.now().toString(36) + '-' + aman;
+        var ref;
+        try {
+          ref = window.firebase.storage().ref(folder + '/' + namaFile);
+        } catch (e) {
+          throw galat('storage/no-default-bucket',
+            'Bucket Firebase Storage tidak ditemukan — periksa nama bucket di js/cloud.js atau buat bucket-nya. [kode: no-default-bucket]',
+            String(e && e.message));
+        }
+        return ref.put(file, { contentType: file.type || undefined }).then(function (snap) {
+          return snap.ref.getDownloadURL();
+        }).then(function (url) {
+          return {
+            url: url,
+            nama: file.name || namaFile,
+            tipe: file.type || '',
+            ukuran: file.size || 0
+          };
+        }).catch(function (e) {
+          throw terjemahkanGalatStorage(e, folder);
+        });
       });
     });
+  }
+
+  // Unggah foto ke Storage dan kembalikan URL publiknya (bisa dibuka tanpa
+  // login). Melempar Error dengan pesan jelas + kode asli bila gagal —
+  // TIDAK menyimpan lokal diam-diam.
+  function unggahPublik(sumber, folder, nama) {
+    var janjiBerkas;
+    if (typeof sumber === 'string' && sumber.indexOf('data:') === 0) {
+      janjiBerkas = Promise.resolve().then(function () {
+        return dataUrlKeBerkas(sumber, nama);
+      });
+    } else {
+      janjiBerkas = Promise.resolve(sumber);
+    }
+    return janjiBerkas.then(function (berkas) {
+      return unggah(berkas, folder, null).then(function (hasil) {
+        return hasil.url;
+      });
+    });
+  }
+
+  function dataUrlKeBerkas(dataUrl, nama) {
+    var blob = dataUrlKeBlob(dataUrl);
+    try {
+      return new File([blob], nama || 'foto.jpg', { type: blob.type || 'image/jpeg' });
+    } catch (e) {
+      return blob;
+    }
   }
 
   function unggahFoto(file, folder) {
@@ -163,12 +292,10 @@ var Cloud = (function () {
     });
   }
 
-  // Unggah data URL ke cloud; bila gagal / cloud tidak tersedia,
-  // kembalikan data URL lokal agar fitur tetap berjalan.
+  // Unggah data URL ke cloud. Bila gagal, MELEMPAR error dengan pesan jelas
+  // (pemanggil yang menentukan fallback — tidak lagi diam-diam memakai lokal).
   function unggahAtauLokal(dataUrl, folder, nama) {
-    return unggahDataUrl(dataUrl, folder, nama).then(function (url) {
-      return url || dataUrl;
-    });
+    return unggahPublik(dataUrl, folder, nama || 'foto.jpg');
   }
 
   function hapusFile(url) {
@@ -413,6 +540,8 @@ var Cloud = (function () {
     init: init,
     siap: function () { return status === 'siap'; },
     status: function () { return status; },
+    diagnosa: diagnosa,
+    unggahPublik: unggahPublik,
     validasiGambar: validasiGambar,
     validasiBerkas: validasiBerkas,
     unggahFoto: unggahFoto,

@@ -194,11 +194,21 @@ var LandingStore = (function () {
   }
 
   // Unggah Blob ke Firebase Storage -> URL publik (bisa dibuka tanpa login).
-  // Mengembalikan '' bila gagal/tidak tersedia (pemanggil memakai fallback lokal).
+  // Mengembalikan { url, galat } — galat berisi pesan asli bila gagal.
   function unggahKeCloud(blob, folder, nama) {
     return tungguCloudSiap(5000).then(function (ok) {
-      if (!ok || !cloudSiap()) return '';
-      if (typeof Cloud === 'undefined' || !Cloud || typeof Cloud.unggahFoto !== 'function') return '';
+      if (!ok || !cloudSiap()) {
+        return {
+          url: '',
+          galat: 'Cloud tidak aktif: ' + (
+            (typeof Cloud !== 'undefined' && Cloud && Cloud.diagnosa && Cloud.diagnosa().galatMuat) ||
+            'SDK Firebase tidak tersedia / konfigurasi belum diisi.'
+          )
+        };
+      }
+      if (typeof Cloud === 'undefined' || !Cloud || typeof Cloud.unggahPublik !== 'function') {
+        return { url: '', galat: 'Modul cloud tidak memuat fungsi unggah.' };
+      }
       var berkas;
       try {
         berkas = typeof File === 'function'
@@ -209,9 +219,9 @@ var LandingStore = (function () {
       }
       var unggahan;
       try {
-        unggahan = Promise.resolve(Cloud.unggahFoto(berkas, folder || 'foto/landing'));
+        unggahan = Promise.resolve(Cloud.unggahPublik(berkas, folder || 'foto/landing', nama || 'foto.jpg'));
       } catch (e) {
-        return Promise.resolve('');
+        return Promise.resolve({ url: '', galat: (e && e.message) || 'Gagal memulai unggah.' });
       }
       // Batasi waktu unggah jaringan agar proses tidak menggantung.
       return new Promise(function (resolve) {
@@ -219,15 +229,15 @@ var LandingStore = (function () {
         function akhir(v) {
           if (selesai) return;
           selesai = true;
-          resolve(v || '');
+          resolve(v);
         }
         setTimeout(function () {
-          akhir('');
+          akhir({ url: '', galat: 'Batas waktu unggah ke cloud terlampaui (jaringan lambat).' });
         }, 7000);
-        unggahan.then(function (res) {
-          akhir(res && res.url ? res.url : '');
-        }, function () {
-          akhir('');
+        unggahan.then(function (url) {
+          akhir({ url: url || '', galat: url ? '' : 'Cloud tidak mengembalikan URL unggahan.' });
+        }, function (e) {
+          akhir({ url: '', galat: (e && e.message) || 'Gagal unggah ke cloud.' });
         });
       });
     });
@@ -260,28 +270,71 @@ var LandingStore = (function () {
     });
   }
 
+  // Simpan foto: UTAMAKAN cloud (URL publik), fallback lokal bila gagal.
+  // Mengembalikan { nilai, lokal, galat } — galat berisi penyebab asli bila
+  // foto tidak berhasil diunggah ke cloud (pemanggil menampilkannya + retry).
   function simpanFoto(sumber, opts) {
     opts = opts || {};
     var janjiBlob;
     if (typeof sumber === 'string') {
-      if (sumber.indexOf('data:') !== 0) return Promise.resolve(sumber); // URL https / path
+      if (sumber.indexOf('data:') !== 0) {
+        // URL https / path — tidak perlu disimpan ulang
+        return Promise.resolve({ nilai: sumber, lokal: false, galat: '' });
+      }
       try {
         janjiBlob = Promise.resolve(dataUrlKeBlob(sumber));
       } catch (e) {
-        janjiBlob = Promise.reject(new Error('Gagal membaca foto.'));
+        return Promise.reject(new Error('Gagal membaca foto.'));
       }
     } else {
       janjiBlob = Promise.resolve(sumber);
     }
     return janjiBlob.then(function (blob) {
       if (!blob) throw new Error('Gagal menyimpan foto.');
-      return unggahKeCloud(blob, opts.folder, opts.nama).then(function (url) {
-        if (url) return url;
+      return unggahKeCloud(blob, opts.folder, opts.nama).then(function (hasil) {
+        if (hasil.url) return { nilai: hasil.url, lokal: false, galat: '' };
         return simpanLokal(blob).then(function (ref) {
-          if (ref) return ref;
-          // Cadangan terakhir: data URL (bertahan setelah refresh, tetap lokal).
-          return blobKeDataUrl(blob);
+          if (ref) return { nilai: ref, lokal: true, galat: hasil.galat };
+          return blobKeDataUrl(blob).then(function (dataUrl) {
+            return { nilai: dataUrl || '', lokal: true, galat: hasil.galat };
+          });
         });
+      });
+    });
+  }
+
+  // Ambil Blob di balik sebuah nilai foto lokal (idb: / data:).
+  function blobDariNilai(nilai) {
+    var s = String(nilai || '');
+    if (s.indexOf(TOKOH) === 0) {
+      var isi = cacheFoto[s.slice(TOKOH.length)];
+      if (!isi) return Promise.resolve(null);
+      if (typeof isi !== 'string') return Promise.resolve(isi);
+      try {
+        return Promise.resolve(dataUrlKeBlob(isi));
+      } catch (e) {
+        return Promise.resolve(null);
+      }
+    }
+    if (s.indexOf('data:') === 0) {
+      try {
+        return Promise.resolve(dataUrlKeBlob(s));
+      } catch (e) {
+        return Promise.resolve(null);
+      }
+    }
+    return Promise.resolve(null);
+  }
+
+  // Unggah ulang foto lokal ke cloud (untuk tombol "Sinkronkan ke Cloud"
+  // dan migrasi otomatis). Mengembalikan { nilai, lokal, galat }.
+  function sinkronkanKeCloud(nilai, opts) {
+    opts = opts || {};
+    return blobDariNilai(nilai).then(function (blob) {
+      if (!blob) return { nilai: nilai, lokal: true, galat: 'File foto tidak ditemukan di perangkat ini — silakan unggah ulang.' };
+      return unggahKeCloud(blob, opts.folder || 'foto/landing', opts.nama || 'foto-lama.jpg').then(function (hasil) {
+        if (hasil.url) return { nilai: hasil.url, lokal: false, galat: '' };
+        return { nilai: nilai, lokal: true, galat: hasil.galat };
       });
     });
   }
@@ -719,9 +772,9 @@ var LandingStore = (function () {
     // 1) publikasikan foto lokal ke cloud (agar tampil di perangkat lain)
     unggahUlang.forEach(function (u) {
       janji = janji.then(function () {
-        return unggahKeCloud(u.blob, 'foto/landing', 'foto-lama.jpg').then(function (url) {
-          if (!url) return;
-          setNilai(u.jalan, url);
+        return unggahKeCloud(u.blob, 'foto/landing', 'foto-lama.jpg').then(function (hasil) {
+          if (!hasil.url) return;
+          setNilai(u.jalan, hasil.url);
           berubah = true;
           total++;
         });
@@ -731,9 +784,9 @@ var LandingStore = (function () {
     // 2) pindahkan foto base64 lama (cloud dahulu, lalu IndexedDB)
     perlu.forEach(function (p) {
       janji = janji.then(function () {
-        return simpanFoto(p.data, { folder: 'foto/landing', nama: 'foto-lama.jpg' }).then(function (ref) {
-          if (!ref) return;
-          setNilai(p.jalan, ref);
+        return simpanFoto(p.data, { folder: 'foto/landing', nama: 'foto-lama.jpg' }).then(function (hasil) {
+          if (!hasil || !hasil.nilai) return;
+          setNilai(p.jalan, hasil.nilai);
           berubah = true;
           total++;
         }, function () {});
@@ -747,6 +800,65 @@ var LandingStore = (function () {
       } catch (e) {}
       notify();
       return total;
+    });
+  }
+
+  // Sinkronkan SEMUA foto lokal (idb:/data:) ke cloud lalu simpan URL-nya.
+  // Dipakai tombol "Sinkronkan ke Cloud" — mengembalikan { sukses, gagal, pesan }.
+  function sinkronkanSemuaLokal(folder) {
+    var mentah = bacaMentah();
+    if (!mentah) return Promise.resolve({ sukses: 0, gagal: 0, pesan: 'Belum ada data foto.' });
+    var daftar = [];
+    function tampung(obj, kunci, jalan) {
+      var v = obj[kunci];
+      if (typeof v === 'string' && (v.indexOf(TOKOH) === 0 || v.indexOf('data:') === 0)) {
+        daftar.push({ jalan: jalan, nilai: v });
+      }
+    }
+    (mentah.kolase || []).forEach(function (k, i) {
+      if (k) tampung(k, 'file', ['kolase', i, 'file']);
+    });
+    (mentah.galeri || []).forEach(function (g, i) {
+      if (!g) return;
+      tampung(g, 'src', ['galeri', i, 'src']);
+      tampung(g, 'file', ['galeri', i, 'file']);
+    });
+    if (mentah.merek) tampung(mentah.merek, 'logo', ['merek', 'logo']);
+    if (!daftar.length) return Promise.resolve({ sukses: 0, gagal: 0, pesan: 'Tidak ada foto lokal yang perlu disinkronkan.' });
+
+    var sukses = 0;
+    var gagal = 0;
+    var galatTerakhir = '';
+    var janji = Promise.resolve();
+    daftar.forEach(function (d) {
+      janji = janji.then(function () {
+        return sinkronkanKeCloud(d.nilai, { folder: folder || 'foto/landing' }).then(function (hasil) {
+          if (hasil.lokal) {
+            gagal++;
+            galatTerakhir = hasil.galat || galatTerakhir;
+            return;
+          }
+          var obj = mentah;
+          for (var i = 0; i < d.jalan.length - 1; i++) obj = obj[d.jalan[i]];
+          obj[d.jalan[d.jalan.length - 1]] = hasil.nilai;
+          sukses++;
+        });
+      });
+    });
+    return janji.then(function () {
+      if (sukses) {
+        try {
+          localStorage.setItem(KEY, JSON.stringify(mentah));
+        } catch (e) {}
+        notify();
+      }
+      return {
+        sukses: sukses,
+        gagal: gagal,
+        pesan: sukses
+          ? sukses + ' foto berhasil disinkronkan ke cloud.'
+          : ('Gagal sinkron ke cloud: ' + (galatTerakhir || 'tidak diketahui'))
+      };
     });
   }
 
@@ -802,6 +914,8 @@ var LandingStore = (function () {
     bacaFoto: bacaFoto,
     urlFoto: urlFoto,
     simpanFoto: simpanFoto,
+    sinkronkanKeCloud: sinkronkanKeCloud,
+    sinkronkanSemuaLokal: sinkronkanSemuaLokal,
     hapusFotoRef: hapusFotoRef,
     hidupkan: hidupkan,
     simpanDariCloud: simpanDariCloud,

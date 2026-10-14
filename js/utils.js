@@ -183,11 +183,17 @@ var Utils = (function () {
 
   // Simpan hasil kompresi foto ke penyimpanan cloud bila tersedia,
   // kalau tidak, pakai data URL lokal sebagai cadangan.
+  // Unggah foto ke cloud (URL publik). Bila gagal, penyebab ASLINYA
+  // ditampilkan dan foto dipakai lokal sementara — tidak diam-diam.
   function keCloud(dataUrl, folder, nama) {
-    if (typeof Cloud === 'undefined' || !Cloud || !Cloud.unggahAtauLokal) {
+    if (typeof Cloud === 'undefined' || !Cloud || typeof Cloud.unggahPublik !== 'function') {
       return Promise.resolve(dataUrl);
     }
-    return Cloud.unggahAtauLokal(dataUrl, folder, nama);
+    return Cloud.unggahPublik(dataUrl, folder, nama).catch(function (err) {
+      var sebab = (err && err.message) || 'tidak diketahui';
+      toast('Gagal unggah ke cloud: ' + sebab + ' — foto dipakai lokal sementara.', 'danger');
+      return dataUrl;
+    });
   }
 
   function formData(form) {

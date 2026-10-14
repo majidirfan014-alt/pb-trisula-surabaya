@@ -58,6 +58,8 @@ var PagesLanding = (function () {
     return (nama || 'foto') + ' · ' + (kb > 0 ? kb + ' KB' : 'ukuran tidak diketahui');
   }
 
+  var TOMBOL_SINKRON = '<button type="button" class="btn btn-sm btn-secondary" data-lp-sinkron>' + UI.icon('refresh', 18) + ' Sinkronkan ke Cloud</button>';
+
   function slotFoto(key, file, caption, label, hideCaption, info) {
     var src = LandingStore.urlFoto(file);
     var ada = !!src;
@@ -168,9 +170,11 @@ var PagesLanding = (function () {
     }
   }
 
-  function tampilkanError(key, pesan) {
+  function tampilkanError(key, pesan, tombolHtml) {
     var slot = document.querySelector('[data-lp-error="' + key + '"]');
-    if (slot) slot.textContent = pesan || '';
+    if (slot) {
+      slot.innerHTML = pesan ? (Utils.esc(pesan) + (tombolHtml || '')) : '';
+    }
     if (pesan) Utils.toast(pesan, 'danger');
   }
 
@@ -306,6 +310,16 @@ var PagesLanding = (function () {
       }
       if (e.target.closest('[data-lp-tambah-galeri]')) {
         document.getElementById('lp-file-galeri').click();
+        return;
+      }
+      var coba = e.target.closest('[data-lp-coba-lagi]');
+      if (coba) {
+        cobaLagiCloud(coba.getAttribute('data-lp-coba-lagi'));
+        return;
+      }
+      var sinkron = e.target.closest('[data-lp-sinkron]');
+      if (sinkron) {
+        sinkronkanSemua(sinkron);
         return;
       }
       var hapus = e.target.closest('[data-lp-hapus]');
@@ -523,6 +537,108 @@ var PagesLanding = (function () {
     return dipakai;
   }
 
+  // Tombol "Coba Lagi": unggah ulang foto lokal (idb:/data:) ke cloud.
+  function cobaLagiCloud(key) {
+    var d = ambil();
+    var nilai = '';
+    if (key === 'logo') nilai = d.merek.logo;
+    else if (key.indexOf('kolase_') === 0) {
+      var i = parseInt(key.split('_')[1], 10);
+      nilai = (d.kolase[i] || {}).file || '';
+    }
+    if (!nilai || /^https?:/.test(String(nilai))) {
+      tampilkanError(key, 'Tidak ada foto lokal yang perlu diunggah ulang.');
+      return;
+    }
+    bersihkanError(key);
+    prosesAktif[key] = { batal: false };
+    mulaiProsesUI(key, 'Mengunggah ke cloud...');
+    LandingStore.sinkronkanKeCloud(nilai, { folder: 'foto/landing', nama: 'foto.jpg' }).then(function (hasil) {
+      if (prosesAktif[key]) delete prosesAktif[key];
+      selesaiProsesUI(key);
+      if (hasil.lokal) {
+        tampilkanError(key, 'Masih gagal: ' + (hasil.galat || 'tidak diketahui') + ' — foto tetap tersimpan lokal.',
+          '<div class="mt-1"><button type="button" class="btn btn-sm btn-secondary" data-lp-coba-lagi="' + Utils.esc(key) + '">Coba Lagi</button></div>');
+        perbaruiSlot(key);
+        return;
+      }
+      if (key === 'logo') {
+        d.merek.logo = hasil.nilai;
+      } else if (key.indexOf('kolase_') === 0) {
+        var idx = parseInt(key.split('_')[1], 10);
+        if (d.kolase[idx]) d.kolase[idx].file = hasil.nilai;
+      }
+      tandaiBelumSimpan();
+      perbaruiSlot(key);
+      Utils.toast('Foto berhasil disinkronkan ke cloud.', 'success');
+    });
+  }
+
+  // Tombol "Sinkronkan ke Cloud": unggah semua foto lokal (draft + data
+  // tersimpan) ke cloud, lalu perbarui nilainya menjadi URL publik.
+  function sinkronkanSemua(btn) {
+    if (btn) {
+      btn.disabled = true;
+      btn.textContent = 'Menyinkronkan...';
+    }
+    var d = ambil();
+    function lokal(v) {
+      return typeof v === 'string' && (v.indexOf('idb:') === 0 || v.indexOf('data:') === 0);
+    }
+    var antre = [];
+    (d.kolase || []).forEach(function (k, i) {
+      if (k && lokal(k.file)) antre.push({ key: 'kolase_' + i, nilai: k.file });
+    });
+    (d.galeri || []).forEach(function (g) {
+      if (g && lokal(g.src || g.file)) antre.push({ key: 'galeri_' + g.id, nilai: g.src || g.file });
+    });
+    if (lokal(d.merek.logo)) antre.push({ key: 'logo', nilai: d.merek.logo });
+
+    var sukses = 0;
+    var galatTerakhir = '';
+    var janji = Promise.resolve();
+    antre.forEach(function (p) {
+      janji = janji.then(function () {
+        return LandingStore.sinkronkanKeCloud(p.nilai, { folder: 'foto/landing', nama: 'foto.jpg' }).then(function (hasil) {
+          if (hasil.lokal) {
+            galatTerakhir = hasil.galat || galatTerakhir;
+            return;
+          }
+          sukses++;
+          if (p.key === 'logo') {
+            d.merek.logo = hasil.nilai;
+          } else if (p.key.indexOf('kolase_') === 0) {
+            var i = parseInt(p.key.split('_')[1], 10);
+            if (d.kolase[i]) d.kolase[i].file = hasil.nilai;
+          } else {
+            var item = cariGaleri(p.key.slice(7));
+            if (item) item.src = hasil.nilai;
+          }
+        });
+      });
+    });
+
+    janji.then(function () {
+      // Data tersimpan yang masih lokal ikut disinkronkan.
+      return LandingStore.sinkronkanSemuaLokal('foto/landing');
+    }).then(function (hasil) {
+      if (sukses) tandaiBelumSimpan();
+      renderTab();
+      var totalSukses = sukses + (hasil ? hasil.sukses : 0);
+      if (totalSukses) {
+        Utils.toast(totalSukses + ' foto berhasil disinkronkan ke cloud.', 'success');
+      } else {
+        Utils.toast('Gagal sinkron ke cloud: ' + (galatTerakhir || (hasil && hasil.pesan) || 'tidak diketahui'), 'danger');
+      }
+    }, function () {
+      if (btn) {
+        btn.disabled = false;
+        btn.textContent = 'Sinkronkan ke Cloud';
+      }
+      Utils.toast('Gagal menyinkronkan ke cloud.', 'danger');
+    });
+  }
+
   function unggahSatu(input) {
     var file = input.files && input.files[0];
     if (!file) return;
@@ -551,21 +667,22 @@ var PagesLanding = (function () {
       return LandingStore.simpanFoto(f.blob, {
         folder: 'foto/landing',
         nama: f.nama || file.name || 'foto.jpg'
-      }).then(function (nilai) {
-        return { nilai: nilai, info: infoBerkas(f.nama || file.name, f.ukuran) };
+      }).then(function (hasil) {
+        return { hasil: hasil, info: infoBerkas(f.nama || file.name, f.ukuran) };
       });
-    }).then(function (hasil) {
+    }).then(function (bungkus) {
       if (token.batal) {
-        LandingStore.hapusFotoRef(hasil.nilai);
+        LandingStore.hapusFotoRef(bungkus.hasil.nilai);
         return;
       }
+      var hasil = bungkus.hasil;
       var d = ambil();
       if (key === 'logo') {
         if (d.merek.logo && d.merek.logo !== hasil.nilai && !refDiDataTersimpan(d.merek.logo)) {
           LandingStore.hapusFotoRef(d.merek.logo);
         }
         d.merek.logo = hasil.nilai;
-        d.merek.logo_info = hasil.info;
+        d.merek.logo_info = bungkus.info;
       } else if (key.indexOf('kolase_') === 0) {
         var i = parseInt(key.split('_')[1], 10);
         if (!d.kolase[i]) d.kolase[i] = { file: '', caption: '', alt: '' };
@@ -573,16 +690,19 @@ var PagesLanding = (function () {
           LandingStore.hapusFotoRef(d.kolase[i].file);
         }
         d.kolase[i].file = hasil.nilai;
-        d.kolase[i].file_info = hasil.info;
+        d.kolase[i].file_info = bungkus.info;
         if (!d.kolase[i].caption) d.kolase[i].caption = String(file.name || '').replace(/\.[^.]+$/, '');
         if (!d.kolase[i].alt) d.kolase[i].alt = file.name || '';
       }
       tandaiBelumSimpan();
       perbaruiSlot(key);   // hanya slot ini yang diperbarui
-      if (/^https?:/.test(String(hasil.nilai))) {
-        Utils.toast('Foto tersimpan di cloud dan tampil di semua perangkat.', 'success');
+      if (hasil.lokal) {
+        // Jangan berpura-pura berhasil: foto tersimpan lokal, alasannya jelas.
+        tampilkanError(key,
+          'Gagal unggah ke cloud: ' + (hasil.galat || 'tidak diketahui') + ' — foto sementara hanya di perangkat ini.',
+          '<div class="mt-1"><button type="button" class="btn btn-sm btn-secondary" data-lp-coba-lagi="' + Utils.esc(key) + '">Coba Lagi</button></div>');
       } else {
-        Utils.toast('Cloud tidak tersedia — foto hanya tersimpan di perangkat ini. Unggah ulang nanti agar tampil di perangkat lain.', 'danger');
+        Utils.toast('Foto tersimpan di cloud dan tampil di semua perangkat.', 'success');
       }
     });
 
@@ -636,6 +756,7 @@ var PagesLanding = (function () {
     var total = files.length;
     var berjalan = 0;
     var gagal = [];
+    var galatCloud = [];
     var lokalSaja = 0;
     mulaiProsesGaleri('Memproses 0 dari ' + total);
 
@@ -648,22 +769,25 @@ var PagesLanding = (function () {
         return LandingStore.simpanFoto(res.blob, {
           folder: 'foto/galeri',
           nama: res.nama || f.name || 'galeri.jpg'
-        }).then(function (nilai) {
-          return { nilai: nilai, res: res };
+        }).then(function (hasil) {
+          return { hasil: hasil, res: res };
         });
-      }).then(function (hasil) {
-        if (!hasil) return;
+      }).then(function (bungkus) {
+        if (!bungkus) return;
         if (token.batal) {
-          LandingStore.hapusFotoRef(hasil.nilai);
+          LandingStore.hapusFotoRef(bungkus.hasil.nilai);
           return;
         }
-        if (!/^https?:/.test(String(hasil.nilai))) lokalSaja++;
+        if (bungkus.hasil.lokal) {
+          lokalSaja++;
+          galatCloud.push((f && f.name ? f.name : 'foto') + ': ' + (bungkus.hasil.galat || 'tidak diketahui'));
+        }
         var d = ambil();
         var item = {
           id: 'g' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
-          src: hasil.nilai,
-          file_info: infoBerkas(hasil.res.nama || f.name, hasil.res.ukuran),
-          judul: String(hasil.res.nama || f.name || '').replace(/\.[^.]+$/, ''),
+          src: bungkus.hasil.nilai,
+          file_info: infoBerkas(bungkus.res.nama || f.name, bungkus.res.ukuran),
+          judul: String(bungkus.res.nama || f.name || '').replace(/\.[^.]+$/, ''),
           keterangan: '',
           kategori: 'Atlet'
         };
@@ -685,16 +809,19 @@ var PagesLanding = (function () {
     Promise.all([pekerja(), pekerja()]).then(function () {
       if (prosesAktif['galeri'] === token) delete prosesAktif['galeri'];
       selesaiProsesGaleri();
-      if (gagal.length) tampilkanError('galeri', gagal.join(' | '));
+      var gabung = gagal.concat(galatCloud);
+      if (gabung.length) {
+        tampilkanError('galeri', 'Sebagian foto gagal: ' + gabung.join(' | '),
+          '<div class="mt-1"><button type="button" class="btn btn-sm btn-secondary" data-lp-sinkron>Coba Lagi / Sinkronkan ke Cloud</button></div>');
+      }
       var sukses = total - gagal.length;
       if (token.batal) {
         Utils.toast('Pengunggahan foto galeri dibatalkan.', 'info');
       } else if (sukses > 0) {
-        var pesan = sukses + ' foto galeri berhasil ditambahkan.' + (gagal.length ? ' ' + gagal.length + ' gagal.' : '');
-        if (lokalSaja) {
-          pesan += ' ' + lokalSaja + ' foto hanya tersimpan di perangkat ini (cloud tidak tersedia).';
-        }
-        Utils.toast(pesan, gagal.length || lokalSaja ? 'info' : 'success');
+        var pesan = sukses + ' foto galeri berhasil ditambahkan.' +
+          (gagal.length ? ' ' + gagal.length + ' gagal diproses.' : '') +
+          (lokalSaja ? ' ' + lokalSaja + ' foto belum terunggah ke cloud (lokal).' : '');
+        Utils.toast(pesan, gabung.length ? 'info' : 'success');
       }
     });
   }
@@ -916,6 +1043,7 @@ var PagesLanding = (function () {
       html += '<div class="card lp-kartu">' +
         '<div class="card-title">' + UI.icon('users', 20) + 'Foto Kolase Hero (4 Foto)</div>' +
         '<p class="muted small">Format JPG, JPEG, PNG, atau WEBP. Ukuran file asli maksimal 10 MB, otomatis dikompres hingga hasil di bawah 2 MB (maks. lebar 1600px). Bisa juga menyeret foto ke area pratinjau.</p>' +
+        '<div class="mb-2">' + TOMBOL_SINKRON + '</div>' +
         '<div class="lp-foto-grid">' +
         (d.kolase || []).map(function (k, i) {
           return slotFoto('kolase_' + i, k.file, k.caption, 'Foto ' + (i + 1) + (i === 0 ? ' (Utama)' : ''), false, k.file_info);
@@ -929,6 +1057,7 @@ var PagesLanding = (function () {
         '<label class="btn btn-secondary">' + IKON_UNGGAH + '<span>Tambah Foto (boleh lebih dari satu)</span>' +
         '<input type="file" hidden multiple accept="image/jpeg,image/jpg,image/png,image/webp" data-lp-file-galeri id="lp-file-galeri"></label>' +
         '<button type="button" class="btn btn-ghost" data-lp-tambah-galeri>Pilih dari Penjelajah</button>' +
+        TOMBOL_SINKRON +
         '<div class="lp-foto-proses lp-proses-inline" data-lp-proses="galeri" hidden>' +
         '<div class="lp-spinner" aria-hidden="true"></div>' +
         '<span data-lp-proses-teks>Memproses...</span></div>' +
@@ -987,6 +1116,7 @@ var PagesLanding = (function () {
         UI.field({ name: 'sub', label: 'Teks Kecil (Navbar)',  value: d.merek.sub }) +
         '</div>' +
         slotFoto('logo', d.merek.logo, '', 'Logo Klub', true, d.merek.logo_info) +
+        '<div class="mt-2">' + TOMBOL_SINKRON + '</div>' +
         '</div>' + barSimpan();
     }
 
