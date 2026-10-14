@@ -4584,3 +4584,464 @@ section[id],
     display: none !important;
   }
 }
+
+/* ============ Picker Lokasi Latihan (checkbox kartu/chip) ============ */
+
+.picker-lokasi-host .lokasi-field {
+  margin-bottom: 0;
+}
+
+.lokasi-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 10px;
+}
+
+.lokasi-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 10px;
+}
+
+.lokasi-card {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 14px;
+  min-height: 56px;
+  border: 1.5px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--card);
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.05);
+  cursor: pointer;
+  font-weight: 700;
+  color: var(--ink);
+  user-select: none;
+  transition: background 0.18s ease, border-color 0.18s ease, color 0.18s ease, transform 0.12s ease;
+}
+
+.lokasi-card input[type="checkbox"] {
+  position: absolute;
+  opacity: 0;
+  width: 1px;
+  height: 1px;
+  pointer-events: none;
+}
+
+.lokasi-card .lokasi-check {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  flex: 0 0 26px;
+  border-radius: 50%;
+  border: 2px solid var(--line);
+  color: transparent;
+  background: #fff;
+  transition: background 0.18s ease, border-color 0.18s ease, color 0.18s ease;
+}
+
+.lokasi-card .lokasi-nama {
+  line-height: 1.25;
+  font-size: 0.95rem;
+}
+
+.lokasi-card:hover {
+  border-color: var(--primary-500);
+  background: var(--primary-50);
+}
+
+.lokasi-card:active {
+  transform: scale(0.98);
+}
+
+.lokasi-card.active {
+  background: var(--primary-700);
+  border-color: var(--primary-700);
+  color: #fff;
+  box-shadow: var(--shadow-accent);
+}
+
+.lokasi-card.active .lokasi-check {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+
+.lokasi-card:focus-within {
+  outline: 2px solid var(--primary-500);
+  outline-offset: 2px;
+}
+
+.lokasi-card-lainnya {
+  border-style: dashed;
+}
+
+.lokasi-lainnya-box {
+  margin-top: 10px;
+}
+
+.lokasi-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.lokasi-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: var(--primary-50);
+  border: 1px solid var(--primary-100);
+  color: var(--primary-800);
+  font-size: 0.76rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+/* ============ Picker Atlet (pencarian lalu centang) ============ */
+
+.picker-trigger {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 48px;
+  padding: 10px 14px;
+  border: 1.5px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: #fff;
+  color: var(--muted);
+  font: inherit;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 0.18s ease, box-shadow 0.18s ease;
+}
+
+.picker-trigger:hover {
+  border-color: var(--primary-500);
+}
+
+.picker-trigger:focus-visible {
+  outline: none;
+  border-color: var(--primary-500);
+  box-shadow: var(--ring);
+}
+
+.picker-trigger .picker-trigger-teks {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.picker-trigger.ada {
+  border-color: var(--primary-700);
+  color: var(--ink);
+}
+
+.picker-trigger-panah {
+  display: inline-flex;
+  color: var(--primary-700);
+  flex: 0 0 auto;
+}
+
+.picker-ringkas {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.picker-ringkas:empty {
+  display: none;
+}
+
+.picker-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 8px 5px 12px;
+  border-radius: 999px;
+  background: var(--primary-700);
+  color: #fff;
+  font-size: 0.82rem;
+  font-weight: 700;
+  max-width: 100%;
+}
+
+.picker-chip .small.muted {
+  color: rgba(255, 255, 255, 0.75);
+}
+
+.picker-chip-static {
+  padding-right: 8px;
+  background: var(--primary-50);
+  color: var(--primary-800);
+  border: 1px solid var(--primary-100);
+}
+
+.picker-chip-static .small.muted {
+  color: var(--muted);
+}
+
+.picker-chip-x {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  flex: 0 0 22px;
+  border: 0;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.22);
+  color: inherit;
+  cursor: pointer;
+  padding: 0;
+}
+
+.picker-chip-static .picker-chip-x {
+  background: var(--accent-light);
+  color: var(--accent);
+}
+
+.picker-chip-x:hover {
+  background: var(--accent);
+  color: #fff;
+}
+
+.picker-chip-x:focus-visible {
+  outline: 2px solid var(--primary-500);
+  outline-offset: 2px;
+}
+
+.picker-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 940;
+  background: rgba(15, 23, 42, 0.45);
+}
+
+.picker-pop {
+  position: fixed;
+  z-index: 950;
+  display: flex;
+  flex-direction: column;
+  background: var(--card);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-lg);
+  overflow: hidden;
+  max-height: min(560px, calc(100dvh - 40px));
+}
+
+.picker-pop-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 12px 10px;
+  border-bottom: 1px solid var(--line);
+  flex: 0 0 auto;
+  background: #fff;
+}
+
+.picker-search {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 12px;
+  min-height: 44px;
+  border: 1.5px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--bg);
+  color: var(--muted);
+}
+
+.picker-search:focus-within {
+  border-color: var(--primary-500);
+  box-shadow: var(--ring);
+  background: #fff;
+}
+
+.picker-search input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  font: inherit;
+  font-size: 1rem;
+  color: var(--ink);
+  outline: none;
+  padding: 10px 0;
+}
+
+.picker-pop-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--line);
+  flex: 0 0 auto;
+  max-height: 108px;
+  overflow-y: auto;
+}
+
+.picker-pop-tools {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--line);
+  flex: 0 0 auto;
+  background: var(--primary-50);
+}
+
+.picker-counter {
+  margin-left: auto;
+  color: var(--accent);
+  font-weight: 800;
+  font-size: 0.84rem;
+  white-space: nowrap;
+}
+
+.picker-pop-list {
+  flex: 1 1 auto;
+  min-height: 120px;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  padding: 6px;
+}
+
+.picker-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 9px 10px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  user-select: none;
+  transition: background 0.15s ease;
+}
+
+.picker-row:hover {
+  background: var(--primary-50);
+}
+
+.picker-row input {
+  accent-color: var(--primary-700);
+  width: 18px;
+  height: 18px;
+  flex: 0 0 18px;
+}
+
+.picker-row .avatar {
+  flex: 0 0 auto;
+}
+
+.picker-row-teks {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  line-height: 1.3;
+}
+
+.picker-row-teks b {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.picker-row-check {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  flex: 0 0 24px;
+  border-radius: 50%;
+  border: 2px solid var(--line);
+  color: transparent;
+  background: #fff;
+}
+
+.picker-row.active {
+  background: var(--primary-50);
+}
+
+.picker-row.active .picker-row-check {
+  background: var(--primary-700);
+  border-color: var(--primary-700);
+  color: #fff;
+}
+
+.picker-kosong {
+  padding: 28px 16px;
+  text-align: center;
+  color: var(--muted);
+  font-weight: 600;
+}
+
+.picker-pop-foot {
+  flex: 0 0 auto;
+  padding: 12px;
+  padding-bottom: calc(12px + env(safe-area-inset-bottom, 0px));
+  border-top: 1px solid var(--line);
+  background: #fff;
+}
+
+.picker-done {
+  width: 100%;
+  min-height: 50px;
+  font-size: 1rem;
+}
+
+body.picker-open {
+  overflow: hidden;
+}
+
+@media (max-width: 640px) {
+  .picker-pop.sheet {
+    inset: 0;
+    left: 0;
+    right: 0;
+    top: 0;
+    bottom: 0;
+    width: 100%;
+    max-width: none;
+    max-height: 100dvh;
+    height: 100dvh;
+    border-radius: 0;
+  }
+
+  .picker-pop.sheet .picker-pop-head {
+    padding-top: calc(12px + env(safe-area-inset-top, 0px));
+    position: sticky;
+    top: 0;
+    z-index: 2;
+  }
+
+  .picker-pop.sheet .picker-done {
+    min-height: 56px;
+    font-size: 1.05rem;
+    box-shadow: var(--shadow-accent);
+  }
+
+  .lokasi-grid {
+    grid-template-columns: repeat(auto-fill, minmax(132px, 1fr));
+  }
+}
+
+@media (min-width: 641px) {
+  .picker-pop:not(.sheet) {
+    width: min(420px, calc(100vw - 24px));
+    animation: sheet-in 0.18s ease;
+  }
+}

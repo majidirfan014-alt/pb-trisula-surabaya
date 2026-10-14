@@ -518,6 +518,9 @@ var Kemajuan = (function () {
   // dan selalu memakai id_parameter asli dari master, agar tidak membuat aspek ganda.
   function isiDataContoh(userId, idAtlet) {
     if (!idAtlet || sudahContoh(idAtlet)) return false;
+    // Tandai dulu sebelum mengisi, agar notifikasi store saat insert tidak
+    // memicu isiDataContoh berulang (re-entransi) untuk atlet yang sama.
+    tandaiContoh(idAtlet);
     var master = {};
     Store.all('log_parameters').forEach(function (p) {
       if (p && p.id && p.nama) master[p.nama] = p;

@@ -843,10 +843,7 @@ var PagesMonitoring = (function () {
   function formHtml(data, editRow) {
     return '<form id="form-mon" novalidate>' +
       '<div class="form-grid cols-2">' +
-      UI.field({
-        name: 'id_atlet', label: 'Atlet', type: 'select', required: true,
-        value: data.id_atlet, options: opsiAtlet(true)
-      }) +
+      '<div id="mon-atlet"></div>' +
       UI.field({
         name: 'tanggal', label: 'Tanggal dalam Minggu Program', type: 'date', required: true,
         value: data.tanggal,
@@ -960,6 +957,7 @@ var PagesMonitoring = (function () {
     var editRow = null;
     var simpanLock = 0;
     var filter = { idAtlet: '', rentang: '8' };
+    var pickerApi = null;
 
     function refreshMingguInfo() {
       var host = body.querySelector('#mon-minggu-info');
@@ -992,7 +990,9 @@ var PagesMonitoring = (function () {
     function terapkanKeForm() {
       var form = body.querySelector('#form-mon');
       if (!form) return;
-      form.querySelector('[name="id_atlet"]').value = data.id_atlet;
+      if (pickerApi) {
+        pickerApi.setValue(data.id_atlet ? String(data.id_atlet).split(',').filter(Boolean) : []);
+      }
       form.querySelector('[name="tanggal"]').value = data.tanggal;
       form.querySelector('[name="catatan_pelatih"]').value = data.catatan_pelatih;
       ASPESK.forEach(function (a) {
@@ -1012,21 +1012,22 @@ var PagesMonitoring = (function () {
     function muatOtomatis() {
       var form = body.querySelector('#form-mon');
       if (!form) return;
-      var idAtlet = form.querySelector('[name="id_atlet"]').value;
+      var daftarId = pickerApi ? pickerApi.getValue() : [];
       var tanggal = form.querySelector('[name="tanggal"]').value;
-      if (!idAtlet || !tanggal) {
+      if (!daftarId.length || !tanggal) {
         editRow = null;
         refreshMingguInfo();
         return;
       }
       var senin = seninDari(tanggal);
-      var row = null;
-      if (idAtlet === '*') {
-        var kumpul = rowsUntukMinggu(senin);
-        row = kumpul.length ? kumpul[0] : null;
-      } else {
-        row = rowUntuk(idAtlet, senin);
+      // Muat otomatis hanya untuk satu atlet; untuk beberapa atlet sekaligus
+      // nilai dasar pada form dipakai untuk seluruh atlet terpilih.
+      if (daftarId.length > 1) {
+        editRow = null;
+        refreshMingguInfo();
+        return;
       }
+      var row = rowUntuk(daftarId[0], senin);
       if (row) {
         muatDariRow(row);
         terapkanKeForm();
@@ -1047,6 +1048,15 @@ var PagesMonitoring = (function () {
         }).join('') +
         '</select></div>' +
         '<div id="mon-riwayat"></div>';
+
+      pickerApi = Picker.atlet(body.querySelector('#mon-atlet'), {
+        name: 'id_atlet',
+        label: 'Atlet',
+        required: true,
+        mode: 'multi',
+        value: data.id_atlet ? String(data.id_atlet).split(',').filter(Boolean) : [],
+        help: 'Pilih satu atau beberapa atlet. Gunakan "Pilih semua hasil pencarian" untuk semua atlet.'
+      });
 
       terapkanKeForm();
       renderRiwayat();
@@ -1121,11 +1131,12 @@ var PagesMonitoring = (function () {
 
         simpanLock = sekarang;
         var senin = seninDari(isi.tanggal);
+        var dipilihAtlet = pickerApi ? pickerApi.getValue() : String(isi.id_atlet || '').split(',').filter(Boolean);
         var target = isi.id_atlet === '*'
           ? Shared.activeAthletes().map(function (a) {
             return a.id_atlet;
           })
-          : [isi.id_atlet];
+          : dipilihAtlet;
 
         if (!target.length) {
           simpanLock = 0;
@@ -1153,12 +1164,7 @@ var PagesMonitoring = (function () {
         });
 
         var jumlah = target.length;
-        Utils.toast(
-          jumlah > 1
-            ? 'Program mingguan disimpan untuk ' + jumlah + ' atlet.'
-            : 'Program mingguan berhasil disimpan.',
-          'success'
-        );
+        Utils.toast('Berhasil disimpan untuk ' + jumlah + ' atlet.', 'success');
 
         muatDariRow(null);
         data = dataKosong();

@@ -173,8 +173,20 @@ var Shared = (function () {
 
   function matchesFor(idAtlet) {
     return Utils.sortBy(Store.where('matches', function (m) {
-      return !idAtlet || m.id_atlet === idAtlet;
+      if (!idAtlet) return true;
+      return m.id_atlet === idAtlet || m.id_atlet_2 === idAtlet;
     }), 'tanggal', 'desc');
+  }
+
+  // Nama atlet pada satu pertandingan. Nomor ganda menyimpan pasangan
+  // pada id_atlet_2 sehingga kedua nama tampil; data lama tetap terbaca.
+  function labelAtletMatch(m) {
+    if (!m) return '-';
+    var a = UI.athleteById(m.id_atlet);
+    var utama = a ? a.nama : (m.id_atlet || '-');
+    if (!m.id_atlet_2) return utama;
+    var b = UI.athleteById(m.id_atlet_2);
+    return utama + ' / ' + (b ? b.nama : m.id_atlet_2);
   }
 
   function attentionList() {
@@ -450,6 +462,7 @@ var Shared = (function () {
     latestTests: latestTests,
     testHistory: testHistory,
     matchesFor: matchesFor,
+    labelAtletMatch: labelAtletMatch,
     attentionList: attentionList,
     lastMatch: lastMatch,
     activeParameters: activeParameters,

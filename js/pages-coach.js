@@ -595,6 +595,20 @@ var PagesCoach = (function () {
       if (akhir && tgl > akhir) return false;
       return true;
     }
+    function lokasiAtlet(r) {
+      if (r && (r.lokasi_ids || r.lokasi)) {
+        var teks = Picker.labelLokasi(r);
+        if (teks) return teks;
+      }
+      var hasil = [];
+      Store.all('absensi_asisten').forEach(function (j) {
+        if (!j || j.tanggal !== r.tanggal) return;
+        if ((j.atlet || []).indexOf(r.id_atlet) === -1) return;
+        var t = Picker.labelLokasi(j);
+        if (t && hasil.indexOf(t) === -1) hasil.push(t);
+      });
+      return hasil.join('; ');
+    }
     var hasil = [];
     if (jenis !== 'asisten') {
       Store.where('attendance', function (r) {
@@ -608,6 +622,7 @@ var PagesCoach = (function () {
           tanggal: r.tanggal,
           status: r.status || '-',
           jam_masuk: r.jam_masuk || '',
+          lokasi: lokasiAtlet(r),
           catatan: r.catatan || '',
           input: UI.userName(r.input_oleh)
         });
@@ -629,7 +644,6 @@ var PagesCoach = (function () {
           return a ? a.nama : id;
         }).join(', ');
         var catatan = [];
-        if (r.lokasi) catatan.push('Lokasi: ' + r.lokasi);
         if (r.program) catatan.push('Program: ' + r.program);
         if (atlet) catatan.push('Atlet: ' + atlet);
         hasil.push({
@@ -639,6 +653,7 @@ var PagesCoach = (function () {
           tanggal: r.tanggal,
           status: (legacy && legacy.status) || 'Hadir',
           jam_masuk: (legacy && legacy.jam_masuk) || '',
+          lokasi: Picker.labelLokasi(r) || r.lokasi || '',
           catatan: catatan.join(' / '),
           input: (u && u.nama) || r.nama_asisten || '-'
         });
@@ -765,12 +780,12 @@ var PagesCoach = (function () {
       }
 
       var kolom = ['No', 'ID Atlet/ID Pengguna', 'Nama', 'Peran', 'Tanggal', 'Hari', 'Status',
-        'Jam Masuk', 'Catatan', 'Diinput Oleh'];
+        'Jam Masuk', 'Lokasi Latihan', 'Catatan', 'Diinput Oleh'];
       var baris = rows.map(function (r, i) {
         return [
           i + 1, r.id, r.nama, r.peran,
           Ekspor.tanggalIndo(r.tanggal), Ekspor.hariIndo(r.tanggal), r.status,
-          r.jam_masuk || '-', r.catatan || '-', r.input || '-'
+          r.jam_masuk || '-', r.lokasi || '-', r.catatan || '-', r.input || '-'
         ];
       });
 
@@ -854,7 +869,9 @@ var PagesCoach = (function () {
           (rec ? UI.statusBadge(rec.status) : UI.badge('Belum diabsen', 'muted')) +
           '</div>' +
           (rec ? '<div class="small muted">Diinput oleh ' + Utils.esc(UI.userName(rec.input_oleh)) +
-            (rec.catatan ? ' / ' + Utils.esc(rec.catatan) : '') + '</div>' : '<div class="small muted">Belum ada catatan untuk tanggal ini.</div>') +
+            (rec.catatan ? ' / ' + Utils.esc(rec.catatan) : '') + '</div>' +
+            (Picker.labelLokasi(rec) ? '<div class="mt-1">' + Picker.chipLokasi(rec) + '</div>' : '')
+            : '<div class="small muted">Belum ada catatan untuk tanggal ini.</div>') +
           '</div>';
       });
       html += '</div>';
@@ -928,7 +945,15 @@ var PagesCoach = (function () {
       });
       var lokasiList = {};
       Store.all('absensi_asisten').forEach(function (r) {
-        if (r.lokasi) lokasiList[r.lokasi] = true;
+        var n = Picker.nilaiLokasi(r);
+        if (n.nama.length || n.lainnya) {
+          n.nama.forEach(function (t) {
+            lokasiList[t] = true;
+          });
+          if (n.lainnya) lokasiList[n.lainnya] = true;
+        } else if (r.lokasi) {
+          lokasiList[String(r.lokasi)] = true;
+        }
       });
 
       var fTanggal = isi.querySelector('#ka-tanggal');
@@ -941,7 +966,16 @@ var PagesCoach = (function () {
       var rows = Store.where('absensi_asisten', function (r) {
         if (nilaiTanggal && r.tanggal !== nilaiTanggal) return false;
         if (nilaiAsisten && r.id_asisten !== nilaiAsisten) return false;
-        if (nilaiLokasi && r.lokasi !== nilaiLokasi) return false;
+        if (nilaiLokasi) {
+          var n = Picker.nilaiLokasi(r);
+          var cocok = false;
+          n.nama.forEach(function (t) {
+            if (t === nilaiLokasi) cocok = true;
+          });
+          if (n.lainnya && n.lainnya.indexOf(nilaiLokasi) !== -1) cocok = true;
+          if (!n.nama.length && !n.lainnya && r.lokasi && String(r.lokasi).indexOf(nilaiLokasi) !== -1) cocok = true;
+          if (!cocok) return false;
+        }
         return true;
       });
       rows = Utils.sortBy(rows, 'tanggal', 'desc');
@@ -981,7 +1015,7 @@ var PagesCoach = (function () {
             '<td><div class="flex items-center gap-1">' + UI.avatar(u || { nama: r.nama_asisten || '-' }, 34) +
             '<b>' + Utils.esc((u && u.nama) || r.nama_asisten || '-') + '</b></div></td>' +
             '<td>' + Utils.fmtDate(r.tanggal, true) + '</td>' +
-            '<td>' + Utils.esc(r.lokasi || '-') + '</td>' +
+            '<td>' + Picker.chipLokasi(r) + '</td>' +
             '<td class="small">' + (atlet || '-') + '</td>' +
             '<td class="small">' + Utils.esc(r.program || '-') + '</td>' +
             '</tr>';
@@ -1049,7 +1083,7 @@ var PagesCoach = (function () {
       '<div class="card">' +
       '<div class="card-title">' + UI.icon('plus', 20) + 'Input Hasil Tes</div>' +
       '<form id="form-tes" novalidate><div class="form-grid cols-2">' +
-      UI.selectAthlete('id_atlet', '', { label: 'Atlet' }) +
+      '<div id="tes-atlet"></div>' +
       UI.field({ name: 'id_tes', label: 'Jenis Tes', type: 'select', required: true, options: [{ value: '', label: '-- Pilih jenis tes --' }].concat(Shared.testTypes().map(function (t) { return { value: t.id, label: t.nama + ' (' + t.satuan + ')' }; })) }) +
       UI.field({ name: 'tanggal', label: 'Tanggal Tes', type: 'date', required: true, value: Utils.todayISO() }) +
       UI.field({ name: 'hasil', label: 'Hasil', type: 'number', required: true, step: '0.1', placeholder: 'contoh: 8.4' }) +
@@ -1078,6 +1112,14 @@ var PagesCoach = (function () {
     var page = root.querySelector('.page');
     var form = page.querySelector('#form-tes');
     var riwayat = page.querySelector('#tf-riwayat');
+
+    Picker.atlet(page.querySelector('#tes-atlet'), {
+      name: 'id_atlet',
+      label: 'Atlet',
+      required: true,
+      mode: 'single',
+      help: 'Klik untuk mencari atlet berdasarkan nama atau ID.'
+    });
 
     UI.bindSubmit(form, function () {
       Utils.clearErrors(form);
@@ -1254,9 +1296,10 @@ var PagesCoach = (function () {
       var params = Shared.activeParameters(kategori);
       var html = '<form id="form-log" novalidate>' +
         '<div class="form-grid cols-2">' +
-        UI.selectAthlete('id_atlet', '', { label: 'Atlet' }) +
         UI.field({ name: 'tanggal', label: 'Tanggal', type: 'date', required: true, value: Utils.todayISO() }) +
         '</div>' +
+        '<div id="log-atlet"></div>' +
+        '<div id="log-lokasi"></div>' +
         UI.field({
           name: 'program', label: 'Program Latihan', type: 'textarea', rows: 2, required: true,
           placeholder: 'contoh: Pemanasan, footwork 6 titik, smash, pendinginan'
@@ -1272,6 +1315,11 @@ var PagesCoach = (function () {
             '</div>';
         }).join('') + '</div>';
       }
+      html += '<div class="field" id="log-override" hidden>' +
+        '<label class="label">Penyesuaian Nilai per Atlet <span class="small muted">(opsional)</span></label>' +
+        '<div class="help">Kosongkan untuk memakai nilai dasar di atas. Isi hanya yang perlu dibedakan tiap atlet.</div>' +
+        '<div id="log-override-list"></div>' +
+        '</div>';
       html += UI.field({ name: 'catatan', label: 'Catatan untuk atlet', type: 'textarea', rows: 2, placeholder: 'Opsional. Contoh: servis sudah lebih stabil, pertahankan.' }) +
         '<button class="btn" type="submit">' + UI.icon('save', 20) + ' Simpan Logbook</button>' +
         '</form>';
@@ -1323,7 +1371,7 @@ var PagesCoach = (function () {
       });
       var keys = Object.keys(grouped).sort().reverse();
       listHost.innerHTML = '<div class="table-wrap"><table class="table"><thead><tr>' +
-        '<th>Tanggal</th><th>Atlet</th><th>Program Latihan</th><th>Ringkasan</th><th>Catatan</th><th>Input Oleh</th><th class="align-center">Aksi</th>' +
+        '<th>Tanggal</th><th>Atlet</th><th>Lokasi</th><th>Program Latihan</th><th>Ringkasan</th><th>Catatan</th><th>Input Oleh</th><th class="align-center">Aksi</th>' +
         '</tr></thead><tbody>' +
         keys.slice(0, 40).map(function (k) {
           var g = grouped[k];
@@ -1335,6 +1383,7 @@ var PagesCoach = (function () {
           return '<tr>' +
             '<td>' + Utils.fmtDate(g.tanggal) + '</td>' +
             '<td><b>' + Utils.esc(a ? a.nama : '-') + '</b></td>' +
+            '<td>' + Picker.chipLokasi(g.items[0]) + '</td>' +
             '<td class="small">' + Utils.esc(Shared.programLatihan(g.items[0])) + '</td>' +
             '<td><div class="score-pills">' + pills + '</div></td>' +
             '<td class="small">' + Utils.esc(g.catatan || '-') + '</td>' +
@@ -1357,52 +1406,115 @@ var PagesCoach = (function () {
 
       var form = body.querySelector('#form-log');
       if (form) {
+        var pickerApi = Picker.atlet(form.querySelector('#log-atlet'), {
+          name: 'id_atlet',
+          label: 'Atlet',
+          required: true,
+          mode: 'multi',
+          help: 'Pilih satu atau beberapa atlet. Entri disimpan terpisah untuk setiap atlet.',
+          onChange: function () {
+            renderOverride();
+          }
+        });
+        var lokasiApi = Picker.lokasi(form.querySelector('#log-lokasi'), {
+          label: 'Lokasi Latihan',
+          required: true,
+          help: 'Pilih satu atau beberapa lokasi yang dipakai hari ini.'
+        });
+
+        function renderOverride() {
+          var box = form.querySelector('#log-override');
+          var list = form.querySelector('#log-override-list');
+          if (!box || !list) return;
+          var ids = pickerApi.getValue();
+          var paramsAktif = Shared.activeParameters(mode);
+          if (ids.length < 2 || !paramsAktif.length) {
+            box.hidden = true;
+            list.innerHTML = '';
+            return;
+          }
+          box.hidden = false;
+          list.innerHTML = '<div class="list-rows">' + ids.map(function (id) {
+            var a = UI.athleteById(id);
+            return '<div class="list-row" style="flex-wrap:wrap">' +
+              '<div class="grow"><b>' + Utils.esc(a ? a.nama : id) + '</b><span>' + Utils.esc(id) + '</span></div>' +
+              '<div class="flex gap-1 flex-wrap">' +
+              paramsAktif.map(function (p) {
+                return '<div style="min-width:96px">' +
+                  '<div class="small muted">' + Utils.esc(p.nama) + '</div>' +
+                  '<input class="input" type="number" min="1" max="10" step="1" name="ov_' + Utils.esc(id) + '_' + Utils.esc(p.id) + '" placeholder="dasar" aria-label="Nilai ' + Utils.esc(p.nama) + ' untuk ' + Utils.esc(a ? a.nama : id) + '">' +
+                  '</div>';
+              }).join('') +
+              '</div></div>';
+          }).join('') + '</div>';
+        }
+
+        renderOverride();
+
         UI.bindSubmit(form, function () {
           Utils.clearErrors(form);
           var data = Utils.formData(form);
           var errors = {};
-          if (!data.id_atlet) errors.id_atlet = 'Pilih atlet.';
+          var nilaiLokasi = lokasiApi.getValue();
+          var dipilih = pickerApi.getValue();
+          if (!dipilih.length) errors.id_atlet = 'Pilih atlet.';
           if (!data.tanggal) errors.tanggal = 'Tanggal wajib diisi.';
+          if (!nilaiLokasi.ids.length && !nilaiLokasi.lainnya) errors.lokasi = 'Lokasi latihan wajib diisi.';
           if (!String(data.program || '').trim()) errors.program = 'Program latihan wajib diisi.';
           var params = Shared.activeParameters(mode);
           if (!params.length) {
             Utils.toast('Tidak ada parameter aktif. Tambahkan dulu di tab Pengaturan Parameter.', 'danger');
             return;
           }
-          var filled = 0;
-          params.forEach(function (p) {
-            var val = data['p_' + p.id];
-            if (val === '' || val === undefined) return;
-            filled++;
-            var n = Number(val);
-            if (isNaN(n) || n < 1 || n > 10) errors['p_' + p.id] = 'Isi nilai 1 - 10.';
+          function nilaiUntuk(id, p) {
+            var ov = data['ov_' + id + '_' + p.id];
+            if (ov !== undefined && ov !== null && String(ov).trim() !== '') return ov;
+            return data['p_' + p.id];
+          }
+          var belumIsi = [];
+          dipilih.forEach(function (id) {
+            var n = 0;
+            params.forEach(function (p) {
+              var val = nilaiUntuk(id, p);
+              if (val === '' || val === undefined) return;
+              n++;
+              var num = Number(val);
+              if (isNaN(num) || num < 1 || num > 10) errors['p_' + p.id] = 'Isi nilai 1 - 10.';
+            });
+            if (!n) belumIsi.push(id);
           });
-          if (!filled) errors['p_' + params[0].id] = 'Isi minimal satu nilai parameter.';
+          if (belumIsi.length) errors['p_' + params[0].id] = 'Isi minimal satu nilai parameter untuk setiap atlet terpilih.';
           if (Object.keys(errors).length) {
             Utils.showErrors(form, errors);
             Utils.toast('Periksa kembali isian.', 'danger');
             return;
           }
-          params.forEach(function (p) {
-            var val = data['p_' + p.id];
-            if (val === '' || val === undefined) return;
-            Store.insert('logbook_entries', {
-              id_atlet: data.id_atlet,
-              tanggal: data.tanggal,
-              id_parameter: p.id,
-              nama_parameter: p.nama,
-              satuan: p.satuan,
-              kategori: p.kategori,
-              nilai: Number(val),
-              program: data.program || '',
-              catatan: data.catatan || '',
-              input_oleh: user.id,
-              input_peran: CONFIG.ROLE_LABEL[user.role] || ''
+          var lokasiPayload = Picker.payloadLokasi(nilaiLokasi);
+          dipilih.forEach(function (id) {
+            params.forEach(function (p) {
+              var val = nilaiUntuk(id, p);
+              if (val === '' || val === undefined) return;
+              Store.insert('logbook_entries', Object.assign({
+                id_atlet: id,
+                tanggal: data.tanggal,
+                id_parameter: p.id,
+                nama_parameter: p.nama,
+                satuan: p.satuan,
+                kategori: p.kategori,
+                nilai: Number(val),
+                program: data.program || '',
+                catatan: data.catatan || '',
+                input_oleh: user.id,
+                input_peran: CONFIG.ROLE_LABEL[user.role] || ''
+              }, lokasiPayload));
             });
           });
-          UI.toast('Logbook berhasil disimpan.', 'success');
+          UI.toast('Berhasil disimpan untuk ' + dipilih.length + ' atlet.', 'success');
           form.reset();
           form.querySelector('[name="tanggal"]').value = Utils.todayISO();
+          lokasiApi.setValue({ ids: [], lainnya: '' });
+          pickerApi.setValue([]);
+          renderOverride();
           refreshList(mode);
         });
       }
@@ -1523,7 +1635,11 @@ var PagesCoach = (function () {
     var sets = (m.skor_set && m.skor_set.length ? m.skor_set : ['']);
     return '<form id="form-match" novalidate>' +
       '<div class="form-grid cols-2">' +
-      UI.selectAthlete('id_atlet', m.id_atlet || presetIdAtlet || '', { label: 'Atlet' }) +
+      UI.field({
+        name: 'nomor', label: 'Nomor', type: 'select', required: true,
+        value: m.nomor || 'Tunggal',
+        options: [{ value: 'Tunggal', label: 'Tunggal (1 atlet)' }, { value: 'Ganda', label: 'Ganda (2 atlet / pasangan)' }]
+      }) +
       UI.field({ name: 'tanggal', label: 'Tanggal', type: 'date', required: true, value: m.tanggal || Utils.todayISO() }) +
       UI.field({ name: 'turnamen', label: 'Turnamen', required: true, value: m.turnamen, placeholder: 'contoh: Surabaya Open 2026' }) +
       UI.field({
@@ -1536,8 +1652,9 @@ var PagesCoach = (function () {
       }) +
       UI.field({ name: 'lawan', label: 'Lawan', required: true, value: m.lawan, placeholder: 'contoh: PB Jaya Raya' }) +
       UI.field({ name: 'hasil', label: 'Hasil', type: 'select', required: true, value: m.hasil || 'Menang', options: ['Menang', 'Kalah'] }) +
-      UI.field({ name: 'catatan', label: 'Catatan', type: 'textarea', value: m.catatan, rows: 2, placeholder: 'Opsional' }) +
       '</div>' +
+      '<div id="match-atlet"></div>' +
+      UI.field({ name: 'catatan', label: 'Catatan', type: 'textarea', value: m.catatan, rows: 2, placeholder: 'Opsional' }) +
       '<div class="field">' +
       '<label class="label">Skor per Set <span class="req">*</span></label>' +
       '<div class="help" style="margin:0 0 8px">Format angka-angka, contoh: 21-18</div>' +
@@ -1563,6 +1680,32 @@ var PagesCoach = (function () {
         '<button type="submit" class="btn" form="form-match">Simpan Hasil</button>');
     UI.openModal('m-match');
     var form = document.getElementById('form-match');
+    var atletHost = form.querySelector('#match-atlet');
+    var pickerApi = null;
+
+    function pasangPickerAtlet(nilaiAwal) {
+      var nomor = form.querySelector('[name="nomor"]').value;
+      pickerApi = Picker.atlet(atletHost, {
+        name: 'id_atlet',
+        label: 'Atlet',
+        required: true,
+        mode: nomor === 'Ganda' ? 'pair' : 'single',
+        value: nilaiAwal || [],
+        help: nomor === 'Ganda'
+          ? 'Pilih tepat 2 atlet sebagai pasangan ganda.'
+          : 'Pilih 1 atlet untuk nomor tunggal (klik untuk mencari).'
+      });
+    }
+
+    var nilaiAwalAtlet = [];
+    if (match && match.id_atlet) nilaiAwalAtlet.push(match.id_atlet);
+    if (match && match.id_atlet_2) nilaiAwalAtlet.push(match.id_atlet_2);
+    else if (!match && presetIdAtlet) nilaiAwalAtlet.push(presetIdAtlet);
+    pasangPickerAtlet(nilaiAwalAtlet);
+
+    form.querySelector('[name="nomor"]').addEventListener('change', function () {
+      pasangPickerAtlet(pickerApi.getValue());
+    });
 
     form.addEventListener('click', function (e) {
       var add = e.target.closest('[data-add-set]');
@@ -1589,7 +1732,11 @@ var PagesCoach = (function () {
       Utils.clearErrors(form);
       var data = Utils.formData(form);
       var errors = {};
-      if (!data.id_atlet) errors.id_atlet = 'Atlet wajib dipilih.';
+      var dipilih = pickerApi.getValue();
+      var nomor = data.nomor || 'Tunggal';
+      if (!dipilih.length) errors.id_atlet = 'Atlet wajib dipilih.';
+      else if (nomor === 'Ganda' && dipilih.length !== 2) errors.id_atlet = 'Nomor ganda memerlukan tepat 2 atlet sebagai pasangan.';
+      else if (nomor === 'Tunggal' && dipilih.length !== 1) errors.id_atlet = 'Nomor tunggal memerlukan tepat 1 atlet.';
       if (!data.tanggal) errors.tanggal = 'Tanggal wajib diisi.';
       if (!data.turnamen) errors.turnamen = 'Turnamen wajib diisi.';
       if (!data.kategori) errors.kategori = 'Kategori pertandingan wajib dipilih.';
@@ -1621,7 +1768,9 @@ var PagesCoach = (function () {
       }
 
       var payload = {
-        id_atlet: data.id_atlet,
+        id_atlet: dipilih[0],
+        id_atlet_2: dipilih[1] || '',
+        nomor: nomor,
         tanggal: data.tanggal,
         turnamen: data.turnamen,
         kategori: data.kategori || '',
@@ -1683,10 +1832,10 @@ var PagesCoach = (function () {
         '<th>Tanggal</th><th>Atlet</th><th>Kategori</th><th>Turnamen</th><th>Lawan</th><th>Skor</th><th>Hasil</th><th class="align-center">Aksi</th>' +
         '</tr></thead><tbody>' +
         rows.map(function (m) {
-          var a = UI.athleteById(m.id_atlet);
           return '<tr>' +
             '<td>' + Utils.fmtDate(m.tanggal) + '</td>' +
-            '<td><b>' + Utils.esc(a ? a.nama : '-') + '</b></td>' +
+            '<td><b>' + Utils.esc(Shared.labelAtletMatch(m)) + '</b>' +
+            (m.nomor === 'Ganda' ? ' <span class="small muted">(Ganda)</span>' : '') + '</td>' +
             '<td>' + Shared.badgeKategori(m.kategori) + '</td>' +
             '<td>' + Utils.esc(m.turnamen) + '</td>' +
             '<td>' + Utils.esc(m.lawan) + '</td>' +
@@ -2035,6 +2184,10 @@ var PagesCoach = (function () {
       '<div id="setting-list"></div>' +
       '</div>' +
       '<div class="card mt-2">' +
+      '<div class="card-title">' + UI.icon('target', 20) + 'Kelola Lokasi Latihan</div>' +
+      '<div id="kelola-lokasi"></div>' +
+      '</div>' +
+      '<div class="card mt-2">' +
       '<div class="card-title">' + UI.icon('save', 20) + 'Penyimpanan Foto</div>' +
       '<p class="muted small">Foto yang diunggah disimpan ke <b>Firebase Storage</b> sehingga tampil di semua perangkat. ' +
       'Foto lama yang masih tersimpan lokal dapat dipindahkan ke cloud lewat tombol di bawah ini.</p>' +
@@ -2128,6 +2281,7 @@ var PagesCoach = (function () {
     }
 
     renderList();
+    Picker.kelolaLokasi(page.querySelector('#kelola-lokasi'));
 
     page.addEventListener('click', function (e) {
       var migrasi = e.target.closest('[data-migrasi-foto]');

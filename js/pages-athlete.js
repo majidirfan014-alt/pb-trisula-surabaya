@@ -637,7 +637,8 @@ var PagesAthlete = (function () {
         UI.backButton({ closeModal: 'm-detail-match' }) +
         '<div class="detail-grid">' +
         '<div class="detail-item"><div class="k">Tanggal</div><div class="v">' + Utils.fmtDate(m.tanggal, true) + '</div></div>' +
-        '<div class="detail-item"><div class="k">Atlet</div><div class="v">' + Utils.esc(a ? a.nama : '-') + '</div></div>' +
+        '<div class="detail-item"><div class="k">Atlet</div><div class="v">' + Utils.esc(Shared.labelAtletMatch(m)) +
+        (m.nomor === 'Ganda' ? ' <span class="small muted">(Ganda)</span>' : '') + '</div></div>' +
         '<div class="detail-item"><div class="k">Turnamen</div><div class="v">' + Utils.esc(m.turnamen) + '</div></div>' +
         '<div class="detail-item"><div class="k">Kategori</div><div class="v">' + Shared.badgeKategori(m.kategori) + '</div></div>' +
         '<div class="detail-item"><div class="k">Lawan</div><div class="v">' + Utils.esc(m.lawan) + '</div></div>' +
@@ -879,7 +880,7 @@ var PagesAthlete = (function () {
       var lokasiProgram = {};
       Store.all('absensi_asisten').forEach(function (r) {
         if (!r || (r.atlet || []).indexOf(athlete.id_atlet) === -1) return;
-        lokasiProgram[r.tanggal] = { lokasi: r.lokasi || '', program: r.program || '' };
+        lokasiProgram[r.tanggal] = r;
       });
 
       var total = rows.length;
@@ -907,11 +908,12 @@ var PagesAthlete = (function () {
         '<th>Tanggal</th><th>Lokasi Latihan</th><th>Program</th><th>Status</th><th>Keterangan</th>' +
         '</tr></thead><tbody>' +
         rows.map(function (r) {
-          var lp = lokasiProgram[r.tanggal] || {};
+          var lp = lokasiProgram[r.tanggal] || null;
+          var sumberLokasi = (r.lokasi_ids || r.lokasi) ? r : lp;
           return '<tr>' +
             '<td>' + Utils.fmtDate(r.tanggal, true) + '</td>' +
-            '<td class="small">' + Utils.esc(lp.lokasi || '-') + '</td>' +
-            '<td class="small">' + Utils.esc(lp.program || '-') + '</td>' +
+            '<td class="small">' + (sumberLokasi ? Picker.chipLokasi(sumberLokasi) : '-') + '</td>' +
+            '<td class="small">' + Utils.esc(lp && lp.program ? lp.program : '-') + '</td>' +
             '<td>' + UI.statusBadge(r.status === 'Tidak Hadir' ? 'Tidak Hadir' : r.status) +
             (r.status === 'Tidak Hadir' ? ' <span class="small muted">(Alpa)</span>' : '') + '</td>' +
             '<td class="small">' + Utils.esc(r.catatan || '-') + '</td>' +

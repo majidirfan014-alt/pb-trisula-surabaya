@@ -87,13 +87,19 @@ var PagesAssistant = (function () {
       '<form id="form-absen" novalidate>' +
       '<div class="form-grid cols-2">' +
       UI.field({ name: 'tanggal', label: 'Tanggal Latihan', type: 'date', required: true, value: Utils.todayISO() }) +
-      UI.field({ name: 'lokasi', label: 'Lokasi Latihan', required: true, placeholder: 'contoh: GOR Surabaya' }) +
       '</div>' +
-      '<div class="field">' +
-      '<label class="label">Nama Atlet yang Dilatih <span class="req">*</span></label>' +
-      '<div class="multi-pilih" id="absen-atlet"></div>' +
-      '<div class="help">Pilih satu atau beberapa atlet.</div>' +
-      '<div class="field-error" data-error-for="atlet"></div>' +
+      '<div id="absen-lokasi"></div>' +
+      '<div id="absen-atlet"></div>' +
+      '<div class="field" id="absen-status-box">' +
+      '<label class="label">Status Kehadiran Atlet Terpilih</label>' +
+      '<div class="flex gap-1 flex-wrap" id="absen-status-bulk">' +
+      (CONFIG.STATUS_KEHADIRAN || []).map(function (s) {
+        return '<button type="button" class="btn btn-sm btn-secondary" data-status-semua="' + Utils.esc(s) + '">' + Utils.esc(s) + '</button>';
+      }).join('') +
+      '</div>' +
+      '<div class="help">Tetapkan status untuk semua atlet terpilih, lalu ubah per atlet bila perlu.</div>' +
+      '<div id="absen-status-list"></div>' +
+      '<div class="field-error" data-error-for="status"></div>' +
       '</div>' +
       UI.field({ name: 'program', label: 'Program yang Dijalankan', type: 'textarea', required: true, rows: 3, placeholder: 'contoh: Pemanasan, footwork, smash, pendinginan' }) +
       '<button class="btn" type="submit">' + UI.icon('save', 20) + ' Simpan Absensi</button>' +
@@ -106,21 +112,53 @@ var PagesAssistant = (function () {
 
     var page = root.querySelector('.page');
     var form = page.querySelector('#form-absen');
-    var multiHost = page.querySelector('#absen-atlet');
+    var statusHost = page.querySelector('#absen-status-list');
+    var statusPerAtlet = {};
+    var pickerApi = null;
 
-    function renderMulti() {
-      var daftar = Shared.activeAthletes();
-      if (!daftar.length) {
-        multiHost.innerHTML = UI.emptyState('Belum ada atlet terdaftar.', 'users');
+    var lokasiApi = Picker.lokasi(page.querySelector('#absen-lokasi'), {
+      label: 'Lokasi Latihan',
+      required: true,
+      help: 'Pilih satu atau beberapa lokasi yang dipakai hari ini.'
+    });
+
+    pickerApi = Picker.atlet(page.querySelector('#absen-atlet'), {
+      name: 'atlet',
+      label: 'Nama Atlet yang Dilatih',
+      required: true,
+      mode: 'multi',
+      help: 'Cari lalu centang satu atau beberapa atlet.',
+      onChange: function (ids) {
+        var baru = {};
+        ids.forEach(function (id) {
+          baru[id] = statusPerAtlet[id] || 'Hadir';
+        });
+        statusPerAtlet = baru;
+        renderStatus();
+      }
+    });
+
+    function renderStatus() {
+      var ids = pickerApi.getValue();
+      if (!ids.length) {
+        statusHost.innerHTML = '<div class="small muted">Centang atlet terlebih dahulu untuk menetapkan status kehadiran.</div>';
         return;
       }
-      multiHost.innerHTML = daftar.map(function (a) {
-        return '<label class="chip-pilih">' +
-          '<input type="checkbox" name="atlet" value="' + Utils.esc(a.id_atlet) + '">' +
-          '<span>' + Utils.esc(a.nama) + ' <b class="small muted">' + Utils.esc(a.id_atlet) + '</b></span>' +
-          '</label>';
-      }).join('');
+      statusHost.innerHTML = '<div class="list-rows">' + ids.map(function (id) {
+        var a = UI.athleteById(id);
+        var nilai = statusPerAtlet[id] || 'Hadir';
+        return '<div class="list-row">' +
+          UI.avatar(a || { nama: id }, 38) +
+          '<div class="grow"><b>' + Utils.esc(a ? a.nama : id) + '</b><span>' + Utils.esc(id) + '</span></div>' +
+          '<select class="input" name="status_' + Utils.esc(id) + '" data-status-atlet="' + Utils.esc(id) + '" style="max-width:160px" aria-label="Status kehadiran ' + Utils.esc(a ? a.nama : id) + '">' +
+          (CONFIG.STATUS_KEHADIRAN || []).map(function (s) {
+            return '<option value="' + Utils.esc(s) + '"' + (nilai === s ? ' selected' : '') + '>' + Utils.esc(s) + '</option>';
+          }).join('') +
+          '</select></div>';
+      }).join('') + '</div>';
     }
+
+    renderStatus();
 
     function renderRiwayat() {
       var host = page.querySelector('#absen-riwayat');
@@ -141,7 +179,7 @@ var PagesAssistant = (function () {
           }).join(', ');
           return '<tr>' +
             '<td>' + Utils.fmtDate(r.tanggal, true) + '</td>' +
-            '<td>' + Utils.esc(r.lokasi || '-') + '</td>' +
+            '<td>' + Picker.chipLokasi(r) + '</td>' +
             '<td class="small">' + (nama || '-') + '</td>' +
             '<td class="small">' + Utils.esc(r.program || '-') + '</td>' +
             '<td class="align-center"><button type="button" class="btn btn-sm btn-danger" data-hapus-absen="' + Utils.esc(r.id) + '">Hapus</button></td>' +
@@ -149,54 +187,18 @@ var PagesAssistant = (function () {
         }).join('') + '</tbody></table></div>';
     }
 
-    renderMulti();
     renderRiwayat();
 
-    UI.bindSubmit(form, function () {
-      Utils.clearErrors(form);
-      var data = Utils.formData(form);
-      var errors = {};
-      var dipilih = [];
-      var kotak = form.querySelectorAll('input[name="atlet"]');
-      for (var i = 0; i < kotak.length; i++) {
-        if (kotak[i].checked) dipilih.push(kotak[i].value);
-      }
-      if (!data.tanggal) errors.tanggal = 'Tanggal latihan wajib diisi.';
-      if (!data.lokasi) errors.lokasi = 'Lokasi latihan wajib diisi.';
-      if (!dipilih.length) errors.atlet = 'Pilih minimal satu atlet yang dilatih.';
-      if (!data.program) errors.program = 'Program yang dijalankan wajib diisi.';
-
-      if (Object.keys(errors).length) {
-        Utils.showErrors(form, errors);
-        Utils.toast('Mohon lengkapi isian yang ditandai.', 'danger');
+    page.addEventListener('click', function (e) {
+      var semua = e.target.closest('[data-status-semua]');
+      if (semua) {
+        var nilai = semua.getAttribute('data-status-semua');
+        pickerApi.getValue().forEach(function (id) {
+          statusPerAtlet[id] = nilai;
+        });
+        renderStatus();
         return;
       }
-
-      var sudah = Store.findOne('absensi_asisten', function (r) {
-        return r.id_asisten === user.id && r.tanggal === data.tanggal;
-      });
-      var payload = {
-        id_asisten: user.id,
-        nama_asisten: user.nama,
-        tanggal: data.tanggal,
-        lokasi: data.lokasi,
-        atlet: dipilih,
-        program: data.program
-      };
-      if (sudah) {
-        Store.update('absensi_asisten', sudah.id, payload);
-        Utils.toast('Absensi berhasil diperbarui.', 'success');
-      } else {
-        Store.insert('absensi_asisten', payload);
-        Utils.toast('Absensi berhasil disimpan.', 'success');
-      }
-      form.reset();
-      form.querySelector('[name="tanggal"]').value = Utils.todayISO();
-      renderMulti();
-      renderRiwayat();
-    });
-
-    page.addEventListener('click', function (e) {
       var hapus = e.target.closest('[data-hapus-absen]');
       if (!hapus) return;
       UI.confirmDialog('Data absensi ini akan dihapus. Lanjutkan?', 'Konfirmasi Hapus').then(function (ok) {
@@ -207,8 +209,85 @@ var PagesAssistant = (function () {
       });
     });
 
+    page.addEventListener('change', function (e) {
+      var s = e.target.closest ? e.target.closest('[data-status-atlet]') : null;
+      if (s) statusPerAtlet[s.getAttribute('data-status-atlet')] = s.value;
+    });
+
+    UI.bindSubmit(form, function () {
+      Utils.clearErrors(form);
+      var data = Utils.formData(form);
+      var errors = {};
+      var nilaiLokasi = lokasiApi.getValue();
+      var dipilih = pickerApi.getValue();
+      if (!data.tanggal) errors.tanggal = 'Tanggal latihan wajib diisi.';
+      if (!nilaiLokasi.ids.length && !nilaiLokasi.lainnya) errors.lokasi = 'Lokasi latihan wajib diisi.';
+      if (!dipilih.length) errors.atlet = 'Pilih minimal satu atlet yang dilatih.';
+      if (!data.program) errors.program = 'Program yang dijalankan wajib diisi.';
+
+      if (Object.keys(errors).length) {
+        Utils.showErrors(form, errors);
+        Utils.toast('Mohon lengkapi isian yang ditandai.', 'danger');
+        return;
+      }
+
+      var statusAkhir = {};
+      dipilih.forEach(function (id) {
+        statusAkhir[id] = statusPerAtlet[id] || 'Hadir';
+      });
+
+      var lokasiPayload = Picker.payloadLokasi(nilaiLokasi);
+      var sudah = Store.findOne('absensi_asisten', function (r) {
+        return r.id_asisten === user.id && r.tanggal === data.tanggal;
+      });
+      var payload = Object.assign({
+        id_asisten: user.id,
+        nama_asisten: user.nama,
+        tanggal: data.tanggal,
+        atlet: dipilih,
+        status_atlet: statusAkhir,
+        program: data.program
+      }, lokasiPayload);
+      if (sudah) {
+        Store.update('absensi_asisten', sudah.id, payload);
+      } else {
+        Store.insert('absensi_asisten', payload);
+      }
+
+      // Simpan kehadiran per atlet (struktur sama dengan input pelatih kepala)
+      // supaya tampil di rekap kehadiran & halaman atlet.
+      dipilih.forEach(function (id) {
+        var a = UI.athleteById(id);
+        var status = statusAkhir[id];
+        var lama = Store.findOne('attendance', function (r) {
+          return r.id_atlet === id && r.tanggal === data.tanggal && r.tipe === 'atlet';
+        });
+        var baris = Object.assign({
+          tanggal: data.tanggal,
+          id_pengguna: a ? a.user_id : null,
+          id_atlet: id,
+          tipe: 'atlet',
+          status: status,
+          catatan: status === 'Hadir' ? '' : '',
+          jam_masuk: '',
+          jam_pulang: '',
+          input_oleh: user.id
+        }, lokasiPayload);
+        if (lama) Store.update('attendance', lama.id, baris);
+        else Store.insert('attendance', baris);
+      });
+
+      Utils.toast('Berhasil disimpan untuk ' + dipilih.length + ' atlet.', 'success');
+      form.reset();
+      form.querySelector('[name="tanggal"]').value = Utils.todayISO();
+      lokasiApi.setValue({ ids: [], lainnya: '' });
+      pickerApi.setValue([]);
+      statusPerAtlet = {};
+      renderStatus();
+      renderRiwayat();
+    });
+
     app.subscribe('absensi_asisten', renderRiwayat);
-    app.subscribe('athletes', renderMulti);
   }
 
   function profilAsisten(root, user, app) {
@@ -407,10 +486,12 @@ var PagesAssistant = (function () {
 
     function renderForm() {
       var params = Shared.activeParameters(mode);
-      var html = '<form id="form-lh" novalidate><div class="form-grid cols-2">' +
-        UI.selectAthlete('id_atlet', '', { label: 'Atlet' }) +
+      var html = '<form id="form-lh" novalidate>' +
+        '<div class="form-grid cols-2">' +
         UI.field({ name: 'tanggal', label: 'Tanggal', type: 'date', required: true, value: Utils.todayISO() }) +
         '</div>' +
+        '<div id="lh-atlet"></div>' +
+        '<div id="lh-lokasi"></div>' +
         UI.field({
           name: 'program', label: 'Program Latihan', type: 'textarea', rows: 2, required: true,
           placeholder: 'contoh: Pemanasan, footwork 6 titik, smash, pendinginan'
@@ -425,57 +506,126 @@ var PagesAssistant = (function () {
             '<div class="field-error" data-error-for="p_' + Utils.esc(p.id) + '"></div></div>';
         }).join('') + '</div>';
       }
+      html += '<div class="field" id="lh-override" hidden>' +
+        '<label class="label">Penyesuaian Nilai per Atlet <span class="small muted">(opsional)</span></label>' +
+        '<div class="help">Kosongkan untuk memakai nilai dasar di atas. Isi hanya yang perlu dibedakan tiap atlet.</div>' +
+        '<div id="lh-override-list"></div>' +
+        '</div>';
       html += UI.field({ name: 'catatan', label: 'Catatan untuk atlet', type: 'textarea', rows: 2, placeholder: 'Contoh: footwork sudah lebih cepat, pertahankan.' }) +
         '<button class="btn" type="submit">' + UI.icon('save', 20) + ' Simpan Logbook</button></form>';
       body.innerHTML = html;
 
       var form = body.querySelector('#form-lh');
+      var pickerApi = Picker.atlet(body.querySelector('#lh-atlet'), {
+        name: 'id_atlet',
+        label: 'Atlet',
+        required: true,
+        mode: 'multi',
+        help: 'Pilih satu atau beberapa atlet. Entri disimpan terpisah untuk setiap atlet.',
+        onChange: function () {
+          renderOverride();
+          segarkanKemajuan();
+        }
+      });
+      var lokasiApi = Picker.lokasi(body.querySelector('#lh-lokasi'), {
+        label: 'Lokasi Latihan',
+        required: true,
+        help: 'Pilih satu atau beberapa lokasi yang dipakai hari ini.'
+      });
+
+      function renderOverride() {
+        var box = body.querySelector('#lh-override');
+        var list = body.querySelector('#lh-override-list');
+        if (!box || !list) return;
+        var ids = pickerApi.getValue();
+        var paramsAktif = Shared.activeParameters(mode);
+        if (ids.length < 2 || !paramsAktif.length) {
+          box.hidden = true;
+          list.innerHTML = '';
+          return;
+        }
+        box.hidden = false;
+        list.innerHTML = '<div class="list-rows">' + ids.map(function (id) {
+          var a = UI.athleteById(id);
+          return '<div class="list-row" style="flex-wrap:wrap">' +
+            '<div class="grow"><b>' + Utils.esc(a ? a.nama : id) + '</b><span>' + Utils.esc(id) + '</span></div>' +
+            '<div class="flex gap-1 flex-wrap">' +
+            paramsAktif.map(function (p) {
+              return '<div style="min-width:96px">' +
+                '<div class="small muted">' + Utils.esc(p.nama) + '</div>' +
+                '<input class="input" type="number" min="1" max="10" step="1" name="ov_' + Utils.esc(id) + '_' + Utils.esc(p.id) + '" placeholder="dasar" aria-label="Nilai ' + Utils.esc(p.nama) + ' untuk ' + Utils.esc(a ? a.nama : id) + '">' +
+                '</div>';
+            }).join('') +
+            '</div></div>';
+        }).join('') + '</div>';
+      }
+
+      renderOverride();
+
       UI.bindSubmit(form, function () {
         Utils.clearErrors(form);
         var data = Utils.formData(form);
         var errors = {};
-        if (!data.id_atlet) errors.id_atlet = 'Pilih atlet.';
+        var nilaiLokasi = lokasiApi.getValue();
+        var dipilih = pickerApi.getValue();
+        if (!dipilih.length) errors.id_atlet = 'Pilih atlet.';
         if (!data.tanggal) errors.tanggal = 'Tanggal wajib diisi.';
+        if (!nilaiLokasi.ids.length && !nilaiLokasi.lainnya) errors.lokasi = 'Lokasi latihan wajib diisi.';
         if (!String(data.program || '').trim()) errors.program = 'Program latihan wajib diisi.';
         var ps = Shared.activeParameters(mode);
         if (!ps.length) {
           Utils.toast('Tidak ada parameter aktif.', 'danger');
           return;
         }
-        var filled = 0;
-        ps.forEach(function (p) {
-          var val = data['p_' + p.id];
-          if (val === '' || val === undefined) return;
-          filled++;
-          var n = Number(val);
-          if (isNaN(n) || n < 1 || n > 10) errors['p_' + p.id] = 'Isi nilai 1 - 10.';
+        function nilaiUntuk(id, p) {
+          var ov = data['ov_' + id + '_' + p.id];
+          if (ov !== undefined && ov !== null && String(ov).trim() !== '') return ov;
+          return data['p_' + p.id];
+        }
+        var belumIsi = [];
+        dipilih.forEach(function (id) {
+          var n = 0;
+          ps.forEach(function (p) {
+            var val = nilaiUntuk(id, p);
+            if (val === '' || val === undefined) return;
+            n++;
+            var num = Number(val);
+            if (isNaN(num) || num < 1 || num > 10) errors['p_' + p.id] = 'Isi nilai 1 - 10.';
+          });
+          if (!n) belumIsi.push(id);
         });
-        if (!filled) errors['p_' + ps[0].id] = 'Isi minimal satu nilai parameter.';
+        if (belumIsi.length) errors['p_' + ps[0].id] = 'Isi minimal satu nilai parameter untuk setiap atlet terpilih.';
         if (Object.keys(errors).length) {
           Utils.showErrors(form, errors);
           Utils.toast('Periksa kembali isian yang ditandai.', 'danger');
           return;
         }
-        ps.forEach(function (p) {
-          var val = data['p_' + p.id];
-          if (val === '' || val === undefined) return;
-          Store.insert('logbook_entries', {
-            id_atlet: data.id_atlet,
-            tanggal: data.tanggal,
-            id_parameter: p.id,
-            nama_parameter: p.nama,
-            satuan: p.satuan,
-            kategori: p.kategori,
-            nilai: Number(val),
-            program: data.program || '',
-            catatan: data.catatan || '',
-            input_oleh: user.id,
-            input_peran: CONFIG.ROLE_LABEL[user.role] || ''
+        var lokasiPayload = Picker.payloadLokasi(nilaiLokasi);
+        dipilih.forEach(function (id) {
+          ps.forEach(function (p) {
+            var val = nilaiUntuk(id, p);
+            if (val === '' || val === undefined) return;
+            Store.insert('logbook_entries', Object.assign({
+              id_atlet: id,
+              tanggal: data.tanggal,
+              id_parameter: p.id,
+              nama_parameter: p.nama,
+              satuan: p.satuan,
+              kategori: p.kategori,
+              nilai: Number(val),
+              program: data.program || '',
+              catatan: data.catatan || '',
+              input_oleh: user.id,
+              input_peran: CONFIG.ROLE_LABEL[user.role] || ''
+            }, lokasiPayload));
           });
         });
-        Utils.toast('Logbook berhasil disimpan.', 'success');
+        Utils.toast('Berhasil disimpan untuk ' + dipilih.length + ' atlet.', 'success');
         form.reset();
         form.querySelector('[name="tanggal"]').value = Utils.todayISO();
+        lokasiApi.setValue({ ids: [], lainnya: '' });
+        pickerApi.setValue([]);
+        renderOverride();
         refreshList();
       });
     }
@@ -497,7 +647,7 @@ var PagesAssistant = (function () {
       });
       var keys = Object.keys(grouped).sort().reverse();
       listHost.innerHTML = '<div class="table-wrap"><table class="table"><thead><tr>' +
-        '<th>Tanggal</th><th>Atlet</th><th>Program Latihan</th><th>Ringkasan</th><th>Catatan</th><th>Input Oleh</th><th class="align-center">Aksi</th>' +
+        '<th>Tanggal</th><th>Atlet</th><th>Lokasi</th><th>Program Latihan</th><th>Ringkasan</th><th>Catatan</th><th>Input Oleh</th><th class="align-center">Aksi</th>' +
         '</tr></thead><tbody>' +
         keys.slice(0, 30).map(function (k) {
           var g = grouped[k];
@@ -506,6 +656,7 @@ var PagesAssistant = (function () {
           return '<tr>' +
             '<td>' + Utils.fmtDate(g.tanggal) + '</td>' +
             '<td><b>' + Utils.esc(a ? a.nama : '-') + '</b></td>' +
+            '<td>' + Picker.chipLokasi(g.items[0]) + '</td>' +
             '<td class="small">' + Utils.esc(Shared.programLatihan(g.items[0])) + '</td>' +
             '<td><div class="score-pills">' + g.items.map(function (i) {
               return '<span class="score-pill">' + Utils.esc(Shared.namaParameter(i)) + ': ' + Utils.esc(i.nilai) + '</span>';
@@ -528,7 +679,7 @@ var PagesAssistant = (function () {
       }
       var form = body.querySelector('#form-lh');
       var kolom = form ? form.querySelector('[name="id_atlet"]') : null;
-      var idAtlet = kolom ? kolom.value : '';
+      var idAtlet = kolom ? String(kolom.value || '').split(',')[0] : '';
       if (!idAtlet) {
         host.innerHTML = UI.emptyState('Pilih atlet di atas untuk melihat perkembangannya.', 'users');
         return;
@@ -622,7 +773,10 @@ var PagesAssistant = (function () {
     function renderForm() {
       formHost.innerHTML =
         '<form id="form-ip" novalidate><div class="form-grid cols-2">' +
-        UI.selectAthlete('id_atlet', '', { label: 'Atlet' }) +
+        UI.field({
+          name: 'nomor', label: 'Nomor', type: 'select', required: true, value: 'Tunggal',
+          options: [{ value: 'Tunggal', label: 'Tunggal (1 atlet)' }, { value: 'Ganda', label: 'Ganda (2 atlet / pasangan)' }]
+        }) +
         UI.field({ name: 'tanggal', label: 'Tanggal', type: 'date', required: true, value: Utils.todayISO() }) +
         UI.field({ name: 'turnamen', label: 'Turnamen', required: true, placeholder: 'contoh: Surabaya Open 2026' }) +
         UI.field({
@@ -634,8 +788,9 @@ var PagesAssistant = (function () {
         }) +
         UI.field({ name: 'lawan', label: 'Lawan', required: true, placeholder: 'contoh: PB Djarum Kudus' }) +
         UI.field({ name: 'hasil', label: 'Hasil', type: 'select', value: 'Menang', options: ['Menang', 'Kalah'] }) +
-        UI.field({ name: 'catatan', label: 'Catatan', type: 'textarea', rows: 2, placeholder: 'Opsional' }) +
         '</div>' +
+        '<div id="ip-atlet"></div>' +
+        UI.field({ name: 'catatan', label: 'Catatan', type: 'textarea', rows: 2, placeholder: 'Opsional' }) +
         '<div class="field"><label class="label">Skor per Set <span class="req">*</span></label>' +
         '<div class="help" style="margin:0 0 8px">Format angka-angka, contoh: 21-18</div>' +
         '<div id="ip-set-rows"><div class="set-row"><input class="input" name="set_0" placeholder="contoh: 21-18" inputmode="numeric" aria-label="Skor set 1">' +
@@ -645,6 +800,28 @@ var PagesAssistant = (function () {
         '<button class="btn" type="submit">' + UI.icon('save', 20) + ' Simpan Hasil</button></form>';
 
       var form = formHost.querySelector('#form-ip');
+      var atletHost = form.querySelector('#ip-atlet');
+      var pickerApi = null;
+
+      function pasangPickerAtlet(nilaiAwal) {
+        var nomor = form.querySelector('[name="nomor"]').value;
+        pickerApi = Picker.atlet(atletHost, {
+          name: 'id_atlet',
+          label: 'Atlet',
+          required: true,
+          mode: nomor === 'Ganda' ? 'pair' : 'single',
+          value: nilaiAwal || [],
+          help: nomor === 'Ganda'
+            ? 'Pilih tepat 2 atlet sebagai pasangan ganda.'
+            : 'Pilih 1 atlet untuk nomor tunggal (klik untuk mencari).'
+        });
+      }
+
+      pasangPickerAtlet([]);
+
+      form.querySelector('[name="nomor"]').addEventListener('change', function () {
+        pasangPickerAtlet(pickerApi.getValue());
+      });
 
       form.addEventListener('click', function (e) {
         if (e.target.closest('[data-add-set]')) {
@@ -669,7 +846,11 @@ var PagesAssistant = (function () {
         Utils.clearErrors(form);
         var data = Utils.formData(form);
         var errors = {};
-        if (!data.id_atlet) errors.id_atlet = 'Atlet wajib dipilih.';
+        var dipilih = pickerApi.getValue();
+        var nomor = data.nomor || 'Tunggal';
+        if (!dipilih.length) errors.id_atlet = 'Atlet wajib dipilih.';
+        else if (nomor === 'Ganda' && dipilih.length !== 2) errors.id_atlet = 'Nomor ganda memerlukan tepat 2 atlet sebagai pasangan.';
+        else if (nomor === 'Tunggal' && dipilih.length !== 1) errors.id_atlet = 'Nomor tunggal memerlukan tepat 1 atlet.';
         if (!data.tanggal) errors.tanggal = 'Tanggal wajib diisi.';
         if (!data.turnamen) errors.turnamen = 'Turnamen wajib diisi.';
         if (!data.kategori) errors.kategori = 'Kategori pertandingan wajib dipilih.';
@@ -699,7 +880,9 @@ var PagesAssistant = (function () {
           return;
         }
         Store.insert('matches', {
-          id_atlet: data.id_atlet,
+          id_atlet: dipilih[0],
+          id_atlet_2: dipilih[1] || '',
+          nomor: nomor,
           tanggal: data.tanggal,
           turnamen: data.turnamen,
           kategori: data.kategori || '',
@@ -730,10 +913,10 @@ var PagesAssistant = (function () {
         '<th>Tanggal</th><th>Atlet</th><th>Kategori</th><th>Turnamen</th><th>Lawan</th><th>Skor</th><th>Hasil</th><th>Input Oleh</th>' +
         '</tr></thead><tbody>' +
         rows.slice(0, 30).map(function (m) {
-          var a = UI.athleteById(m.id_atlet);
           return '<tr>' +
             '<td>' + Utils.fmtDate(m.tanggal) + '</td>' +
-            '<td><b>' + Utils.esc(a ? a.nama : '-') + '</b></td>' +
+            '<td><b>' + Utils.esc(Shared.labelAtletMatch(m)) + '</b>' +
+            (m.nomor === 'Ganda' ? ' <span class="small muted">(Ganda)</span>' : '') + '</td>' +
             '<td>' + Shared.badgeKategori(m.kategori) + '</td>' +
             '<td>' + Utils.esc(m.turnamen) + '</td>' +
             '<td>' + Utils.esc(m.lawan) + '</td>' +

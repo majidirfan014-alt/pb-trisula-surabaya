@@ -325,7 +325,8 @@ var App = (function () {
   function missingDeps() {
     var need = [
       ['CONFIG', 'config.js'], ['Utils', 'utils.js'], ['Store', 'store.js'],
-      ['Auth', 'auth.js'], ['UI', 'ui.js'], ['Docs', 'docs.js'], ['Shared', 'shared.js']
+      ['Auth', 'auth.js'], ['UI', 'ui.js'], ['Docs', 'docs.js'], ['Shared', 'shared.js'],
+      ['Picker', 'pickers.js']
     ];
     return need.filter(function (n) {
       return typeof window[n[0]] === 'undefined' || window[n[0]] === null;
@@ -355,6 +356,9 @@ var App = (function () {
 
     user = Auth.require();
     if (!user) return;
+
+    // Siapkan master lokasi latihan & migrasi data lama (aman dijalankan berulang).
+    if (typeof Picker !== 'undefined' && Picker && Picker.init) Picker.init();
 
     PagesCoach.register();
     PagesAssistant.register();
