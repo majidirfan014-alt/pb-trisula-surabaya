@@ -4,7 +4,9 @@ var CONFIG = {
   TAGLINE: 'Pantau kehadiran, fisik, logbook, dan prestasi atlet dalam satu tempat.',
   PREFIX: 'pbts_',
   SESSION_HOURS: 168,
-  DEMO_SEED: true,
+  // Membuat akun Pelatih Kepala awal saat penyimpanan masih kosong.
+  // Tidak ada lagi data contoh (akun/atlet/demo) yang dibuat otomatis.
+  SEED_AWAL: true,
   DOKUMEN_MAX_MB: 2,
   DOKUMEN_TEMPLATE: 'assets/template-surat-kebenaran-usia.pdf',
   GALERI_FOLDER: 'assets/galeri',
@@ -47,16 +49,7 @@ var CONFIG = {
       'Monitoring Atlet', 'Kehadiran', 'Tes Fisik', 'Logbook Latihan',
       'Hasil Pertandingan', 'Perkembangan Atlet', 'Badminton School'
     ],
-    galeri: [
-      { id: 'g1', src: 'assets/galeri/utama.jpg', kategori: 'Pelatih', judul: 'Keluarga Besar PB Trisula Surabaya', keterangan: 'Kebersamaan pelatih dan atlet', utama: true },
-      { id: 'g2', src: 'assets/galeri/pelatih-1.jpg', kategori: 'Pelatih', judul: 'Pelatih: Coach Ahmad Fauzi', keterangan: 'Pelatih Kepala' },
-      { id: 'g3', src: 'assets/galeri/pelatih-2.jpg', kategori: 'Pelatih', judul: 'Pelatih: Coach Raka Wijaya', keterangan: 'Asisten Pelatih' },
-      { id: 'g4', src: 'assets/galeri/atlet-1.jpg', kategori: 'Atlet', judul: 'Atlet: Budi Santoso', keterangan: 'Atlet Club' },
-      { id: 'g5', src: 'assets/galeri/atlet-2.jpg', kategori: 'Atlet', judul: 'Atlet: Siti Rahma', keterangan: 'Atlet Club' },
-      { id: 'g6', src: 'assets/galeri/atlet-3.jpg', kategori: 'Atlet', judul: 'Atlet: Andi Pratama', keterangan: 'Atlet Club' },
-      { id: 'g7', src: 'assets/galeri/atlet-4.jpg', kategori: 'Atlet', judul: 'Atlet: Dinda Lestari', keterangan: 'Atlet Club' },
-      { id: 'g8', src: 'assets/galeri/atlet-5.jpg', kategori: 'Atlet', judul: 'Tim Atlet PB Trisula', keterangan: 'Latihan Bersama' }
-    ],
+    galeri: [],
     tentang: {
       judul: 'Tentang PB Trisula Surabaya',
       teks1: 'PB Trisula Surabaya adalah klub bulutangkis yang membina atlet usia sekolah hingga junior. Kami percaya pembinaan yang baik lahir dari data yang rapi: siapa yang hadir, bagaimana kondisi fisiknya, apa yang dilatih hari ini, dan bagaimana hasil pertandingannya.',

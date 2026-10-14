@@ -40,30 +40,24 @@ vm.createContext(sandbox);
 function load(rel) {
   vm.runInContext(fs.readFileSync(path.join(ROOT, rel), 'utf8'), sandbox, { filename: rel });
 }
-['js/config.js', 'js/utils.js', 'js/store.js', 'js/auth.js', 'js/ui.js', 'js/shared.js', 'js/landing-store.js', 'js/pages-monitoring.js'].forEach(load);
+['js/config.js', 'js/utils.js', 'js/store.js', 'js/auth.js', 'js/ui.js', 'js/shared.js', 'js/landing-store.js'].forEach(load);
 sandbox.Utils.toast = () => {};
 sandbox.UI.toast = () => {};
 if (sandbox.UI && !sandbox.UI.icon) sandbox.UI.icon = () => '';
 if (sandbox.UI && !sandbox.UI.emptyState) sandbox.UI.emptyState = () => '';
 
 async function utama() {
-  // 1) seed bawaan aplikasi: users, athletes, log_parameters, test_types,
-  //    attendance, logbook_entries, physical_tests, matches
+  // 1) data awal aplikasi: akun pelatih kepala + log_parameters, test_types
+  //    (tanpa data contoh/demo — sudah dihapus dari aplikasi)
   await sandbox.Auth.seed();
 
-  // 2) data contoh Monitoring (per atlet, memakai id_parameter asli)
-  const coach = sandbox.Store.all('users').filter(u => u.role === 'pelatih_kepala')[0];
-  sandbox.Store.all('athletes').filter(a => a.status !== 'nonaktif').forEach(a => {
-    sandbox.PagesMonitoring.isiDataContoh(coach ? coach.id : '', a.id_atlet);
-  });
-
-  // 3) konfigurasi landing page (gabungan default + tersimpan)
+  // 2) konfigurasi landing page (gabungan default + tersimpan)
   sandbox.LandingStore.simpan(sandbox.LandingStore.get());
 
   const keluaran = {
     _meta: {
       dibuat: new Date().toISOString(),
-      sumber: 'PB Trisula Surabaya - logika seed aplikasi (js/auth.js + js/pages-monitoring.js + js/landing-store.js)',
+      sumber: 'PB Trisula Surabaya - data awal aplikasi (js/auth.js + js/landing-store.js)',
       keterangan: 'Koleksi Firestore memakai nama yang sama dengan key localStorage aplikasi (tanpa prefix pbts_).'
     }
   };

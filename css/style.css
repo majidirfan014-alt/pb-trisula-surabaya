@@ -2371,25 +2371,13 @@ section[id],
   color: var(--primary-800);
 }
 
-.demo-box {
-  margin-top: 18px;
-  border: 1px solid var(--line);
-  border-radius: var(--radius-sm);
-  padding: 12px 14px;
-  background: var(--bg);
-  font-size: 0.86rem;
+/* Jarak bawah kartu login dirapikan. */
+#login-wrap {
+  padding-bottom: 22px;
 }
 
-.demo-box summary {
-  cursor: pointer;
-  font-weight: 700;
-  color: var(--ink-soft);
-}
-
-.demo-box ul {
-  margin: 10px 0 0;
-  padding-left: 18px;
-  color: var(--muted);
+#login-wrap .auth-foot {
+  margin-top: 14px;
 }
 
 .app-shell {

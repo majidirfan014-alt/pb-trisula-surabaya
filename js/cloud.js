@@ -274,6 +274,19 @@ var Cloud = (function () {
         try {
           localStorage.setItem(CONFIG.PREFIX + nama, JSON.stringify(rows));
         } catch (e) {}
+        // Data cloud bisa saja masih memuat akun admin lama atau sisa data
+        // contoh; jalankan lagi migrasi & pembersihan agar hasilnya tersimpan
+        // lokal dan tersinkron kembali ke cloud.
+        if (nama === 'users' && typeof Auth !== 'undefined' && Auth) {
+          try {
+            var janji = Promise.resolve();
+            if (typeof Auth.migrasiAkunAdmin === 'function') janji = janji.then(function () { return Auth.migrasiAkunAdmin(); });
+            if (typeof Auth.hapusDataContoh === 'function') janji = janji.then(function () { return Auth.hapusDataContoh(); });
+            janji.then(function () {
+              if (typeof App !== 'undefined' && App && typeof App.render === 'function') App.render();
+            }, function () {});
+          } catch (e) {}
+        }
         if (typeof App !== 'undefined' && App && typeof App.render === 'function') App.render();
       });
     });

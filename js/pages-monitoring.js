@@ -651,136 +651,6 @@ var PagesMonitoring = (function () {
     ];
   }
 
-  /* ============================ data contoh (demo) ============================ */
-
-  var CONTOH_FLAG = 'mon_demo';
-  var CONTOH_MINGGU = 6;
-
-  var CONTOH_PROGRAM = {
-    fisik: [
-      ['Daya tahan aerobik & lari interval', '3x seminggu, 45 menit'],
-      ['Kekuatan kaki & core (squat, plank)', '3x seminggu, 40 menit'],
-      ['Kecepatan reaksi & akselerasi', '2x seminggu, 35 menit'],
-      ['Kelincahan footwork ladder', '3x seminggu, 30 menit'],
-      ['Daya tahan anaerobik (interval shuttle)', '2x seminggu, 50 menit'],
-      ['Kekuatan lengan & pergelangan', '2x seminggu, 35 menit']
-    ],
-    teknik: [
-      ['Footwork 6 titik', '4x seminggu, 30 menit'],
-      ['Smash & drive dari belakang', '3x seminggu, 40 menit'],
-      ['Drop shot & netting depan', '3x seminggu, 35 menit'],
-      ['Servis pendek & panjang', '2x seminggu, 25 menit'],
-      ['Block & counter depan net', '3x seminggu, 30 menit'],
-      ['Kombinasi pukulan belakang lapangan', '3x seminggu, 45 menit']
-    ],
-    taktik: [
-      ['Pola serangan depan-belakang', '2x seminggu, 40 menit'],
-      ['Pola bertahan & counter attack', '2x seminggu, 35 menit'],
-      ['Rotasi ganda (drive & net)', '2x seminggu, 40 menit'],
-      ['Pola tunggal bertahan', '2x seminggu, 35 menit'],
-      ['Variasi tempo permainan', '2x seminggu, 30 menit'],
-      ['Membaca pola permainan lawan', '2x seminggu, 35 menit']
-    ],
-    mental: [
-      ['Fokus & konsentrasi poin kritis', '2x seminggu, 20 menit'],
-      ['Percaya diri sebelum pertandingan', '2x seminggu, 20 menit'],
-      ['Mengelola tekanan saat rubber game', '2x seminggu, 25 menit'],
-      ['Visualisasi pertandingan', '2x seminggu, 20 menit'],
-      ['Pernapasan & relaksasi otot', '2x seminggu, 15 menit'],
-      ['Rutinitas persiapan pra-pertandingan', '2x seminggu, 20 menit']
-    ]
-  };
-
-  var CONTOH_CATATAN_ASPESK = {
-    fisik: ['Napas terasa lebih panjang.', 'Daya tahan kaki mulai meningkat.', 'Jaga pola makan dan istirahat.', '', 'Interval shuttle sudah bisa diselesaikan penuh.', ''],
-    teknik: ['Footwork sudah lebih rapi.', 'Arah smash masih perlu dijaga.', 'Drop shot mulai konsisten.', '', 'Netting depan lebih percaya diri.', ''],
-    taktik: ['Rotasi depan-belakang mulai lancar.', '', 'Pola serangan sudah terbaca.', '', 'Mulai berani mengubah tempo.', ''],
-    mental: ['', 'Lebih tenang saat poin ketat.', '', 'Visualisasi sebelum latihan membantu.', '', 'Fokus di akhir set sudah membaik.']
-  };
-
-  var CONTOH_CATATAN_PELATIH = [
-    'Mulai program baru, sesuaikan beban latihan.',
-    '',
-    'Kehadiran latihan sudah bagus, pertahankan.',
-    'Ada peningkatan di aspek teknik, lanjutkan.',
-    'Persiapkan fisik untuk turnamen bulan depan.',
-    'Bagus, pertahankan fokus dan jaga kondisi.'
-  ];
-
-  function nilaiContoh(aspekIdx, atletIdx, mingguIdx, total) {
-    var basis = [6, 7, 5, 6][aspekIdx];
-    var bakat = [1, -1, 0][atletIdx % 3];
-    var naik = total > 1 ? Math.round((mingguIdx / (total - 1)) * 3) : 0;
-    var variasi = ((aspekIdx * 3 + atletIdx * 2 + mingguIdx * 5) % 3) - 1;
-    return Math.max(1, Math.min(10, basis + bakat + naik + variasi));
-  }
-
-  function contohAspek(nama, aspekIdx, atletIdx, mingguIdx, total, isiKosong) {
-    if (isiKosong) return { program: '', durasi: '', intensitas: null, catatan: '' };
-    var pilih = CONTOH_PROGRAM[nama][mingguIdx % CONTOH_PROGRAM[nama].length];
-    return {
-      program: pilih[0],
-      durasi: pilih[1],
-      intensitas: nilaiContoh(aspekIdx, atletIdx, mingguIdx, total),
-      catatan: CONTOH_CATATAN_ASPESK[nama][mingguIdx % CONTOH_CATATAN_ASPESK[nama].length] || ''
-    };
-  }
-
-  function tandaiContoh() {
-    try {
-      localStorage.setItem(CONFIG.PREFIX + CONTOH_FLAG, '1');
-    } catch (e) {}
-  }
-
-  function sudahContoh() {
-    try {
-      return localStorage.getItem(CONFIG.PREFIX + CONTOH_FLAG) === '1';
-    } catch (e) {
-      return true;
-    }
-  }
-
-  // Mengisi data contoh satu kali (bila belum ada data sama sekali) supaya
-  // menu Monitoring langsung menampilkan grafik dan penjelasan.
-  function isiDataContoh(userId) {
-    if (sudahContoh()) return false;
-    if (semuaRow().length) {
-      tandaiContoh();
-      return false;
-    }
-    var daftar = Shared.activeAthletes();
-    if (!daftar.length) {
-      tandaiContoh();
-      return false;
-    }
-
-    var seninIni = seninDari(Utils.todayISO());
-    var daftarMinggu = [];
-    for (var i = CONTOH_MINGGU - 1; i >= 0; i--) {
-      daftarMinggu.push(Utils.addDaysISO(seninIni, -7 * i));
-    }
-
-    daftar.forEach(function (a, atletIdx) {
-      daftarMinggu.forEach(function (tgl, w) {
-        Store.insert(KOLEKSI, {
-          idAtlet: a.id_atlet,
-          tanggalMulai: tgl,
-          mingguKe: w + 1,
-          fisik: contohAspek('fisik', 0, atletIdx, w, CONTOH_MINGGU, false),
-          teknik: contohAspek('teknik', 1, atletIdx, w, CONTOH_MINGGU, false),
-          taktik: contohAspek('taktik', 2, atletIdx, w, CONTOH_MINGGU, w === 2 && atletIdx === 1),
-          mental: contohAspek('mental', 3, atletIdx, w, CONTOH_MINGGU, w === 0),
-          catatanPelatih: CONTOH_CATATAN_PELATIH[(w + atletIdx) % CONTOH_CATATAN_PELATIH.length] || '',
-          dibuatOleh: userId || '',
-          diperbarui: Utils.nowISO()
-        });
-      });
-    });
-
-    tandaiContoh();
-    return true;
-  }
-
   /* ============================ tab: input program ============================ */
 
   function kartuAspek(a, data) {
@@ -937,7 +807,6 @@ var PagesMonitoring = (function () {
 
   function monitoringCoach(root, user, app) {
     migrasiIntensitasSekali();
-    isiDataContoh(user && user.id);
 
     root.innerHTML =
       '<div class="page">' +
@@ -1529,6 +1398,5 @@ var PagesMonitoring = (function () {
     penjelasan: penjelasan,
     tingkatIntensitas: tingkatIntensitas,
     migrasiIntensitas: migrasiIntensitas,
-    isiDataContoh: isiDataContoh
   };
 })();

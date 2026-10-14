@@ -426,12 +426,6 @@ var Kemajuan = (function () {
     var data = [];
 
     function muat() {
-      if (!opts.data && opts.skipSeed !== true && opts.idAtlet) {
-        try {
-          var u = (typeof App !== 'undefined' && App && App.user) ? App.user() : null;
-          isiDataContoh(u ? u.id : '', opts.idAtlet);
-        } catch (e) {}
-      }
       data = opts.data ? opts.data.slice() : ambilData(opts.idAtlet);
       return data;
     }
@@ -489,85 +483,6 @@ var Kemajuan = (function () {
     });
   }
 
-  /* ============================ data contoh ============================ */
-
-  var CONTOH_FLAG = 'kemajuan_demo';
-  var CONTOH_NILAI = {
-    // [nilai awal, kenaikan per minggu] supaya terlihat tren naik
-    'Footwork': [6, 4], 'Forehand': [7, 3], 'Backhand': [5, 3], 'Serve': [6, 4],
-    'Dropshot': [5, 4], 'Smash': [8, 2], 'Netting': [6, 3],
-    'Kecepatan': [6, 3], 'Kekuatan': [7, 2], 'Daya Tahan': [5, 4], 'Fleksibilitas': [6, 2]
-  };
-
-  function sudahContoh(idAtlet) {
-    try {
-      return localStorage.getItem(CONFIG.PREFIX + CONTOH_FLAG + '_' + (idAtlet || 'umum')) === '1';
-    } catch (e) {
-      return true;
-    }
-  }
-
-  function tandaiContoh(idAtlet) {
-    try {
-      localStorage.setItem(CONFIG.PREFIX + CONTOH_FLAG + '_' + (idAtlet || 'umum'), '1');
-    } catch (e) {}
-  }
-
-  // Mengisi data contoh sekali jalan per atlet supaya panil langsung bisa dicoba.
-  // Hanya mengisi tanggal/aspek yang belum punya penilaian (tidak menimpa data asli)
-  // dan selalu memakai id_parameter asli dari master, agar tidak membuat aspek ganda.
-  function isiDataContoh(userId, idAtlet) {
-    if (!idAtlet || sudahContoh(idAtlet)) return false;
-    // Tandai dulu sebelum mengisi, agar notifikasi store saat insert tidak
-    // memicu isiDataContoh berulang (re-entransi) untuk atlet yang sama.
-    tandaiContoh(idAtlet);
-    var master = {};
-    Store.all('log_parameters').forEach(function (p) {
-      if (p && p.id && p.nama) master[p.nama] = p;
-    });
-    var sudah = {};
-    Store.all('logbook_entries').forEach(function (e) {
-      sudah[e.id_atlet + '|' + e.tanggal + '|' + (e.id_parameter || e.nama_parameter)] = true;
-    });
-
-    var seninIni = seninDari(Utils.todayISO());
-    var jumlahMinggu = 6;
-    var n = 0;
-    for (var w = jumlahMinggu - 1; w >= 0; w--) {
-      var senin = Utils.addDaysISO(seninIni, -7 * w);
-      [0, 2, 4].forEach(function (geser, si) {
-        var tgl = Utils.addDaysISO(senin, geser);
-        Object.keys(CONTOH_NILAI).forEach(function (nama, ki) {
-          var p = master[nama];
-          if (!p) return;
-          if (sudah[idAtlet + '|' + tgl + '|' + p.id]) return;
-          var dasar = CONTOH_NILAI[nama][0];
-          var naik = CONTOH_NILAI[nama][1];
-          var tahap = jumlahMinggu - 1 - w;
-          var nilai = dasar + Math.round(tahap * naik / 2) + ((ki + si) % 2);
-          if (nilai < 1) nilai = 1;
-          if (nilai > 10) nilai = 10;
-          Store.insert('logbook_entries', {
-            id_atlet: idAtlet,
-            tanggal: tgl,
-            id_parameter: p.id,
-            nama_parameter: p.nama,
-            satuan: p.satuan,
-            kategori: p.kategori,
-            nilai: nilai,
-            catatan: '',
-            input_oleh: userId || '',
-            input_peran: ''
-          });
-          n++;
-        });
-      });
-    }
-
-    tandaiContoh(idAtlet);
-    return n > 0;
-  }
-
   return {
     render: render,
     ASPEK: ASPEK,
@@ -582,7 +497,6 @@ var Kemajuan = (function () {
     daftarAspek: daftarAspek,
     bangunModel: bangunModel,
     kalimatRingkas: kalimatRingkas,
-    ambilData: ambilData,
-    isiDataContoh: isiDataContoh
+    ambilData: ambilData
   };
 })();

@@ -201,13 +201,40 @@ var Store = (function () {
 
   var seedPromise = null;
 
+  // Migrasi otomatis data lama (mis. akun admin -> superadmin) yang aman
+  // dijalankan berulang setiap kali penyimpanan diinisialisasi.
+  function migrasiAkun() {
+    if (typeof Auth === 'undefined' || !Auth || typeof Auth.migrasiAkunAdmin !== 'function') {
+      return Promise.resolve();
+    }
+    try {
+      return Promise.resolve(Auth.migrasiAkunAdmin()).then(function () {});
+    } catch (e) {
+      return Promise.resolve();
+    }
+  }
+
+  // Pembersihan sisa data contoh dari penyimpanan lama (idempoten, hanya
+  // menyentuh akun/data contoh yang terverifikasi, bukan data asli).
+  function bersihkanDataContoh() {
+    if (typeof Auth === 'undefined' || !Auth || typeof Auth.hapusDataContoh !== 'function') {
+      return Promise.resolve();
+    }
+    try {
+      return Promise.resolve(Auth.hapusDataContoh()).then(function () {});
+    } catch (e) {
+      return Promise.resolve();
+    }
+  }
+
   function init() {
     var users = read('users');
-    if (!users.length && CONFIG.DEMO_SEED) {
+    if (!users.length && CONFIG.SEED_AWAL) {
       if (seedPromise) return seedPromise;
       seedPromise = Auth.seed().then(function () {
         ready = true;
         seedPromise = null;
+        return migrasiAkun().then(bersihkanDataContoh);
       }, function (err) {
         seedPromise = null;
         throw err;
@@ -227,7 +254,7 @@ var Store = (function () {
       }
       ready = true;
     }
-    return Promise.resolve();
+    return migrasiAkun().then(bersihkanDataContoh);
   }
 
   return {
