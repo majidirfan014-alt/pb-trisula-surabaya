@@ -108,8 +108,9 @@ var PagesPublic = (function () {
     isiTeks('hero-tombol-kedua', h.tombolKedua, { bungkus: 'a' });
 
     var logo = document.querySelectorAll('img.brand-logo');
+    var srcLogo = LandingStore.urlFoto(m.logo);
     for (var i = 0; i < logo.length; i++) {
-      if (m.logo) logo[i].src = m.logo;
+      if (srcLogo) logo[i].src = srcLogo;
       if (m.nama) logo[i].alt = 'Logo ' + m.nama;
     }
 
@@ -220,7 +221,8 @@ var PagesPublic = (function () {
   }
 
   function pasangGambar(img, file, alt) {
-    if (!file) {
+    var src = LandingStore.urlFoto(file);
+    if (!src) {
       img.style.display = 'none';
       return;
     }
@@ -232,7 +234,7 @@ var PagesPublic = (function () {
     img.addEventListener('error', function () {
       img.style.display = 'none';
     });
-    img.src = file;
+    img.src = src;
     if (img.complete && img.naturalWidth > 0) siap();
   }
 
@@ -255,7 +257,8 @@ var PagesPublic = (function () {
     var placeholders = document.querySelectorAll('#hero-kolase .foto-placeholder span');
     for (var j = 0; j < placeholders.length; j++) {
       var it = isiSlot(j);
-      placeholders[j].textContent = it && it.file ? String(it.file).split('/').pop() : 'kosong';
+      var srcIt = it && it.file ? LandingStore.urlFoto(it.file) : '';
+      placeholders[j].textContent = srcIt ? String(srcIt).split('/').pop() : 'kosong';
     }
   }
 
@@ -341,7 +344,7 @@ var PagesPublic = (function () {
   function bangunDaftarFoto() {
     return (cfg().galeri || []).map(function (item, i) {
       item = item || {};
-      var src = String(item.src || item.file || '').trim();
+      var src = LandingStore.urlFoto(item.src || item.file);
       var namaFile = src ? src.split('/').pop() : ('foto-' + (i + 1));
       var judul = String(item.judul || item.caption || '').trim() || namaFile;
       var keterangan = String(item.keterangan || '').trim();

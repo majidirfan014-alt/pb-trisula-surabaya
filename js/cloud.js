@@ -293,7 +293,15 @@ var Cloud = (function () {
     koleksiMuat('landing').then(function (rows) {
       if (!rows || !rows.length) return;
       try {
-        localStorage.setItem(CONFIG.PREFIX + 'landing', JSON.stringify(rows[0]));
+        // Dokumen cloud berbentuk { id: 'config', isi: {...} }; yang dipakai
+        // aplikasi adalah objek di dalamnya. Jangan simpan bungkusnya —
+        // dulu kesalahan ini membuat foto & pengaturan landing hilang.
+        var isi = rows[0] && rows[0].isi ? rows[0].isi : rows[0];
+        if (typeof LandingStore !== 'undefined' && LandingStore && LandingStore.simpanDariCloud) {
+          LandingStore.simpanDariCloud(isi);
+        } else {
+          localStorage.setItem(CONFIG.PREFIX + 'landing', JSON.stringify(isi));
+        }
       } catch (e) {}
       if (typeof PagesPublic !== 'undefined' && PagesPublic && typeof PagesPublic.init === 'function') {
         try { PagesPublic.init(); } catch (e) {}

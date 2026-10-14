@@ -40,10 +40,10 @@ var CONFIG = {
       tombolNavbar: 'Daftar'
     },
     kolase: [
-      { file: 'assets/galeri/utama.jpg', caption: 'Keluarga Besar PB Trisula Surabaya', alt: 'Foto bersama pelatih dan atlet PB Trisula Surabaya' },
-      { file: 'assets/galeri/pelatih-1.jpg', caption: 'Tim Pelatih', alt: 'Pelatih PB Trisula Surabaya' },
-      { file: 'assets/galeri/atlet-1.jpg', caption: 'Latihan Rutin', alt: 'Atlet PB Trisula Surabaya berlatih' },
-      { file: 'assets/galeri/atlet-2.jpg', caption: 'Kebersamaan Tim', alt: 'Kebersamaan atlet PB Trisula Surabaya' }
+      { file: '', caption: 'Keluarga Besar PB Trisula Surabaya', alt: 'Foto bersama pelatih dan atlet PB Trisula Surabaya' },
+      { file: '', caption: 'Tim Pelatih', alt: 'Pelatih PB Trisula Surabaya' },
+      { file: '', caption: 'Latihan Rutin', alt: 'Atlet PB Trisula Surabaya berlatih' },
+      { file: '', caption: 'Kebersamaan Tim', alt: 'Kebersamaan atlet PB Trisula Surabaya' }
     ],
     marquee: [
       'Monitoring Atlet', 'Kehadiran', 'Tes Fisik', 'Logbook Latihan',

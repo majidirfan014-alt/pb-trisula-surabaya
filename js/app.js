@@ -360,6 +360,11 @@ var App = (function () {
     // Siapkan master lokasi latihan & migrasi data lama (aman dijalankan berulang).
     if (typeof Picker !== 'undefined' && Picker && Picker.init) Picker.init();
 
+    // Muat foto landing page dari IndexedDB & migrasi foto lama ke referensi.
+    if (typeof LandingStore !== 'undefined' && LandingStore && LandingStore.hidupkan) {
+      LandingStore.hidupkan();
+    }
+
     PagesCoach.register();
     PagesAssistant.register();
     PagesAthlete.register();
