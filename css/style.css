@@ -412,6 +412,25 @@ select.input {
   flex-shrink: 0;
 }
 
+/* Foto profil menimpa inisial; bila foto gagal dimuat, inisial tetap tampil. */
+.avatar-wrap {
+  position: relative;
+  display: inline-block;
+  flex-shrink: 0;
+  border-radius: 50%;
+  vertical-align: middle;
+}
+
+.avatar-wrap .avatar {
+  margin: 0;
+}
+
+.avatar-wrap .avatar-foto {
+  position: absolute;
+  top: 0;
+  left: 0;
+}
+
 .avatar-initial {
   display: inline-flex;
   align-items: center;
@@ -2172,6 +2191,12 @@ section[id],
   object-fit: cover;
   display: block;
   transition: transform 0.35s ease;
+}
+
+/* Foto atlet menimpa inisial; bila gagal dimuat, inisial tetap tampil. */
+.gallery-photo img.gallery-foto {
+  position: absolute;
+  inset: 0;
 }
 
 .gallery-item:hover .gallery-photo img {

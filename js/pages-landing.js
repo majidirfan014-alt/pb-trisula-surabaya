@@ -61,8 +61,13 @@ var PagesLanding = (function () {
   function slotFoto(key, file, caption, label, hideCaption, info) {
     var src = LandingStore.urlFoto(file);
     var ada = !!src;
+    var rusak = !!file && !ada;   // nilai ada di data tapi gambar tidak bisa dimuat
+    var infoTeks = rusak
+      ? 'Foto tidak dapat dimuat di perangkat ini. Unggah ulang agar tampil di semua perangkat.'
+      : (info || '');
     var media = '<div class="lp-foto-media' + (ada ? ' ada' : '') + '" data-lp-drop="' + key + '">' +
-      '<div class="lp-foto-kosong">' + UI.icon('users', 26) + '<span>Belum ada foto</span>' +
+      '<div class="lp-foto-kosong">' + UI.icon(rusak ? 'alert' : 'users', 26) +
+      '<span>' + (rusak ? 'Foto tidak dapat dimuat' : 'Belum ada foto') + '</span>' +
       '<span class="lp-foto-seret">atau seret foto ke area ini</span></div>' +
       (ada ? '<img data-lp-img src="' + Utils.esc(src) + '" alt="' + Utils.esc(label || 'Foto') + '">' : '') +
       '<div class="lp-foto-proses" data-lp-proses="' + key + '" hidden>' +
@@ -73,11 +78,12 @@ var PagesLanding = (function () {
       '<div class="lp-foto-label">' + Utils.esc(label) + '</div>' +
       media +
       '<div class="lp-foto-aksi">' +
-      '<label class="btn lp-btn-unggah">' + IKON_UNGGAH + '<span data-lp-teks-unggah>' + (ada ? 'Ganti Foto' : 'Unggah Foto') + '</span>' +
+      '<label class="btn lp-btn-unggah">' + IKON_UNGGAH + '<span data-lp-teks-unggah>' +
+      (ada ? 'Ganti Foto' : (rusak ? 'Unggah Ulang' : 'Unggah Foto')) + '</span>' +
       '<input type="file" hidden accept="image/jpeg,image/jpg,image/png,image/webp" data-lp-file="' + key + '"></label>' +
       '<button type="button" class="btn lp-btn-hapus"' + (ada ? '' : ' disabled') + ' data-lp-hapus="' + key + '"><span data-lp-teks-hapus>Hapus</span></button>' +
       '</div>' +
-      '<div class="lp-foto-info"' + (info ? '' : ' hidden') + ' data-lp-info="' + key + '">' + Utils.esc(info || '') + '</div>' +
+      '<div class="lp-foto-info"' + (infoTeks ? '' : ' hidden') + ' data-lp-info="' + key + '">' + Utils.esc(infoTeks) + '</div>' +
       (hideCaption ? '' : UI.field({ name: 'caption_' + key, label: 'Caption singkat', value: caption || '' })) +
       '<div class="field-error" data-lp-error="' + key + '"></div>' +
       '</div>';
@@ -204,6 +210,7 @@ var PagesLanding = (function () {
       info = k.file_info;
     }
     var src = LandingStore.urlFoto(file);
+    var rusak = !!file && !src;
     var media = slot.querySelector('.lp-foto-media');
     var img = slot.querySelector('img[data-lp-img]');
     if (src) {
@@ -223,8 +230,10 @@ var PagesLanding = (function () {
       if (img && img.parentNode) img.parentNode.removeChild(img);
       if (media) media.classList.remove('ada');
     }
+    var kosong = slot.querySelector('.lp-foto-kosong span');
+    if (kosong) kosong.textContent = rusak ? 'Foto tidak dapat dimuat' : 'Belum ada foto';
     var teksUnggah = slot.querySelector('[data-lp-teks-unggah]');
-    if (teksUnggah) teksUnggah.textContent = src ? 'Ganti Foto' : 'Unggah Foto';
+    if (teksUnggah) teksUnggah.textContent = src ? 'Ganti Foto' : (rusak ? 'Unggah Ulang' : 'Unggah Foto');
     var tombolHapus = slot.querySelector('.lp-btn-hapus');
     if (tombolHapus && !prosesAktif[key]) {
       tombolHapus.disabled = !src;
@@ -233,8 +242,11 @@ var PagesLanding = (function () {
     }
     var infoEl = slot.querySelector('[data-lp-info]');
     if (infoEl) {
-      infoEl.textContent = info || '';
-      infoEl.hidden = !info;
+      var infoTeks = rusak
+        ? 'Foto tidak dapat dimuat di perangkat ini. Unggah ulang agar tampil di semua perangkat.'
+        : (info || '');
+      infoEl.textContent = infoTeks;
+      infoEl.hidden = !infoTeks;
     }
     var errEl = slot.querySelector('[data-lp-error]');
     if (errEl && !errEl.textContent) errEl.textContent = '';
@@ -519,39 +531,6 @@ var PagesLanding = (function () {
     unggahDariBerkas(key, file);
   }
 
-  // Unggah ke cloud di latar belakang (tidak memblokir pratinjau).
-  // Hanya dijalankan bila layanan cloud sudah siap; gagal = tetap lokal.
-  function unggahKeCloudDiam(hasil, key, file, folder) {
-    try {
-      if (typeof Cloud === 'undefined' || !Cloud || !Cloud.siap || !Cloud.siap() || !Cloud.unggahFoto) return;
-      if (!hasil || !hasil.blob) return;
-      if (/^https?:/.test(String(hasil.nilai))) return;
-      var nama = (file && file.name) || 'foto.jpg';
-      var fileBaru = typeof File === 'function'
-        ? new File([hasil.blob], nama, { type: hasil.blob.type || 'image/jpeg' })
-        : hasil.blob;
-      withTimeout(Cloud.unggahFoto(fileBaru, folder || 'foto/landing'), 5000).then(function (res) {
-        if (!res || !res.url) return;
-        var d = ambil();
-        if (key === 'logo') {
-          if (d.merek.logo !== hasil.nilai) return;
-          d.merek.logo = res.url;
-        } else if (key.indexOf('kolase_') === 0) {
-          var i = parseInt(key.split('_')[1], 10);
-          if (!d.kolase[i] || d.kolase[i].file !== hasil.nilai) return;
-          d.kolase[i].file = res.url;
-        } else if (key.indexOf('galeri_') === 0) {
-          var item = cariGaleri(key.slice(7));
-          if (!item || item.src !== hasil.nilai) return;
-          item.src = res.url;
-        } else {
-          return;
-        }
-        perbaruiSlot(key);
-      }, function () {});
-    } catch (e) {}
-  }
-
   function unggahDariBerkas(key, file) {
     if (!file) return;
     if (prosesAktif[key]) return;   // cegah proses ganda pada slot yang sama
@@ -567,8 +546,13 @@ var PagesLanding = (function () {
     }).then(function (f) {
       if (token.batal) throw new Error('DIBATALKAN');
       ubahProsesUI(key, 'Menyimpan...');
-      return LandingStore.simpanFoto(f.blob).then(function (nilai) {
-        return { nilai: nilai, info: infoBerkas(f.nama || file.name, f.ukuran), blob: f.blob };
+      // Simpan ke penyimpanan terpusat (cloud) — URL publik yang dipakai
+      // sebagai src, sehingga tampil di semua perangkat tanpa login.
+      return LandingStore.simpanFoto(f.blob, {
+        folder: 'foto/landing',
+        nama: f.nama || file.name || 'foto.jpg'
+      }).then(function (nilai) {
+        return { nilai: nilai, info: infoBerkas(f.nama || file.name, f.ukuran) };
       });
     }).then(function (hasil) {
       if (token.batal) {
@@ -577,14 +561,14 @@ var PagesLanding = (function () {
       }
       var d = ambil();
       if (key === 'logo') {
-        if (d.merek.logo && d.merek.logo !== hasil.nilai) LandingStore.hapusFotoRef(d.merek.logo);
+        if (d.merek.logo && d.merek.logo !== hasil.nilai && !refDiDataTersimpan(d.merek.logo)) {
+          LandingStore.hapusFotoRef(d.merek.logo);
+        }
         d.merek.logo = hasil.nilai;
         d.merek.logo_info = hasil.info;
       } else if (key.indexOf('kolase_') === 0) {
         var i = parseInt(key.split('_')[1], 10);
         if (!d.kolase[i]) d.kolase[i] = { file: '', caption: '', alt: '' };
-        // Foto lama yang diganti dibebaskan agar object URL & penyimpanan
-        // tidak bocor (foto yang masih dipakai data tersimpan tidak disentuh).
         if (d.kolase[i].file && d.kolase[i].file !== hasil.nilai && !refDiDataTersimpan(d.kolase[i].file)) {
           LandingStore.hapusFotoRef(d.kolase[i].file);
         }
@@ -595,8 +579,11 @@ var PagesLanding = (function () {
       }
       tandaiBelumSimpan();
       perbaruiSlot(key);   // hanya slot ini yang diperbarui
-      Utils.toast('Foto berhasil dipilih.', 'success');
-      unggahKeCloudDiam(hasil, key, file, 'foto/landing');
+      if (/^https?:/.test(String(hasil.nilai))) {
+        Utils.toast('Foto tersimpan di cloud dan tampil di semua perangkat.', 'success');
+      } else {
+        Utils.toast('Cloud tidak tersedia — foto hanya tersimpan di perangkat ini. Unggah ulang nanti agar tampil di perangkat lain.', 'danger');
+      }
     });
 
     withTimeout(janji, 15000).catch(function (err) {
@@ -649,6 +636,7 @@ var PagesLanding = (function () {
     var total = files.length;
     var berjalan = 0;
     var gagal = [];
+    var lokalSaja = 0;
     mulaiProsesGaleri('Memproses 0 dari ' + total);
 
     function satu(f) {
@@ -657,7 +645,10 @@ var PagesLanding = (function () {
       ubahProsesGaleri('Memproses ' + berjalan + ' dari ' + total);
       return LandingStore.bacaFoto(f).then(function (res) {
         if (token.batal) return null;
-        return LandingStore.simpanFoto(res.blob).then(function (nilai) {
+        return LandingStore.simpanFoto(res.blob, {
+          folder: 'foto/galeri',
+          nama: res.nama || f.name || 'galeri.jpg'
+        }).then(function (nilai) {
           return { nilai: nilai, res: res };
         });
       }).then(function (hasil) {
@@ -666,6 +657,7 @@ var PagesLanding = (function () {
           LandingStore.hapusFotoRef(hasil.nilai);
           return;
         }
+        if (!/^https?:/.test(String(hasil.nilai))) lokalSaja++;
         var d = ambil();
         var item = {
           id: 'g' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
@@ -678,7 +670,6 @@ var PagesLanding = (function () {
         d.galeri.push(item);
         tandaiBelumSimpan();
         tambahKartuGaleri(item, d.galeri.length - 1);
-        unggahKeCloudDiam({ nilai: item.src, blob: hasil.res.blob, info: item.file_info }, 'galeri_' + item.id, f, 'foto/galeri');
       }).catch(function (err) {
         gagal.push((f && f.name ? f.name : 'foto') + ': ' + (err && err.message ? err.message : 'gagal diproses'));
       });
@@ -699,7 +690,11 @@ var PagesLanding = (function () {
       if (token.batal) {
         Utils.toast('Pengunggahan foto galeri dibatalkan.', 'info');
       } else if (sukses > 0) {
-        Utils.toast(sukses + ' foto galeri berhasil ditambahkan.' + (gagal.length ? ' ' + gagal.length + ' gagal.' : ''), gagal.length ? 'info' : 'success');
+        var pesan = sukses + ' foto galeri berhasil ditambahkan.' + (gagal.length ? ' ' + gagal.length + ' gagal.' : '');
+        if (lokalSaja) {
+          pesan += ' ' + lokalSaja + ' foto hanya tersimpan di perangkat ini (cloud tidak tersedia).';
+        }
+        Utils.toast(pesan, gagal.length || lokalSaja ? 'info' : 'success');
       }
     });
   }

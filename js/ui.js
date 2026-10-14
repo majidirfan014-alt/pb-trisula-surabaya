@@ -52,10 +52,17 @@ var UI = (function () {
     var foto = entity && entity.foto;
     var nama = (entity && entity.nama) || '?';
     var initial = nama.trim().charAt(0).toUpperCase();
+    var gaya = 'width:' + s + 'px;height:' + s + 'px;font-size:' + Math.round(s * 0.4) + 'px';
+    var inisial = '<div class="avatar avatar-initial" style="' + gaya + '">' + Utils.esc(initial) + '</div>';
     if (foto) {
-      return '<img class="avatar" src="' + foto + '" alt="Foto ' + Utils.esc(nama) + '" width="' + s + '" height="' + s + '">';
+      // Inisial di belakang foto: bila foto gagal dimuat (URL mati/di luar
+      // perangkat), yang tampil tetap inisial — bukan ikon gambar rusak.
+      return '<span class="avatar-wrap" style="width:' + s + 'px;height:' + s + 'px">' +
+        inisial +
+        '<img class="avatar avatar-foto" src="' + Utils.esc(foto) + '" alt="Foto ' + Utils.esc(nama) + '" width="' + s + '" height="' + s + '" onerror="this.style.display=\'none\'">' +
+        '</span>';
     }
-    return '<div class="avatar avatar-initial" style="width:' + s + 'px;height:' + s + 'px;font-size:' + Math.round(s * 0.4) + 'px">' + Utils.esc(initial) + '</div>';
+    return inisial;
   }
 
   function statCard(label, value, sub, iconName, tone) {

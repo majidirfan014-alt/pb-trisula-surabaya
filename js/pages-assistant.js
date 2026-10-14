@@ -325,7 +325,7 @@ var PagesAssistant = (function () {
         '<div class="card-title">' + UI.icon('save', 20) + 'Lisensi Pelatih</div>' +
         (bisaUnduh
           ? '<div class="file-chip">' +
-            (/^image\//.test(lis.tipe || '') ? '<img src="' + Utils.esc(lis.data) + '" alt="Lisensi pelatih">' : '') +
+            (/^image\//.test(lis.tipe || '') ? '<img src="' + Utils.esc(lis.data) + '" alt="Lisensi pelatih" onerror="this.style.display=\'none\'">' : '') +
             '<div><b>' + Utils.esc(lis.nama) + '</b>' +
             '<div class="small muted">' + (/pdf/i.test(lis.tipe || '') ? 'PDF' : 'Gambar') + ' / ' + Math.round((lis.ukuran || 0) / 1024) + ' KB</div></div></div>' +
             '<div class="flex gap-1 mt-2 flex-wrap">' +

@@ -220,18 +220,21 @@ var PagesPublic = (function () {
       '<div class="marquee-isi" aria-hidden="true">' + isi + '</div>';
   }
 
+  var ALT_FOTO = 'Foto kegiatan PB Trisula Surabaya';
+
   function pasangGambar(img, file, alt) {
     var src = LandingStore.urlFoto(file);
     if (!src) {
       img.style.display = 'none';
       return;
     }
-    img.alt = alt || '';
+    img.alt = alt || ALT_FOTO;
     function siap() {
       img.classList.add('siap');
     }
     img.addEventListener('load', siap);
     img.addEventListener('error', function () {
+      // Gambar gagal dimuat -> sembunyikan, biarkan placeholder bersih (ikon).
       img.style.display = 'none';
     });
     img.src = src;
@@ -240,8 +243,17 @@ var PagesPublic = (function () {
 
   function renderKolase() {
     var cfgK = cfg().kolase || [];
+    var cfgG = cfg().galeri || [];
     var defK = (CONFIG.LANDING_DEFAULT || {}).kolase || [];
+    // Slot hero mengambil foto dari data galeri secara otomatis (urut sesuai
+    // urutan unggah); bila galeri belum cukup, pakai foto kolase yang diatur
+    // manual; sisanya tampil placeholder bersih.
     function isiSlot(i) {
+      var g = cfgG[i] || {};
+      var gFile = g.src || g.file;
+      if (gFile && String(gFile).trim()) {
+        return { file: gFile, alt: g.judul || g.keterangan || '', caption: g.keterangan || '' };
+      }
       var item = cfgK[i] || {};
       if (item.file && String(item.file).trim()) return item;
       var fallback = defK[i] || {};
@@ -252,13 +264,12 @@ var PagesPublic = (function () {
     for (var i = 0; i < gambar.length; i++) {
       var img = gambar[i];
       var item = isiSlot(parseInt(img.getAttribute('data-kolase'), 10));
-      pasangGambar(img, item.file, item.alt || item.caption);
+      pasangGambar(img, item.file, item.alt || item.caption || ALT_FOTO);
     }
     var placeholders = document.querySelectorAll('#hero-kolase .foto-placeholder span');
     for (var j = 0; j < placeholders.length; j++) {
-      var it = isiSlot(j);
-      var srcIt = it && it.file ? LandingStore.urlFoto(it.file) : '';
-      placeholders[j].textContent = srcIt ? String(srcIt).split('/').pop() : 'kosong';
+      // Jangan pernah menampilkan ID/nama file ke pengunjung — cukup ikon.
+      placeholders[j].textContent = '';
     }
   }
 
@@ -345,8 +356,8 @@ var PagesPublic = (function () {
     return (cfg().galeri || []).map(function (item, i) {
       item = item || {};
       var src = LandingStore.urlFoto(item.src || item.file);
-      var namaFile = src ? src.split('/').pop() : ('foto-' + (i + 1));
-      var judul = String(item.judul || item.caption || '').trim() || namaFile;
+      // Judul bermakna — jangan pernah memakai nama file/ID sebagai teks.
+      var judul = String(item.judul || item.caption || '').trim() || ('Foto kegiatan ' + (i + 1));
       var keterangan = String(item.keterangan || '').trim();
       return {
         id: item.id || 'f' + i,
@@ -354,7 +365,7 @@ var PagesPublic = (function () {
         kategori: String(item.kategori || '').trim() || 'Lainnya',
         judul: judul,
         keterangan: keterangan,
-        alt: item.alt || (judul + (keterangan ? ' - ' + keterangan : '')),
+        alt: item.alt || (judul + (keterangan ? ' - ' + keterangan : '')) || ALT_FOTO,
         utama: !!item.utama
       };
     });
@@ -365,15 +376,15 @@ var PagesPublic = (function () {
   }
 
   function fotoMarkup(item, indeks, isUtama) {
-    var namaFile = item.src ? item.src.split('/').pop() : item.judul;
+    // Placeholder hanya menampilkan ikon — jangan tampilkan ID/nama file.
     return '<figure class="' + (isUtama ? 'keluarga-utama' : 'keluarga-foto') +
       (isUtama ? '" id="keluarga-utama' : '') +
       '" data-foto-index="' + indeks + '" tabindex="0" role="button"' +
-      ' aria-label="' + (isUtama ? 'Perbesar foto: ' : 'Pilih foto: ') + Utils.esc(item.alt) + '">' +
+      ' aria-label="' + (isUtama ? 'Perbesar foto: ' : 'Pilih foto: ') + Utils.esc(item.alt || ALT_FOTO) + '">' +
       '<div class="foto-media">' +
-      '<div class="foto-placeholder">' + UI.icon('users', 30) + '<span>' + Utils.esc(namaFile) + '</span></div>' +
+      '<div class="foto-placeholder">' + UI.icon('users', 30) + '<span></span></div>' +
       '<img' + (isUtama ? ' id="keluarga-utama-img"' : '') +
-      ' src="' + Utils.esc(item.src) + '" alt="' + Utils.esc(item.alt) + '"' +
+      ' src="' + Utils.esc(item.src) + '" alt="' + Utils.esc(item.alt || ALT_FOTO) + '"' +
       (isUtama ? ' decoding="async"' : ' loading="lazy" decoding="async"') + '>' +
       '</div>' +
       (isUtama
@@ -708,9 +719,12 @@ var PagesPublic = (function () {
 
     host.innerHTML = athletes.map(function (a) {
       var initial = (a.nama || '?').trim().charAt(0).toUpperCase();
-      var media = a.foto
-        ? '<img src="' + a.foto + '" alt="Foto ' + Utils.esc(a.nama) + '" loading="lazy">'
-        : '<div class="gallery-initial" aria-hidden="true">' + Utils.esc(initial) + '</div>';
+      // Inisial selalu tampil di belakang; bila foto gagal dimuat,
+      // inisial tetap terlihat (tanpa ikon gambar rusak / teks ID).
+      var media = '<div class="gallery-initial" aria-hidden="true">' + Utils.esc(initial) + '</div>' +
+        (a.foto
+          ? '<img src="' + Utils.esc(a.foto) + '" alt="Foto ' + Utils.esc(a.nama) + '" loading="lazy" class="gallery-foto" onerror="this.style.display=\'none\'">'
+          : '');
       return '<figure class="gallery-item">' +
         '<div class="gallery-photo">' + media + '</div>' +
         '<figcaption>' +
