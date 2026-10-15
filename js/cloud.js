@@ -280,6 +280,87 @@ var Cloud = (function () {
     }
   }
 
+  /* ---------- penyimpanan foto lewat Firestore (gratis, tanpa billing) ----------
+     Cloud Storage untuk Firebase butuh plan Blaze, sedangkan Firestore jalan di
+     plan Spark. Foto disimpan sebagai dokumen di koleksi "foto_landing" dan
+     dibaca publik (lihat firestore.rules) — tampil di semua perangkat. */
+
+  var KOLEKSI_FOTO = 'foto_landing';
+  var MAKS_DATA_URL = 900 * 1024;   // batas aman di bawah 1 MB dokumen Firestore
+
+  function dbFoto() {
+    return muatSdk().then(function (ok) {
+      if (!ok || typeof window.firebase === 'undefined' || !window.firebase || !window.firebase.firestore) {
+        throw galat('sdk', 'Layanan cloud tidak tersedia: ' + (galatMuat || 'SDK Firebase tidak termuat.'));
+      }
+      return window.firebase.firestore().collection(KOLEKSI_FOTO);
+    });
+  }
+
+  function terjemahkanGalatFirestore(err) {
+    var kode = String((err && (err.code || err.name)) || '');
+    var asli = String((err && err.message) || err || '');
+    var pesan;
+    if (/resource-exhausted|quota/i.test(kode) || /quota/i.test(asli)) {
+      pesan = 'Kuota Firestore gratis terlampaui — coba lagi nanti atau hapus foto lama.';
+    } else if (/permission-denied/i.test(kode)) {
+      pesan = 'Tidak punya izin menulis ke Firestore (periksa firestore.rules).';
+    } else if (/invalid-argument|too large|1 mib|maximum/i.test(kode + ' ' + asli)) {
+      pesan = 'Ukuran foto terlalu besar untuk dokumen Firestore (> 1 MB).';
+    } else if (/unavailable|deadline|network/i.test(kode + ' ' + asli)) {
+      pesan = 'Koneksi ke Firestore gagal (jaringan).';
+    } else {
+      pesan = 'Gagal menyimpan foto ke cloud.';
+    }
+    return galat('firestore/' + (kode || 'unknown'), pesan + ' [kode: ' + (kode || 'unknown') + ']', asli);
+  }
+
+  // Simpan data URL foto -> ID dokumen Firestore.
+  function fotoDbSimpan(dataUrl) {
+    if (!dataUrl || String(dataUrl).indexOf('data:') !== 0 || String(dataUrl).length > MAKS_DATA_URL) {
+      return Promise.reject(galat('firestore/ukuran',
+        'Ukuran foto terlalu besar untuk dokumen Firestore (> 1 MB).',
+        String(dataUrl || '').length + ' karakter'));
+    }
+    return dbFoto().then(function (col) {
+      return col.add({
+        data: String(dataUrl),
+        dibuat_pada: new Date().toISOString()
+      });
+    }).then(function (ref) {
+      return ref.id;
+    }).catch(function (e) {
+      throw terjemahkanGalatFirestore(e);
+    });
+  }
+
+  // Muat semua foto publik dari Firestore -> [{ id, data }].
+  function fotoDbSemua() {
+    return dbFoto().then(function (col) {
+      return col.get();
+    }).then(function (snap) {
+      var out = [];
+      snap.forEach(function (d) {
+        var data = d.data() || {};
+        if (data.data) out.push({ id: d.id, data: data.data });
+      });
+      return out;
+    }).catch(function () {
+      return [];
+    });
+  }
+
+  function fotoDbHapus(id) {
+    if (!id) return Promise.resolve(false);
+    return dbFoto().then(function (col) {
+      return col.doc(String(id)).delete();
+    }).then(function () {
+      return true;
+    }).catch(function () {
+      return false;
+    });
+  }
+
   function unggahFoto(file, folder) {
     return unggah(file, folder || 'foto', function (f) {
       return validasiGambar(f, MAKS_FOTO);
@@ -542,6 +623,9 @@ var Cloud = (function () {
     status: function () { return status; },
     diagnosa: diagnosa,
     unggahPublik: unggahPublik,
+    fotoDbSimpan: fotoDbSimpan,
+    fotoDbSemua: fotoDbSemua,
+    fotoDbHapus: fotoDbHapus,
     validasiGambar: validasiGambar,
     validasiBerkas: validasiBerkas,
     unggahFoto: unggahFoto,

@@ -1,19 +1,22 @@
 var LandingStore = (function () {
   var KEY = CONFIG.PREFIX + 'landing';
   var DB_FOTO = CONFIG.PREFIX + 'foto';
-  var TOKOH = 'idb:';
+  var TOKOH = 'idb:';            // referensi foto di IndexedDB (lokal)
+  var TOKOH_FIRE = 'firestore:'; // referensi foto di Firestore (cloud, gratis)
   var listeners = [];
 
-  // Foto disimpan sebagai Blob di IndexedDB; konfigurasi cukup menyimpan
-  // referensi "idb:xxx" (atau URL https bila diunggah ke cloud) sehingga
-  // kuota localStorage tidak terlampaui dan unggah tetap ringan.
-  var cacheFoto = {};   // id -> Blob (atau data URL untuk data lama)
-  var cacheUrl = {};    // id -> object URL yang sedang dipakai
+  // Foto disimpan di "cloud" (Firestore -> URL publik Storage bila tersedia),
+  // cadangan lokal di IndexedDB. Konfigurasi hanya menyimpan REFERENSI
+  // (firestore:xxx / idb:xxx / https://...) — hemat kuota & sinkron antar
+  // perangkat karena koleksi foto Firestore bisa dibaca publik.
+  var cacheFoto = {};   // referensi lengkap -> data URL / Blob (data lama)
+  var cacheUrl = {};    // referensi lengkap -> object URL yang sedang dipakai
   var janjiDb = null;
 
   var MAKS_ASLI = 10 * 1024 * 1024;    // file asli yang diterima
   var MAKS_HASIL = 2 * 1024 * 1024;    // batas ukuran hasil kompresi
   var MAKS_LEBAR = 1600;               // lebar maksimum hasil
+  var MAKS_FIRE = 650 * 1024;          // ~870KB base64 — aman di bawah 1 MB dokumen Firestore
 
   function idbTersedia() {
     try {
@@ -114,29 +117,39 @@ var LandingStore = (function () {
     return '';
   }
 
-  function buangObjectUrl(id) {
-    var u = cacheUrl[id];
+  function buangObjectUrl(kunci) {
+    var u = cacheUrl[kunci];
     if (u) {
       try {
         if (typeof URL !== 'undefined' && URL.revokeObjectURL) URL.revokeObjectURL(u);
       } catch (e) {}
-      delete cacheUrl[id];
+      delete cacheUrl[kunci];
     }
   }
 
+  function kunciLokal(id) {
+    return TOKOH + id;
+  }
+
+  function refDariNilai(v) {
+    var s = String(v || '');
+    if (s.indexOf(TOKOH) === 0 || s.indexOf(TOKOH_FIRE) === 0) return s;
+    return '';
+  }
+
   // Ubah nilai foto di konfigurasi menjadi sumber yang bisa dipakai <img src>.
-  // Referensi "idb:xxx" diubah menjadi object URL (cepat, tanpa base64);
+  // Referensi firestore:/idb: diubah menjadi data URL / object URL dari cache
+  // (cache diisi dari Firestore sehingga tampil di perangkat mana pun);
   // URL/path diteruskan apa adanya.
   function urlFoto(v) {
     var s = String(v || '');
-    if (s.indexOf(TOKOH) !== 0) return s;
-    var id = s.slice(TOKOH.length);
-    if (cacheUrl[id]) return cacheUrl[id];
-    var isi = cacheFoto[id];
+    if (!refDariNilai(s)) return s;
+    if (cacheUrl[s]) return cacheUrl[s];
+    var isi = cacheFoto[s];
     if (!isi) return '';
-    if (typeof isi === 'string') return isi;       // data lama (data URL)
+    if (typeof isi === 'string') return isi;       // data URL (cloud / data lama)
     var url = buatObjectUrl(isi);
-    if (url) cacheUrl[id] = url;
+    if (url) cacheUrl[s] = url;
     return url;
   }
 
@@ -243,13 +256,65 @@ var LandingStore = (function () {
     });
   }
 
+  // Kecilkan ulang foto yang terlalu besar untuk dokumen Firestore (1 MB).
+  function perkecilUntukFirestore(blob) {
+    if (!blob || blob.size <= MAKS_FIRE) return Promise.resolve(blob);
+    return decodeGambar(blob).then(function (hasil) {
+      var lebar = Math.min(1200, hasil.lebar);
+      var tinggi = Math.max(1, Math.round(hasil.tinggi * (lebar / hasil.lebar)));
+      return kompres(hasil.sumber, lebar, tinggi, false, MAKS_FIRE).then(function (b) {
+        hasil.bersihkan();
+        return b || blob;
+      }, function () {
+        hasil.bersihkan();
+        return blob;
+      });
+    }, function () {
+      return blob;
+    });
+  }
+
+  // Simpan ke cloud gratis (Firestore) lebih dulu; bila tidak bisa, coba
+  // Firebase Storage (butuh plan Blaze), lalu kembalikan galat bila keduanya
+  // gagal agar pemanggil menampilkan penyebab + tombol Coba Lagi.
+  function simpanKeFirestore(blob, opts) {
+    if (typeof Cloud === 'undefined' || !Cloud || typeof Cloud.fotoDbSimpan !== 'function') {
+      return Promise.resolve({ url: '', galat: 'Modul cloud tidak memuat penyimpanan foto.' });
+    }
+    var dataUrl = '';
+    return perkecilUntukFirestore(blob).then(function (b) {
+      return blobKeDataUrl(b);
+    }).then(function (d) {
+      dataUrl = d;
+      if (!dataUrl) throw new Error('Gagal mengolah foto.');
+      return Cloud.fotoDbSimpan(dataUrl);
+    }).then(function (id) {
+      var ref = TOKOH_FIRE + id;
+      // Simpan ke cache agar pratinjau langsung tampil tanpa menunggu muat ulang.
+      cacheFoto[ref] = dataUrl;
+      return { url: ref, galat: '' };
+    }, function (e) {
+      return { url: '', galat: (e && e.message) || 'Gagal menyimpan foto ke cloud.' };
+    });
+  }
+
+  function simpanKeCloud(blob, opts) {
+    opts = opts || {};
+    return simpanKeFirestore(blob, opts).then(function (hasil) {
+      if (hasil.url) return hasil;
+      // Cadangan: Firebase Storage (tersedia bila proyek sudah plan Blaze).
+      return unggahKeCloud(blob, opts.folder, opts.nama);
+    });
+  }
+
   function simpanLokal(blob) {
     if (!idbTersedia()) return Promise.resolve('');
     var id = 'f' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
     return fotoTulis(id, { blob: blob }).then(function (ok) {
       if (!ok) return '';
-      cacheFoto[id] = blob;
-      return TOKOH + id;
+      var ref = TOKOH + id;
+      cacheFoto[ref] = blob;
+      return ref;
     });
   }
 
@@ -291,7 +356,7 @@ var LandingStore = (function () {
     }
     return janjiBlob.then(function (blob) {
       if (!blob) throw new Error('Gagal menyimpan foto.');
-      return unggahKeCloud(blob, opts.folder, opts.nama).then(function (hasil) {
+      return simpanKeCloud(blob, opts).then(function (hasil) {
         if (hasil.url) return { nilai: hasil.url, lokal: false, galat: '' };
         return simpanLokal(blob).then(function (ref) {
           if (ref) return { nilai: ref, lokal: true, galat: hasil.galat };
@@ -303,11 +368,12 @@ var LandingStore = (function () {
     });
   }
 
-  // Ambil Blob di balik sebuah nilai foto lokal (idb: / data:).
+  // Ambil Blob/data URL di balik sebuah nilai foto (idb: / firestore: / data:).
   function blobDariNilai(nilai) {
     var s = String(nilai || '');
-    if (s.indexOf(TOKOH) === 0) {
-      var isi = cacheFoto[s.slice(TOKOH.length)];
+    var ref = refDariNilai(s);
+    if (ref) {
+      var isi = cacheFoto[ref];
       if (!isi) return Promise.resolve(null);
       if (typeof isi !== 'string') return Promise.resolve(isi);
       try {
@@ -332,20 +398,28 @@ var LandingStore = (function () {
     opts = opts || {};
     return blobDariNilai(nilai).then(function (blob) {
       if (!blob) return { nilai: nilai, lokal: true, galat: 'File foto tidak ditemukan di perangkat ini — silakan unggah ulang.' };
-      return unggahKeCloud(blob, opts.folder || 'foto/landing', opts.nama || 'foto-lama.jpg').then(function (hasil) {
+      return simpanKeCloud(blob, opts).then(function (hasil) {
         if (hasil.url) return { nilai: hasil.url, lokal: false, galat: '' };
         return { nilai: nilai, lokal: true, galat: hasil.galat };
       });
     });
   }
 
-  // Hapus foto lokal (bila nilainya referensi IndexedDB) dari penyimpanan.
+  // Hapus foto (bila nilainya referensi firestore:/idb:) dari penyimpanan.
   function hapusFotoRef(v) {
     var s = String(v || '');
+    if (s.indexOf(TOKOH_FIRE) === 0) {
+      buangObjectUrl(s);
+      delete cacheFoto[s];
+      if (typeof Cloud !== 'undefined' && Cloud && typeof Cloud.fotoDbHapus === 'function') {
+        return Cloud.fotoDbHapus(s.slice(TOKOH_FIRE.length));
+      }
+      return Promise.resolve(false);
+    }
     if (s.indexOf(TOKOH) !== 0) return Promise.resolve(false);
     var id = s.slice(TOKOH.length);
-    buangObjectUrl(id);
-    delete cacheFoto[id];
+    buangObjectUrl(s);
+    delete cacheFoto[s];
     return fotoBuang(id);
   }
 
@@ -673,15 +747,19 @@ var LandingStore = (function () {
   // Muat semua foto dari IndexedDB ke cache, migrasi record lama (data URL)
   // menjadi Blob, lalu pindahkan foto base64 yang masih di konfigurasi
   // menjadi referensi IndexedDB. Aman diulang; foto tidak pernah dihapus.
+  // Muat foto dari Firestore (semua perangkat) + IndexedDB (perangkat ini)
+  // ke cache, migrasi record lama menjadi Blob, lalu perbaiki data lama di
+  // konfigurasi. Aman diulang; foto tidak pernah dihapus.
   function hidupkan() {
     return fotoSemua().then(function (rows) {
       var perluUbah = [];
       (rows || []).forEach(function (row) {
         if (!row || !row.id) return;
+        var ref = kunciLokal(row.id);
         if (row.blob) {
-          cacheFoto[row.id] = row.blob;
+          cacheFoto[ref] = row.blob;
         } else if (row.data) {
-          cacheFoto[row.id] = row.data;
+          cacheFoto[ref] = row.data;
           perluUbah.push(row);
         }
       });
@@ -693,7 +771,7 @@ var LandingStore = (function () {
           try {
             var blob = dataUrlKeBlob(row.data);
             return fotoTulis(row.id, { blob: blob }).then(function (ok) {
-              if (ok) cacheFoto[row.id] = blob;
+              if (ok) cacheFoto[kunciLokal(row.id)] = blob;
             });
           } catch (e) {
             return null;
@@ -701,6 +779,20 @@ var LandingStore = (function () {
         });
       });
       return janji;
+    }).then(function () {
+      // Foto di Firestore bersifat publik -> tampil di perangkat mana pun,
+      // bahkan bila perangkat ini belum pernah mengunggahnya.
+      if (typeof Cloud === 'undefined' || !Cloud || typeof Cloud.fotoDbSemua !== 'function') {
+        return null;
+      }
+      return Cloud.fotoDbSemua().then(function (rows) {
+        (rows || []).forEach(function (row) {
+          if (row && row.id && row.data) {
+            var ref = TOKOH_FIRE + row.id;
+            if (!cacheFoto[ref]) cacheFoto[ref] = row.data;
+          }
+        });
+      }, function () {});
     }).then(function () {
       return migrasiPenyimpanan();
     }).then(function (n) {
@@ -745,9 +837,10 @@ var LandingStore = (function () {
         obj[kunci] = '';
         berubah = true;
       } else if (typeof v === 'string' && v.indexOf(TOKOH) === 0 && cloudSiap()) {
-        var blob = cacheFoto[v.slice(TOKOH.length)];
+        var blob = cacheFoto[v];
         if (blob && typeof blob !== 'string') unggahUlang.push({ jalan: jalan, blob: blob });
       }
+      // nilai firestore:/https: sudah di cloud -> biarkan
     }
 
     (mentah.kolase || []).forEach(function (k, i) {
@@ -772,7 +865,7 @@ var LandingStore = (function () {
     // 1) publikasikan foto lokal ke cloud (agar tampil di perangkat lain)
     unggahUlang.forEach(function (u) {
       janji = janji.then(function () {
-        return unggahKeCloud(u.blob, 'foto/landing', 'foto-lama.jpg').then(function (hasil) {
+        return simpanKeCloud(u.blob, { folder: 'foto/landing', nama: 'foto-lama.jpg' }).then(function (hasil) {
           if (!hasil.url) return;
           setNilai(u.jalan, hasil.url);
           berubah = true;
