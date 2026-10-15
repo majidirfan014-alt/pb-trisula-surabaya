@@ -405,22 +405,16 @@ var LandingStore = (function () {
     });
   }
 
-  // Hapus foto (bila nilainya referensi firestore:/idb:) dari penyimpanan.
+  // Lepas foto dari TAMPILAN & cache lokal (tombol Hapus / ganti foto).
+  // Sengaja TIDAK menghapus file dari penyimpanan cloud/IndexedDB —
+  // foto yang sudah tersimpan tidak boleh hilang (bisa dipakai lagi /
+  // dipulihkan), sesuai aturan data tidak boleh terhapus.
   function hapusFotoRef(v) {
     var s = String(v || '');
-    if (s.indexOf(TOKOH_FIRE) === 0) {
-      buangObjectUrl(s);
-      delete cacheFoto[s];
-      if (typeof Cloud !== 'undefined' && Cloud && typeof Cloud.fotoDbHapus === 'function') {
-        return Cloud.fotoDbHapus(s.slice(TOKOH_FIRE.length));
-      }
-      return Promise.resolve(false);
-    }
-    if (s.indexOf(TOKOH) !== 0) return Promise.resolve(false);
-    var id = s.slice(TOKOH.length);
+    if (!refDariNilai(s)) return Promise.resolve(false);
     buangObjectUrl(s);
     delete cacheFoto[s];
-    return fotoBuang(id);
+    return Promise.resolve(true);
   }
 
   function clone(o) {

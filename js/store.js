@@ -81,12 +81,22 @@ var Store = (function () {
   }
 
   // Muat sekumpulan data dari cloud ke penyimpanan lokal.
-  // Berbeda dari tulis biasa: selalu memberi tahu pendengar (notify) agar
-  // halaman yang sedang terbuka (mis. landing page) ikut render ulang —
-  // tanpa ini, data cloud datang diam-diam dan tampilan tetap "0".
+  // Berbeda dari tulis biasa: (1) memberi tahu pendengar (notify) agar
+  // halaman yang sedang terbuka ikut render ulang; (2) data lokal yang belum
+  // ada di cloud TIDAK dibuang (mencegah akun/data hilang saat sinkron).
   function muatDariLuar(collection, items) {
+    var datang = Array.isArray(items) ? items : [];
+    var lokal = read(collection);
+    var ada = {};
+    datang.forEach(function (it) {
+      if (it && it.id) ada[it.id] = true;
+    });
+    var gabung = datang.slice();
+    lokal.forEach(function (it) {
+      if (it && it.id && !ada[it.id]) gabung.push(it);
+    });
     try {
-      localStorage.setItem(key(collection), JSON.stringify(Array.isArray(items) ? items : []));
+      localStorage.setItem(key(collection), JSON.stringify(gabung));
     } catch (e) {
       return false;
     }

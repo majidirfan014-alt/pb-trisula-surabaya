@@ -315,15 +315,21 @@ var PagesPublic = (function () {
 
   function renderSummary() {
     // Angka publik: utamakan dokumen ringkasan (bisa dibaca lintas perangkat
-    // tanpa membuka data pribadi); cadangan: hitung dari data lokal.
+    // tanpa membuka data pribadi); cadangan: hitung dari data lokal — dan
+    // jumlah atlet juga dihitung dari koleksi athletes agar tetap benar
+    // walau data akun pengguna belum lengkap.
     var ringkasan = (typeof LandingStore !== 'undefined' && LandingStore && LandingStore.ambilRingkasan)
       ? LandingStore.ambilRingkasan() : null;
     var users = Store.all('users');
+    var atletDariUsers = users.filter(function (u) {
+      return u.role === 'atlet' && u.status !== 'nonaktif';
+    }).length;
+    var atletDariData = Store.count('athletes', function (a) {
+      return a.status !== 'nonaktif';
+    });
     var totalAtlet = (ringkasan && ringkasan.jumlahAtlet !== undefined)
       ? Number(ringkasan.jumlahAtlet) || 0
-      : users.filter(function (u) {
-        return u.role === 'atlet' && u.status !== 'nonaktif';
-      }).length;
+      : Math.max(atletDariUsers, atletDariData);
     var totalAsisten = (ringkasan && ringkasan.jumlahAsisten !== undefined)
       ? Number(ringkasan.jumlahAsisten) || 0
       : users.filter(function (u) {
@@ -333,13 +339,8 @@ var PagesPublic = (function () {
     countUp(document.getElementById('summary-total-atlet'), totalAtlet);
     countUp(document.getElementById('summary-total-asisten'), totalAsisten);
 
-    var totalAtlet2 = (ringkasan && ringkasan.jumlahAtlet !== undefined)
-      ? totalAtlet
-      : Store.count('athletes', function (a) {
-        return a.status !== 'nonaktif';
-      });
     var elTotal2 = document.getElementById('summary-total-atlet-2');
-    if (elTotal2) elTotal2.textContent = String(totalAtlet2);
+    if (elTotal2) elTotal2.textContent = String(totalAtlet);
 
     var elJadwal2 = document.getElementById('summary-jadwal-2');
     if (elJadwal2) elJadwal2.textContent = 'Selasa & Jumat';
