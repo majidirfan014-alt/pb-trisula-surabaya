@@ -228,6 +228,10 @@ var PagesPublic = (function () {
       img.style.display = 'none';
       return;
     }
+    // Tampilkan kembali bila render awal menyembunyikan (cache foto belum
+    // siap saat render pertama). Tanpa baris ini gambar tetap display:none
+    // walau src benar, dan gambar lazy tidak pernah dimuat.
+    img.style.display = '';
     img.alt = alt || ALT_FOTO;
     function siap() {
       img.classList.add('siap');
