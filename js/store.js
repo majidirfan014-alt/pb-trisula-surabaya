@@ -80,6 +80,21 @@ var Store = (function () {
     return item;
   }
 
+  // Muat sekumpulan data dari cloud ke penyimpanan lokal.
+  // Berbeda dari tulis biasa: selalu memberi tahu pendengar (notify) agar
+  // halaman yang sedang terbuka (mis. landing page) ikut render ulang —
+  // tanpa ini, data cloud datang diam-diam dan tampilan tetap "0".
+  function muatDariLuar(collection, items) {
+    try {
+      localStorage.setItem(key(collection), JSON.stringify(Array.isArray(items) ? items : []));
+    } catch (e) {
+      return false;
+    }
+    notify(collection);
+    notify('*');
+    return true;
+  }
+
   function update(collection, id, patch) {
     var items = read(collection);
     for (var i = 0; i < items.length; i++) {
@@ -263,6 +278,7 @@ var Store = (function () {
     find: find,
     findOne: findOne,
     insert: insert,
+    muatDariLuar: muatDariLuar,
     update: update,
     upsert: upsert,
     remove: remove,

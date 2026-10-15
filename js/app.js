@@ -365,6 +365,16 @@ var App = (function () {
       LandingStore.hidupkan();
     }
 
+    // Perbarui ringkasan publik (jumlah atlet & asisten untuk landing page)
+    // setiap kali data pengguna berubah, dan sekali saat awal.
+    if (typeof LandingStore !== 'undefined' && LandingStore && LandingStore.hitungRingkasanDariPengguna) {
+      try {
+        LandingStore.hitungRingkasanDariPengguna();
+        subscribe('users', LandingStore.hitungRingkasanDariPengguna);
+        subscribe('athletes', LandingStore.hitungRingkasanDariPengguna);
+      } catch (e) {}
+    }
+
     PagesCoach.register();
     PagesAssistant.register();
     PagesAthlete.register();

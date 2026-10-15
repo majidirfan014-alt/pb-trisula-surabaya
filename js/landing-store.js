@@ -917,7 +917,7 @@ var LandingStore = (function () {
       tampung(g, 'file', ['galeri', i, 'file']);
     });
     if (mentah.merek) tampung(mentah.merek, 'logo', ['merek', 'logo']);
-    if (!daftar.length) return Promise.resolve({ sukses: 0, gagal: 0, pesan: 'Tidak ada foto lokal yang perlu disinkronkan.' });
+    if (!daftar.length) return Promise.resolve({ sukses: 0, gagal: 0, pesan: 'Semua foto sudah tersinkron.', semua: true });
 
     var sukses = 0;
     var gagal = 0;
@@ -996,6 +996,77 @@ var LandingStore = (function () {
     simpan(hasil);
   }
 
+  /* ---------- ringkasan publik (jumlah atlet & asisten) ----------
+     Landing page hanya boleh menampilkan JUMLAH (bukan data pribadi), dan
+     pengunjung publik tidak perlu membaca koleksi users. Hitungan disimpan
+     sebagai dokumen publik "landing/ringkasan" + salinan lokal, diperbarui
+     otomatis oleh dashboard saat data pengguna berubah. */
+
+  var KEY_RINGKASAN = CONFIG.PREFIX + 'ringkasan';
+
+  function simpanRingkasan(isi) {
+    var data = {
+      jumlahAtlet: Number(isi && isi.jumlahAtlet) || 0,
+      jumlahAsisten: Number(isi && isi.jumlahAsisten) || 0,
+      diperbarui: new Date().toISOString()
+    };
+    try {
+      localStorage.setItem(KEY_RINGKASAN, JSON.stringify(data));
+    } catch (e) {}
+    try {
+      if (typeof Cloud !== 'undefined' && Cloud && typeof Cloud.ringkasanTulis === 'function') {
+        Promise.resolve(Cloud.ringkasanTulis(data)).then(function () {}, function () {});
+      }
+    } catch (e) {}
+    notify();
+    return data;
+  }
+
+  function ambilRingkasan() {
+    try {
+      var raw = localStorage.getItem(KEY_RINGKASAN);
+      return raw ? JSON.parse(raw) : null;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  // Muat ringkasan dari Firestore (publik) -> simpan lokal -> beri tahu
+  // halaman agar render ulang. Dipanggil saat boot landing page.
+  function muatRingkasan() {
+    if (typeof Cloud === 'undefined' || !Cloud || typeof Cloud.ringkasanBaca !== 'function') {
+      return Promise.resolve(ambilRingkasan());
+    }
+    return Promise.resolve(Cloud.ringkasanBaca()).then(function (data) {
+      if (data && (data.jumlahAtlet !== undefined || data.jumlahAsisten !== undefined)) {
+        try {
+          localStorage.setItem(KEY_RINGKASAN, JSON.stringify(data));
+        } catch (e) {}
+        notify();
+      }
+      return ambilRingkasan();
+    }, function () {
+      return ambilRingkasan();
+    });
+  }
+
+  // Hitung ringkasan dari data pengguna lokal (dipakai dashboard untuk
+  // memperbarui angka publik setiap kali pengguna berubah).
+  function hitungRingkasanDariPengguna() {
+    var users = [];
+    try {
+      users = Store.all('users');
+    } catch (e) {}
+    var atlet = 0;
+    var asisten = 0;
+    users.forEach(function (u) {
+      if (!u || u.status === 'nonaktif') return;
+      if (u.role === 'atlet') atlet++;
+      else if (u.role === 'asisten') asisten++;
+    });
+    return simpanRingkasan({ jumlahAtlet: atlet, jumlahAsisten: asisten });
+  }
+
   return {
     defaults: defaults,
     get: get,
@@ -1012,6 +1083,10 @@ var LandingStore = (function () {
     hapusFotoRef: hapusFotoRef,
     hidupkan: hidupkan,
     simpanDariCloud: simpanDariCloud,
+    simpanRingkasan: simpanRingkasan,
+    ambilRingkasan: ambilRingkasan,
+    muatRingkasan: muatRingkasan,
+    hitungRingkasanDariPengguna: hitungRingkasanDariPengguna,
     validasiEmail: validasiEmail,
     validasiUrl: validasiUrl,
     validasiTelepon: validasiTelepon,

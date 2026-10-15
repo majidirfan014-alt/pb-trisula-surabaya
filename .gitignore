@@ -13,3 +13,8 @@ desktop.ini
 # Dataset hasil generate (berisi hash sandi demo) - dibuat ulang lewat
 # tools/gen-dataset.js, tidak perlu masuk repository publik
 tools/firestore-data.json
+
+# Foto uji-coba unggah yang tersimpan di root proyek (bukan aset repo)
+WhatsApp Image*.jpeg
+WhatsApp Image*.jpg
+WhatsApp Image*.png

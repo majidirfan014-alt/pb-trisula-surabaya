@@ -19,6 +19,7 @@ var PagesLanding = (function () {
   function tandaiBelumSimpan() {
     belumSimpan = true;
     App.setDirty(true);
+    perbaruiStatusSimpan();
   }
 
   function clone(o) {
@@ -45,10 +46,24 @@ var PagesLanding = (function () {
     return '<div class="sticky-save lp-simpan">' +
       '<div class="flex flex-wrap gap-1 items-center justify-between">' +
       '<button type="button" class="btn btn-sm btn-ghost" data-lp-reset>Kembalikan ke Default</button>' +
-      '<div class="flex gap-1">' +
+      '<div class="flex gap-1 items-center">' +
+      '<span class="lp-status-simpan" data-lp-status>' + UI.icon('check', 16) + ' Tersimpan</span>' +
       '<button type="button" class="btn btn-sm btn-ghost" data-lp-batal>Batalkan</button>' +
       '<button type="button" class="btn btn-sm" data-lp-simpan>' + UI.icon('save', 18) + ' Simpan Perubahan</button>' +
       '</div></div></div>';
+  }
+
+  // Perbarui label status simpan (Tersimpan / Belum disimpan).
+  function perbaruiStatusSimpan() {
+    var el = document.querySelector('[data-lp-status]');
+    if (!el) return;
+    if (belumSimpan) {
+      el.className = 'lp-status-simpan belum';
+      el.innerHTML = UI.icon('alert', 16) + ' Belum disimpan';
+    } else {
+      el.className = 'lp-status-simpan';
+      el.innerHTML = UI.icon('check', 16) + ' Tersimpan';
+    }
   }
 
   var IKON_UNGGAH = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 16V4"/><path d="M7 9l5-5 5 5"/><path d="M4 17v2a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-2"/></svg>';
@@ -625,8 +640,15 @@ var PagesLanding = (function () {
       if (sukses) tandaiBelumSimpan();
       renderTab();
       var totalSukses = sukses + (hasil ? hasil.sukses : 0);
+      var totalGagal = (hasil ? hasil.gagal : 0) + (galatTerakhir ? 1 : 0);
       if (totalSukses) {
-        Utils.toast(totalSukses + ' foto berhasil disinkronkan ke cloud.', 'success');
+        Utils.toast(totalSukses + ' foto berhasil disinkronkan ke cloud.' +
+          (totalGagal ? ' ' + totalGagal + ' gagal.' : ''), totalGagal ? 'info' : 'success');
+      } else if (!antre.length && hasil && hasil.semua) {
+        // Bukan error — memang tidak ada yang perlu disinkronkan.
+        Utils.toast('Semua foto sudah tersinkron.', 'info');
+      } else if (!antre.length && !hasil) {
+        Utils.toast('Semua foto sudah tersinkron.', 'info');
       } else {
         Utils.toast('Gagal sinkron ke cloud: ' + (galatTerakhir || (hasil && hasil.pesan) || 'tidak diketahui'), 'danger');
       }
@@ -924,6 +946,7 @@ var PagesLanding = (function () {
       draft = LandingStore.get();
       belumSimpan = false;
       App.setDirty(false);
+      perbaruiStatusSimpan();
       Utils.toast('Perubahan berhasil disimpan', 'success');
       renderTab();
     } catch (e) {
@@ -945,6 +968,7 @@ var PagesLanding = (function () {
     }
       belumSimpan = false;
       App.setDirty(false);
+      perbaruiStatusSimpan();
     renderTab();
     Utils.toast('Perubahan dibatalkan.', 'info');
   }
@@ -985,6 +1009,7 @@ var PagesLanding = (function () {
       tersimpan = LandingStore.get();
       belumSimpan = false;
       App.setDirty(false);
+      perbaruiStatusSimpan();
       Utils.toast('Perubahan berhasil disimpan', 'success');
       renderTab();
     });
@@ -1122,6 +1147,7 @@ var PagesLanding = (function () {
 
     body.innerHTML = html;
     pasangGambarLP(body);
+    perbaruiStatusSimpan();
   }
 
   return {

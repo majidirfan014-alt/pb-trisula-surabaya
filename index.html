@@ -7,7 +7,7 @@
   <meta name="description" content="Website monitoring atlet PB Trisula Surabaya: kehadiran, tes fisik, logbook latihan, dan hasil pertandingan.">
   <link rel="icon" type="image/png" href="assets/favicon.png">
   <title>PB TRISULA SURABAYA — Monitoring Atlet</title>
-  <link rel="stylesheet" href="css/style.css?v=4">
+  <link rel="stylesheet" href="css/style.css?v=5">
 </head>
 <body>
 
@@ -250,23 +250,25 @@
     </div>
   </footer>
 
-  <script src="js/config.js?v=4"></script>
-  <script src="js/utils.js?v=4"></script>
-  <script src="js/store.js?v=4"></script>
-  <script src="js/auth.js?v=4"></script>
-  <script src="js/ui.js?v=4"></script>
-  <script src="js/landing-store.js?v=4"></script>
-  <script src="js/cloud.js?v=4"></script>
-  <script src="js/pages-public.js?v=4"></script>
+  <script src="js/config.js?v=5"></script>
+  <script src="js/utils.js?v=5"></script>
+  <script src="js/store.js?v=5"></script>
+  <script src="js/auth.js?v=5"></script>
+  <script src="js/ui.js?v=5"></script>
+  <script src="js/landing-store.js?v=5"></script>
+  <script src="js/cloud.js?v=5"></script>
+  <script src="js/pages-public.js?v=5"></script>
   <script>
     (function () {
       var jalan = false;
       function boot() {
         if (jalan) return;
         jalan = true;
-        // Muat foto landing dari IndexedDB (referensi) sebelum render.
-        if (typeof LandingStore !== 'undefined' && LandingStore && LandingStore.hidupkan) {
-          LandingStore.hidupkan();
+        // Muat foto landing dari IndexedDB/Firebase (referensi) + ringkasan
+        // publik (jumlah atlet & asisten) sebelum render.
+        if (typeof LandingStore !== 'undefined' && LandingStore) {
+          if (LandingStore.hidupkan) LandingStore.hidupkan();
+          if (LandingStore.muatRingkasan) LandingStore.muatRingkasan();
         }
         PagesPublic.init();
         Store.init();

@@ -245,17 +245,16 @@ var PagesPublic = (function () {
     var cfgK = cfg().kolase || [];
     var cfgG = cfg().galeri || [];
     var defK = (CONFIG.LANDING_DEFAULT || {}).kolase || [];
-    // Slot hero mengambil foto dari data galeri secara otomatis (urut sesuai
-    // urutan unggah); bila galeri belum cukup, pakai foto kolase yang diatur
-    // manual; sisanya tampil placeholder bersih.
+    // Slot hero mengikuti tab "Foto Kolase Hero" di dashboard; bila slot
+    // kolase kosong, foto galeri (urut unggah) dipakai sebagai pengisi.
     function isiSlot(i) {
+      var item = cfgK[i] || {};
+      if (item.file && String(item.file).trim()) return item;
       var g = cfgG[i] || {};
       var gFile = g.src || g.file;
       if (gFile && String(gFile).trim()) {
         return { file: gFile, alt: g.judul || g.keterangan || '', caption: g.keterangan || '' };
       }
-      var item = cfgK[i] || {};
-      if (item.file && String(item.file).trim()) return item;
       var fallback = defK[i] || {};
       if (fallback.file) return { file: fallback.file, alt: item.alt || fallback.alt, caption: item.caption || fallback.caption };
       return item;
@@ -315,20 +314,30 @@ var PagesPublic = (function () {
   }
 
   function renderSummary() {
+    // Angka publik: utamakan dokumen ringkasan (bisa dibaca lintas perangkat
+    // tanpa membuka data pribadi); cadangan: hitung dari data lokal.
+    var ringkasan = (typeof LandingStore !== 'undefined' && LandingStore && LandingStore.ambilRingkasan)
+      ? LandingStore.ambilRingkasan() : null;
     var users = Store.all('users');
-    var totalAtlet = users.filter(function (u) {
-      return u.role === 'atlet' && u.status !== 'nonaktif';
-    }).length;
-    var totalAsisten = users.filter(function (u) {
-      return u.role === 'asisten' && u.status !== 'nonaktif';
-    }).length;
+    var totalAtlet = (ringkasan && ringkasan.jumlahAtlet !== undefined)
+      ? Number(ringkasan.jumlahAtlet) || 0
+      : users.filter(function (u) {
+        return u.role === 'atlet' && u.status !== 'nonaktif';
+      }).length;
+    var totalAsisten = (ringkasan && ringkasan.jumlahAsisten !== undefined)
+      ? Number(ringkasan.jumlahAsisten) || 0
+      : users.filter(function (u) {
+        return u.role === 'asisten' && u.status !== 'nonaktif';
+      }).length;
 
     countUp(document.getElementById('summary-total-atlet'), totalAtlet);
     countUp(document.getElementById('summary-total-asisten'), totalAsisten);
 
-    var totalAtlet2 = Store.count('athletes', function (a) {
-      return a.status !== 'nonaktif';
-    });
+    var totalAtlet2 = (ringkasan && ringkasan.jumlahAtlet !== undefined)
+      ? totalAtlet
+      : Store.count('athletes', function (a) {
+        return a.status !== 'nonaktif';
+      });
     var elTotal2 = document.getElementById('summary-total-atlet-2');
     if (elTotal2) elTotal2.textContent = String(totalAtlet2);
 

@@ -361,6 +361,48 @@ var Cloud = (function () {
     });
   }
 
+  /* ---------- ringkasan publik: jumlah atlet & asisten ----------
+     Dokumen "landing/ringkasan" hanya berisi ANGKA (tanpa data pribadi),
+     bisa dibaca pengunjung tanpa login, diperbarui oleh dashboard. */
+  function dbLanding(namaDok) {
+    return muatSdk().then(function (ok) {
+      if (!ok || typeof window.firebase === 'undefined' || !window.firebase || !window.firebase.firestore) {
+        throw galat('sdk', 'Layanan cloud tidak tersedia.');
+      }
+      return window.firebase.firestore().collection('landing').doc(namaDok);
+    });
+  }
+
+  function ringkasanTulis(data) {
+    return dbLanding('ringkasan').then(function (doc) {
+      return doc.set({
+        jumlahAtlet: Number(data && data.jumlahAtlet) || 0,
+        jumlahAsisten: Number(data && data.jumlahAsisten) || 0,
+        diperbarui: new Date().toISOString()
+      });
+    }).then(function () {
+      return true;
+    }).catch(function (e) {
+      throw terjemahkanGalatFirestore(e);
+    });
+  }
+
+  function ringkasanBaca() {
+    return dbLanding('ringkasan').then(function (doc) {
+      return doc.get();
+    }).then(function (snap) {
+      if (!snap || !snap.exists) return null;
+      var d = snap.data() || {};
+      return {
+        jumlahAtlet: Number(d.jumlahAtlet) || 0,
+        jumlahAsisten: Number(d.jumlahAsisten) || 0,
+        diperbarui: d.diperbarui || ''
+      };
+    }).catch(function () {
+      return null;
+    });
+  }
+
   function unggahFoto(file, folder) {
     return unggah(file, folder || 'foto', function (f) {
       return validasiGambar(f, MAKS_FOTO);
@@ -479,8 +521,14 @@ var Cloud = (function () {
     KOLEKSI_SINKRON.forEach(function (nama) {
       koleksiMuat(nama).then(function (rows) {
         if (!rows || !rows.length) return;
+        // Tulis lewat Store agar pendengar (renderSummary landing page,
+        // tabel dashboard, dst.) ikut diperbarui — bukan localStorage polos.
         try {
-          localStorage.setItem(CONFIG.PREFIX + nama, JSON.stringify(rows));
+          if (typeof Store !== 'undefined' && Store && typeof Store.muatDariLuar === 'function') {
+            Store.muatDariLuar(nama, rows);
+          } else {
+            localStorage.setItem(CONFIG.PREFIX + nama, JSON.stringify(rows));
+          }
         } catch (e) {}
         // Data cloud bisa saja masih memuat akun admin lama atau sisa data
         // contoh; jalankan lagi migrasi & pembersihan agar hasilnya tersimpan
@@ -626,6 +674,8 @@ var Cloud = (function () {
     fotoDbSimpan: fotoDbSimpan,
     fotoDbSemua: fotoDbSemua,
     fotoDbHapus: fotoDbHapus,
+    ringkasanTulis: ringkasanTulis,
+    ringkasanBaca: ringkasanBaca,
     validasiGambar: validasiGambar,
     validasiBerkas: validasiBerkas,
     unggahFoto: unggahFoto,
