@@ -34,6 +34,7 @@ var Cloud = (function () {
   var janjiSiap = null;
   var sudahSinkron = false;
   var sudahMigrasi = false;
+  var sudahInit = false;    // initializeApp sudah pernah dijalankan
   var galatMuat = '';       // penyebab SDK/init gagal (asli)
   var galatAuth = '';       // penyebab auth anonim gagal (asli)
 
@@ -77,6 +78,31 @@ var Cloud = (function () {
       window.firebase.storage && window.firebase.firestore;
   }
 
+  // Pastikan aplikasi Firebase sudah diinisialisasi + transport tahan
+  // jaringan (auto-detect long-polling). Aman dipanggil berulang.
+  function siapkanApp() {
+    return new Promise(function (resolve, reject) {
+      try {
+        if (!window.firebase.apps || !window.firebase.apps.length) {
+          window.firebase.initializeApp(KONFIG);
+        }
+      } catch (e) {
+        reject(e);
+        return;
+      }
+      if (!sudahInit) {
+        try {
+          // Transport bawaan (WebChannel) bisa diblokir/ditahan jaringan
+          // (browser HP, proxy, pemblokir iklan) sehingga baca Firestore
+          // diam-diam kosong ("client is offline"). Long-polling = jalur cadangan.
+          window.firebase.firestore().settings({ experimentalAutoDetectLongPolling: true }, true);
+        } catch (e2) {}
+        sudahInit = true;
+      }
+      resolve();
+    });
+  }
+
   function validasiKONFIG() {
     var kurang = [];
     ['apiKey', 'authDomain', 'projectId', 'storageBucket', 'appId'].forEach(function (k) {
@@ -88,7 +114,9 @@ var Cloud = (function () {
   function muatSdk() {
     if (sdkTersedia()) {
       status = 'siap';
-      return Promise.resolve(true);
+      return siapkanApp().then(function () {
+        return true;
+      });
     }
     if (janjiSiap) return janjiSiap;
     status = 'memuat';
@@ -118,17 +146,14 @@ var Cloud = (function () {
       var indeks = 0;
       function berikutnya() {
         if (indeks >= berkas.length) {
-          try {
-            if (!window.firebase.apps || !window.firebase.apps.length) {
-              window.firebase.initializeApp(KONFIG);
-            }
+          siapkanApp().then(function () {
             status = 'siap';
             akhir(true);
-          } catch (e) {
+          }, function (e) {
             status = 'gagal';
             galatMuat = 'initializeApp gagal: ' + ((e && e.message) || e);
             akhir(false);
-          }
+          });
           return;
         }
         var nama = berkas[indeks++];
@@ -345,7 +370,10 @@ var Cloud = (function () {
         if (data.data) out.push({ id: d.id, data: data.data });
       });
       return out;
-    }).catch(function () {
+    }).catch(function (e) {
+      try {
+        console.warn('[Cloud] gagal memuat foto dari Firestore:', (e && (e.code || e.message)) || e);
+      } catch (e2) {}
       return [];
     });
   }
@@ -549,10 +577,18 @@ var Cloud = (function () {
     koleksiMuat('landing').then(function (rows) {
       if (!rows || !rows.length) return;
       try {
-        // Dokumen cloud berbentuk { id: 'config', isi: {...} }; yang dipakai
-        // aplikasi adalah objek di dalamnya. Jangan simpan bungkusnya —
-        // dulu kesalahan ini membuat foto & pengaturan landing hilang.
-        var isi = rows[0] && rows[0].isi ? rows[0].isi : rows[0];
+        // Koleksi "landing" bisa memuat beberapa dokumen (config + ringkasan).
+        // Ambil dokumen konfigurasi yang benar (yang punya isi/bernama config).
+        var cfgRow = null;
+        rows.forEach(function (r) {
+          if (!cfgRow && r && r.isi) cfgRow = r;
+        });
+        if (!cfgRow) {
+          rows.forEach(function (r) {
+            if (!cfgRow && r && r.id === 'config') cfgRow = r;
+          });
+        }
+        var isi = cfgRow ? (cfgRow.isi || cfgRow) : rows[0];
         if (typeof LandingStore !== 'undefined' && LandingStore && LandingStore.simpanDariCloud) {
           LandingStore.simpanDariCloud(isi);
         } else {
