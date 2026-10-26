@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0b3d91">
+  <meta name="description" content="Modul Ekstrakurikuler Bulutangkis Sekolah — PB Trisula Surabaya.">
+  <link rel="icon" type="image/png" href="assets/favicon.png">
+  <title>Ekstrakurikuler — PB TRISULA SURABAYA</title>
+  <link rel="stylesheet" href="css/style.css?v=8">
+  <link rel="stylesheet" href="css/ekskul.css?v=3">
+</head>
+<body>
+  <div class="auth-wrap">
+    <header class="topbar" style="background:transparent;border:none">
+      <a class="brand" href="index.html" style="color:#fff">
+        <img class="brand-logo" src="assets/logo-pb-trisula.png" alt="Logo PB Trisula Surabaya" width="46" height="46">
+        <div class="brand-text" style="color:#fff">PB TRISULA SURABAYA<small style="color:rgba(255,255,255,.75)">Ekstrakurikuler</small></div>
+      </a>
+      <a class="btn btn-sm btn-light" href="index.html">Beranda</a>
+    </header>
+
+    <main class="auth-main">
+      <div class="auth-card">
+        <div class="back-bar">
+          <button type="button" class="btn-back" data-pub-back="index.html">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5"/><path d="M11 6l-6 6 6 6"/></svg>
+            <span>Kembali</span>
+          </button>
+        </div>
+
+        <div class="auth-head">
+          <img class="brand-logo brand-logo-lg" src="assets/logo-pb-trisula.png" alt="Logo PB Trisula Surabaya" width="56" height="56">
+          <h1>Ekstrakurikuler Bulutangkis</h1>
+          <p>Pilih langkah Anda untuk masuk ke modul Ekstrakurikuler.</p>
+        </div>
+
+        <div class="pilih-grid">
+          <a class="pilih-kartu" href="ekskul-login.html">
+            <span class="pilih-ikon">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><path d="M10 17l5-5-5-5"/><path d="M15 12H3"/></svg>
+            </span>
+            <b>Masuk</b>
+            <span>Untuk Superadmin, Sekolah, Guru Sekolah, dan Siswa/Siswi yang sudah punya akun.</span>
+          </a>
+          <a class="pilih-kartu accent" href="ekskul-daftar.html">
+            <span class="pilih-ikon">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/><path d="M9 7h6"/><path d="M9 11h6"/></svg>
+            </span>
+            <b>Daftar</b>
+            <span>Pendaftaran sekolah baru atau pendaftaran siswa/siswi sekolah (dapat akun login).</span>
+          </a>
+        </div>
+
+        <div class="seed-box mt-2">
+          <button type="button" class="btn btn-sm btn-secondary btn-block" id="btn-seed">Muat Data Contoh (Demo)</button>
+          <p class="hint-kecil mt-1 mb-0">Membuat 3 sekolah, 3 guru, 2 pelatih, dan 15 siswa/siswi (semua akun login siap pakai) beserta nilai, absensi, dan pertandingan contoh agar hasil dashboard langsung terlihat. Data nyata tidak ditimpa.</p>
+          <div id="seed-info" hidden></div>
+        </div>
+
+        <div class="auth-foot">
+          <a href="index.html">← Kembali ke beranda</a>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <script src="js/utils.js?v=8"></script>
+  <script src="js/ekskul-store.js?v=3"></script>
+  <script src="js/ekskul-seed.js?v=3"></script>
+  <script>
+    (function () {
+      function bindBack() {
+        document.querySelectorAll('[data-pub-back]').forEach(function (btn) {
+          btn.addEventListener('click', function () {
+            window.location.href = btn.getAttribute('data-pub-back');
+          });
+        });
+      }
+
+      function tampilkanHasil(hasil, gulir) {
+        var info = document.getElementById('seed-info');
+        var btn = document.getElementById('btn-seed');
+        if (!info || !btn) return;
+        var html = '<div class="pesan-panel ' + (hasil.sudah ? 'err' : 'ok') + '">' +
+          '<b>' + (hasil.sudah ? 'Data contoh sudah ada sebelumnya.' : 'Data contoh berhasil dimuat!') + '</b>' +
+          (hasil.sudah
+            ? 'Akun di bawah sudah bisa dipakai masuk.'
+            : 'Gunakan akun berikut untuk mencoba masuk sebagai sekolah atau siswa/siswi.') +
+          '</div>' +
+          '<div class="table-wrap mt-1"><table class="table"><thead><tr>' +
+          '<th>Peran</th><th>Nama</th><th>Nama Pengguna</th><th>Kata Sandi</th>' +
+          '</tr></thead><tbody>' +
+          hasil.akun.map(function (a) {
+            return '<tr><td>' + Utils.esc(a.peran) + '</td><td>' + Utils.esc(a.nama) +
+              '</td><td><code>' + Utils.esc(a.username) + '</code></td><td><code>' + Utils.esc(a.password) + '</code></td></tr>';
+          }).join('') +
+          '</tbody></table></div>' +
+          '<p class="hint-kecil mt-1 mb-0">Buka <a href="ekskul-login.html">halaman Masuk</a> untuk mencoba akun di atas.</p>';
+        info.hidden = false;
+        info.innerHTML = html;
+        btn.textContent = hasil.sudah ? 'Data Contoh Sudah Dimuat' : 'Data Contoh Dimuat';
+        if (gulir) info.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      }
+
+      function muatContoh() {
+        var btn = document.getElementById('btn-seed');
+        var info = document.getElementById('seed-info');
+        if (!btn || !info || btn.disabled) return;
+        btn.disabled = true;
+        btn.textContent = 'Menyiapkan data contoh...';
+        EkskulSeed.muat().then(function (hasil) { tampilkanHasil(hasil, true); }, function (err) {
+          info.hidden = false;
+          info.innerHTML = '<div class="pesan-panel err"><b>Gagal memuat data contoh.</b>' +
+            Utils.esc(err && err.message ? err.message : String(err)) + '</div>';
+          btn.disabled = false;
+          btn.textContent = 'Muat Data Contoh (Demo)';
+        });
+      }
+
+      function sudahAdaDataContoh() {
+        try {
+          return localStorage.getItem(EkskulConfig.PREFIX + 'seed_v2') === '1';
+        } catch (e) {
+          return false;
+        }
+      }
+
+      function bindSeed() {
+        var btn = document.getElementById('btn-seed');
+        if (!btn) return;
+        btn.addEventListener('click', muatContoh);
+      }
+
+      function boot() {
+        bindBack();
+        bindSeed();
+        // Muat data contoh otomatis begitu halaman dibuka; bila sudah ada,
+        // langsung tampilkan daftar akunnya tanpa diproses ulang.
+        if (sudahAdaDataContoh()) {
+          tampilkanHasil({ sudah: true, akun: EkskulSeed.daftarAkun() });
+        } else {
+          muatContoh();
+        }
+      }
+      if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot);
+      else boot();
+    })();
+  </script>
+</body>
+</html>

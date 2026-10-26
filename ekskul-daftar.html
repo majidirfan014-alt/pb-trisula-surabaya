@@ -1,0 +1,420 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0b3d91">
+  <link rel="icon" type="image/png" href="assets/favicon.png">
+  <title>Daftar Ekstrakurikuler — PB TRISULA SURABAYA</title>
+  <link rel="stylesheet" href="css/style.css?v=8">
+  <link rel="stylesheet" href="css/ekskul.css?v=3">
+</head>
+<body>
+  <div class="auth-wrap">
+    <header class="topbar" style="background:transparent;border:none">
+      <a class="brand" href="index.html" style="color:#fff">
+        <img class="brand-logo" src="assets/logo-pb-trisula.png" alt="Logo PB Trisula Surabaya" width="46" height="46">
+        <div class="brand-text" style="color:#fff">PB TRISULA SURABAYA<small style="color:rgba(255,255,255,.75)">Ekstrakurikuler</small></div>
+      </a>
+      <a class="btn btn-sm btn-light" href="ekskul-login.html">Masuk</a>
+    </header>
+
+    <main class="auth-main">
+      <div class="auth-card wide" id="eks-daftar-wrap">
+        <div class="back-bar">
+          <button type="button" class="btn-back" data-pub-back="ekskul.html">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5"/><path d="M11 6l-6 6 6 6"/></svg>
+            <span>Kembali</span>
+          </button>
+        </div>
+
+        <div class="auth-head">
+          <img class="brand-logo brand-logo-lg" src="assets/logo-pb-trisula.png" alt="Logo PB Trisula Surabaya" width="56" height="56">
+          <span class="eks-badge">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
+            Ekstrakurikuler Bulutangkis
+          </span>
+          <h1 id="eks-daftar-judul">Pendaftaran Ekstrakurikuler</h1>
+          <p id="eks-daftar-sub">Pilih tab pendaftaran sesuai kebutuhan Anda.</p>
+        </div>
+
+        <div class="tabs" role="tablist" id="eks-tab">
+          <button type="button" class="tab active" data-mode="sekolah" role="tab">Daftar Sekolah</button>
+          <button type="button" class="tab" data-mode="siswa" role="tab">Daftar Siswa/Siswi</button>
+        </div>
+
+        <div id="eks-sukses" hidden></div>
+
+        <!-- ===== Tab: Daftar Sekolah ===== -->
+        <form id="eks-form-sekolah" novalidate>
+          <div class="field">
+            <label class="label" for="sk-nama">Nama Sekolah <span class="req">*</span></label>
+            <input class="input" type="text" id="sk-nama" name="nama" placeholder="contoh: SMPN 5 Surabaya" required>
+            <div class="field-error" data-error-for="nama"></div>
+          </div>
+          <div class="field">
+            <label class="label" for="sk-alamat">Alamat Sekolah <span class="req">*</span></label>
+            <input class="input" type="text" id="sk-alamat" name="alamat" placeholder="Jalan, nomor, kecamatan, kota" required>
+            <div class="field-error" data-error-for="alamat"></div>
+          </div>
+          <div class="form-grid cols-2">
+            <div class="field">
+              <label class="label" for="sk-username">Nama Pengguna <span class="req">*</span></label>
+              <input class="input" type="text" id="sk-username" name="username" autocomplete="off" placeholder="untuk masuk ke akun sekolah" required>
+              <div class="help">Harus unik, tidak dipakai sekolah/guru lain.</div>
+              <div class="field-error" data-error-for="username"></div>
+            </div>
+            <div class="field">
+              <label class="label" for="sk-password">Kata Sandi <span class="req">*</span></label>
+              <div class="pw-wrap">
+                <input class="input" type="password" id="sk-password" name="password" autocomplete="new-password" required>
+                <button type="button" class="pw-toggle" data-pw-toggle="sk-password">Lihat</button>
+              </div>
+              <div class="help">Minimal 6 karakter.</div>
+              <div class="field-error" data-error-for="password"></div>
+            </div>
+          </div>
+          <div class="field">
+            <label class="label" for="sk-password2">Ulangi Kata Sandi <span class="req">*</span></label>
+            <input class="input" type="password" id="sk-password2" name="password2" autocomplete="new-password" required>
+            <div class="field-error" data-error-for="password2"></div>
+          </div>
+          <button class="btn btn-block" type="submit">Daftarkan Sekolah</button>
+          <p class="hint-kecil mt-2 mb-0">Setelah mendaftar, akun berstatus <b>Menunggu Persetujuan</b> dan baru bisa dipakai masuk setelah disetujui Superadmin.</p>
+        </form>
+
+        <!-- ===== Tab: Daftar Siswa/Siswi ===== -->
+        <form id="eks-form-siswa" hidden novalidate>
+          <div class="form-grid cols-2">
+            <div class="field">
+              <label class="label" for="sw-nama">Nama <span class="req">*</span></label>
+              <input class="input" type="text" id="sw-nama" name="nama" placeholder="Nama lengkap siswa/siswi" required>
+              <div class="field-error" data-error-for="nama"></div>
+            </div>
+            <div class="field">
+              <label class="label" for="sw-kelas">Kelas <span class="req">*</span></label>
+              <input class="input" type="text" id="sw-kelas" name="kelas" placeholder="contoh: 8A" required>
+              <div class="field-error" data-error-for="kelas"></div>
+            </div>
+          </div>
+          <div class="field">
+            <label class="label" for="sw-cari-sekolah">Asal Sekolah <span class="req">*</span></label>
+            <p class="hint-kecil">Ketik nama sekolah untuk mencari, lalu pilih dari daftar.</p>
+            <input class="input" type="search" id="sw-cari-sekolah" placeholder="Cari sekolah yang sudah disetujui..." autocomplete="off">
+            <div class="combo-hasil" id="sw-daftar-sekolah" hidden></div>
+            <input type="hidden" id="sw-sekolah-id" value="">
+            <div class="help" id="sw-sekolah-terpilih">Belum ada sekolah dipilih.</div>
+            <div class="field-error" data-error-for="sekolah"></div>
+          </div>
+          <div class="form-grid cols-2">
+            <div class="field">
+              <label class="label" for="sw-jk">Jenis Kelamin <span class="req">*</span></label>
+              <select class="input" id="sw-jk" name="jk" required>
+                <option value="">-- Pilih --</option>
+                <option value="Laki-laki">Laki-laki</option>
+                <option value="Perempuan">Perempuan</option>
+              </select>
+              <div class="field-error" data-error-for="jk"></div>
+            </div>
+            <div class="field">
+              <label class="label" for="sw-usia">Usia <span class="req">*</span></label>
+              <input class="input" type="number" id="sw-usia" name="usia" min="5" max="25" step="1" placeholder="angka 5 - 25" required>
+              <div class="field-error" data-error-for="usia"></div>
+            </div>
+          </div>
+          <div class="form-grid cols-2">
+            <div class="field">
+              <label class="label" for="sw-username">Nama Pengguna <span class="req">*</span></label>
+              <input class="input" type="text" id="sw-username" name="username" autocomplete="off" placeholder="untuk masuk ke akun siswa" required>
+              <div class="field-error" data-error-for="username"></div>
+            </div>
+            <div class="field">
+              <label class="label" for="sw-password">Kata Sandi <span class="req">*</span></label>
+              <div class="pw-wrap">
+                <input class="input" type="password" id="sw-password" name="password" autocomplete="new-password" placeholder="minimal 6 karakter" required>
+                <button type="button" class="pw-toggle" data-pw-toggle="sw-password">Lihat</button>
+              </div>
+              <div class="field-error" data-error-for="password"></div>
+            </div>
+          </div>
+          <div class="field">
+            <label class="label" for="sw-password2">Ulangi Kata Sandi <span class="req">*</span></label>
+            <div class="pw-wrap">
+              <input class="input" type="password" id="sw-password2" name="password2" autocomplete="new-password" placeholder="ketik ulang kata sandi" required>
+              <button type="button" class="pw-toggle" data-pw-toggle="sw-password2">Lihat</button>
+            </div>
+            <div class="field-error" data-error-for="password2"></div>
+          </div>
+          <button class="btn btn-block" type="submit">Daftarkan Siswa/Siswi</button>
+          <p class="hint-kecil mt-2 mb-0">ID siswa (EKS-001, EKS-002, dst.) dibuat otomatis. Siswa bisa masuk dengan nama pengguna di atas untuk melihat nilai, absensi, dan hasil pertandingannya sendiri.</p>
+        </form>
+
+        <div class="auth-foot">
+          Sudah punya akun sekolah/guru/siswa? <a href="ekskul-login.html">Masuk di sini</a><br>
+          <a href="index.html">← Kembali ke beranda</a>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <script src="js/utils.js?v=8"></script>
+  <script src="js/ekskul-store.js?v=3"></script>
+  <script>
+    (function () {
+      var jalan = false;
+
+      function bindBack() {
+        document.querySelectorAll('[data-pub-back]').forEach(function (btn) {
+          btn.addEventListener('click', function () {
+            window.location.href = btn.getAttribute('data-pub-back');
+          });
+        });
+      }
+
+      function bindPwToggle() {
+        document.querySelectorAll('[data-pw-toggle]').forEach(function (btn) {
+          btn.addEventListener('click', function () {
+            var input = document.getElementById(btn.getAttribute('data-pw-toggle'));
+            if (!input) return;
+            if (input.type === 'password') {
+              input.type = 'text';
+              btn.textContent = 'Sembunyi';
+            } else {
+              input.type = 'password';
+              btn.textContent = 'Lihat';
+            }
+          });
+        });
+      }
+
+      function clearErrors(form) {
+        form.querySelectorAll('[data-error-for]').forEach(function (slot) {
+          slot.textContent = '';
+        });
+        form.querySelectorAll('.input-error').forEach(function (el) {
+          el.classList.remove('input-error');
+        });
+      }
+
+      function showError(form, name, message) {
+        var slot = form.querySelector('[data-error-for="' + name + '"]');
+        if (slot) slot.textContent = message;
+        var input = form.querySelector('[name="' + name + '"], #' + name);
+        if (input && input.classList) input.classList.add('input-error');
+      }
+
+      function tampilkanSukses(judul, isi) {
+        var box = document.getElementById('eks-sukses');
+        box.hidden = false;
+        box.className = 'pesan-panel ok';
+        box.innerHTML = '<b>' + Utils.esc(judul) + '</b>' + Utils.esc(isi);
+        box.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+
+      function sekolahAktifList() {
+        return EkskulStore.where('schools', function (s) {
+          return s.status === 'aktif';
+        }).sort(function (a, b) {
+          return String(a.nama).localeCompare(String(b.nama));
+        });
+      }
+
+      /* ----- Pencarian sekolah pada tab siswa ----- */
+      function bindSekolahSearch() {
+        var cari = document.getElementById('sw-cari-sekolah');
+        var daftar = document.getElementById('sw-daftar-sekolah');
+        var hiddenId = document.getElementById('sw-sekolah-id');
+        var terpilih = document.getElementById('sw-sekolah-terpilih');
+
+        function render(q) {
+          var list = sekolahAktifList().filter(function (s) {
+            if (!q) return true;
+            return (s.nama + ' ' + (s.alamat || '')).toLowerCase().indexOf(q) !== -1;
+          });
+          if (!list.length) {
+            daftar.innerHTML = '<button type="button" disabled>Tidak ada sekolah cocok</button>';
+          } else {
+            daftar.innerHTML = list.map(function (s) {
+              return '<button type="button" data-id="' + Utils.esc(s.id) + '">' + Utils.esc(s.nama) +
+                (s.alamat ? '<small>' + Utils.esc(s.alamat) + '</small>' : '') + '</button>';
+            }).join('');
+          }
+          daftar.hidden = false;
+        }
+
+        cari.addEventListener('focus', function () {
+          render(String(cari.value || '').trim().toLowerCase());
+        });
+        cari.addEventListener('input', function () {
+          hiddenId.value = '';
+          terpilih.textContent = 'Belum ada sekolah dipilih.';
+          render(String(cari.value || '').trim().toLowerCase());
+        });
+        daftar.addEventListener('click', function (e) {
+          var btn = e.target.closest ? e.target.closest('[data-id]') : null;
+          if (!btn) return;
+          var id = btn.getAttribute('data-id');
+          var found = null;
+          sekolahAktifList().forEach(function (s) {
+            if (s.id === id) found = s;
+          });
+          if (!found) return;
+          hiddenId.value = found.id;
+          cari.value = found.nama;
+          terpilih.textContent = 'Sekolah terpilih: ' + found.nama;
+          daftar.hidden = true;
+        });
+        document.addEventListener('click', function (e) {
+          if (!daftar.contains(e.target) && e.target !== cari) daftar.hidden = true;
+        });
+      }
+
+      /* ----- Tab switching ----- */
+      function bindTabs() {
+        var tabs = document.getElementById('eks-tab');
+        var formSekolah = document.getElementById('eks-form-sekolah');
+        var formSiswa = document.getElementById('eks-form-siswa');
+        tabs.addEventListener('click', function (e) {
+          var btn = e.target.closest ? e.target.closest('[data-mode]') : null;
+          if (!btn) return;
+          var mode = btn.getAttribute('data-mode');
+          tabs.querySelectorAll('[data-mode]').forEach(function (b) {
+            b.classList.toggle('active', b === btn);
+          });
+          formSekolah.hidden = mode !== 'sekolah';
+          formSiswa.hidden = mode !== 'siswa';
+        });
+      }
+
+      function boot() {
+        if (jalan) return;
+        jalan = true;
+        bindBack();
+        bindPwToggle();
+        bindTabs();
+        EkskulStore.init();
+
+        /* ----- Submit: Daftar Sekolah ----- */
+        var formSekolah = document.getElementById('eks-form-sekolah');
+        formSekolah.addEventListener('submit', function (e) {
+          e.preventDefault();
+          clearErrors(formSekolah);
+          var nama = document.getElementById('sk-nama').value.trim();
+          var alamat = document.getElementById('sk-alamat').value.trim();
+          var username = document.getElementById('sk-username').value.trim();
+          var password = document.getElementById('sk-password').value;
+          var password2 = document.getElementById('sk-password2').value;
+          var valid = true;
+
+          if (!nama) { showError(formSekolah, 'nama', 'Nama sekolah wajib diisi.'); valid = false; }
+          if (!alamat) { showError(formSekolah, 'alamat', 'Alamat sekolah wajib diisi.'); valid = false; }
+          if (!username) {
+            showError(formSekolah, 'username', 'Nama pengguna wajib diisi.');
+            valid = false;
+          } else if (EkskulData.usernameTaken(username)) {
+            showError(formSekolah, 'username', 'Nama pengguna sudah dipakai atau tidak boleh dipakai.');
+            valid = false;
+          }
+          if (password.length < 6) {
+            showError(formSekolah, 'password', 'Kata sandi minimal 6 karakter.');
+            valid = false;
+          } else if (password !== password2) {
+            showError(formSekolah, 'password2', 'Ketikan kata sandi tidak sama.');
+            valid = false;
+          }
+          if (!valid) return;
+
+          var btn = formSekolah.querySelector('button[type="submit"]');
+          btn.disabled = true;
+
+          EkskulData.daftarSekolah({ nama: nama, alamat: alamat, username: username, password: password }).then(function () {
+            formSekolah.reset();
+            tampilkanSukses('Pendaftaran sekolah diterima!',
+              'Akun sekolah "' + nama + '" berstatus Menunggu Persetujuan. Silakan tunggu Superadmin menyetujui, lalu Anda bisa masuk dengan nama pengguna "' + username + '".');
+          }, function (err) {
+            showError(formSekolah, 'username', err.message || 'Pendaftaran gagal.');
+          }).then(function () {
+            btn.disabled = false;
+          });
+        });
+
+        /* ----- Submit: Daftar Siswa/Siswi ----- */
+        var formSiswa = document.getElementById('eks-form-siswa');
+        formSiswa.addEventListener('submit', function (e) {
+          e.preventDefault();
+          clearErrors(formSiswa);
+          var nama = document.getElementById('sw-nama').value.trim();
+          var kelas = document.getElementById('sw-kelas').value.trim();
+          var sekolahId = document.getElementById('sw-sekolah-id').value;
+          var jk = document.getElementById('sw-jk').value;
+          var usiaRaw = document.getElementById('sw-usia').value;
+          var usia = Number(usiaRaw);
+          var username = document.getElementById('sw-username').value.trim();
+          var password = document.getElementById('sw-password').value;
+          var password2 = document.getElementById('sw-password2').value;
+          var valid = true;
+
+          if (!nama) { showError(formSiswa, 'nama', 'Nama wajib diisi.'); valid = false; }
+          if (!kelas) { showError(formSiswa, 'kelas', 'Kelas wajib diisi.'); valid = false; }
+          if (!sekolahId) { showError(formSiswa, 'sekolah', 'Pilih asal sekolah dari daftar.'); valid = false; }
+          if (!jk) { showError(formSiswa, 'jk', 'Jenis kelamin wajib dipilih.'); valid = false; }
+          if (!usiaRaw || !isFinite(usia) || Math.floor(usia) !== usia || usia < 5 || usia > 25) {
+            showError(formSiswa, 'usia', 'Usia harus bilangan bulat antara 5 dan 25.');
+            valid = false;
+          }
+          if (!username) {
+            showError(formSiswa, 'username', 'Nama pengguna wajib diisi.');
+            valid = false;
+          } else if (EkskulData.usernameTaken(username)) {
+            showError(formSiswa, 'username', 'Nama pengguna sudah dipakai atau tidak boleh dipakai.');
+            valid = false;
+          }
+          if (password.length < 6) {
+            showError(formSiswa, 'password', 'Kata sandi minimal 6 karakter.');
+            valid = false;
+          } else if (password !== password2) {
+            showError(formSiswa, 'password2', 'Ketikan kata sandi tidak sama.');
+            valid = false;
+          }
+          if (!valid) return;
+
+          function simpan() {
+            var btn = formSiswa.querySelector('button[type="submit"]');
+            btn.disabled = true;
+            EkskulData.daftarSiswa({
+              nama: nama, kelas: kelas, sekolah_id: sekolahId, jk: jk, usia: usia,
+              username: username, password: password
+            }).then(function (siswa) {
+              formSiswa.reset();
+              document.getElementById('sw-sekolah-id').value = '';
+              document.getElementById('sw-sekolah-terpilih').textContent = 'Belum ada sekolah dipilih.';
+              tampilkanSukses('Pendaftaran siswa/siswi berhasil!',
+                'ID ' + siswa.id_siswa + ' telah diberikan untuk ' + siswa.nama + ' (' + siswa.kelas + ', ' + EkskulData.namaSekolah(siswa.sekolah_id) + '). Akun login: nama pengguna "' + siswa.username + '" — gunakan untuk melihat nilai, absensi, dan hasil pertandingan sendiri.');
+            }, function (err) {
+              showError(formSiswa, 'nama', err.message || 'Pendaftaran gagal.');
+            }).then(function () {
+              btn.disabled = false;
+            });
+          }
+
+          var duplikat = EkskulData.duplikatSiswa({
+            nama: nama, kelas: kelas, sekolah_id: sekolahId
+          });
+          if (duplikat) {
+            if (window.confirm('Peringatan: sudah ada siswa dengan nama, kelas, dan sekolah yang sama ("' + duplikat.id_siswa + '"). Tetap daftarkan siswa ini?')) {
+              simpan();
+            }
+            return;
+          }
+          simpan();
+        });
+
+        bindSekolahSearch();
+      }
+
+      if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot);
+      else boot();
+    })();
+  </script>
+</body>
+</html>

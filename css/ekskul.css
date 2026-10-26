@@ -1,0 +1,690 @@
+/* ==========================================================================
+   EKSTRAKURIKULER — gaya tambahan modul Ekstrakurikuler (bulutangkis sekolah).
+   Dimuat SETELAH css/style.css sehingga kelas di bawah ini bisa menimpa
+   gaya PB Trisula tanpa mengubah file aslinya.
+   ========================================================================== */
+
+/* --- Tombol "Ekstrakurikuler" di navbar landing page ---------------------- */
+.btn-ekskul-nav {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 10px 18px;
+  border-radius: 999px;
+  border: 2px solid var(--primary-700);
+  background: #fff;
+  color: var(--primary-800);
+  font-weight: 800;
+  font-size: 0.92rem;
+  text-decoration: none;
+  white-space: nowrap;
+  transition: background 0.25s ease, color 0.25s ease, border-color 0.25s ease,
+    box-shadow 0.25s ease, transform 0.25s ease;
+}
+
+.btn-ekskul-nav:hover,
+.btn-ekskul-nav:focus-visible {
+  background-image: linear-gradient(135deg, #0b3d91 0%, #d62839 100%);
+  border-color: transparent;
+  color: #fff;
+  text-decoration: none;
+  transform: translateY(-1px);
+  box-shadow: 0 10px 22px rgba(214, 40, 57, 0.22);
+}
+
+.btn-ekskul-nav .icon {
+  flex-shrink: 0;
+}
+
+.btn-ekskul-desktop {
+  display: none;
+}
+
+@media (min-width: 900px) {
+  .btn-ekskul-desktop {
+    display: inline-flex;
+  }
+}
+
+.mobile-menu .nav-ekskul {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border: 2px solid var(--primary-700);
+  background: #fff;
+  color: var(--primary-800);
+}
+
+.mobile-menu .nav-ekskul:hover {
+  background-image: linear-gradient(135deg, #0b3d91 0%, #d62839 100%);
+  border-color: transparent;
+  color: #fff;
+  text-decoration: none;
+}
+
+/* --- Kartu pilihan masuk/daftar di halaman ekskul.html -------------------- */
+.pilih-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 14px;
+  margin: 8px 0 4px;
+}
+
+@media (min-width: 560px) {
+  .pilih-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+.pilih-kartu {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 20px 18px;
+  border-radius: var(--radius);
+  border: 2px solid var(--primary-100);
+  background: var(--primary-50);
+  color: var(--ink);
+  text-align: left;
+  cursor: pointer;
+  text-decoration: none;
+  font: inherit;
+  transition: border-color 0.25s ease, background 0.25s ease, transform 0.2s ease,
+    box-shadow 0.25s ease;
+}
+
+.pilih-kartu:hover,
+.pilih-kartu:focus-visible {
+  border-color: var(--primary-600);
+  background: #fff;
+  color: var(--ink);
+  text-decoration: none;
+  transform: translateY(-2px);
+  box-shadow: var(--shadow);
+}
+
+.pilih-kartu .pilih-ikon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 46px;
+  height: 46px;
+  border-radius: 14px;
+  background: var(--primary-700);
+  color: #fff;
+}
+
+.pilih-kartu.accent .pilih-ikon {
+  background-image: linear-gradient(135deg, #0b3d91 0%, #d62839 100%);
+}
+
+.pilih-kartu b {
+  font-size: 1.08rem;
+}
+
+.pilih-kartu span {
+  color: var(--muted);
+  font-size: 0.9rem;
+  line-height: 1.45;
+}
+
+/* --- Kotak data contoh (demo) di halaman ekskul.html ---------------------- */
+.seed-box {
+  border-top: 1px dashed rgba(15, 23, 42, 0.18);
+  padding-top: 16px;
+  margin-top: 18px;
+}
+
+.seed-box .table {
+  font-size: 0.85rem;
+  background: #fff;
+}
+
+.seed-box .table code {
+  background: var(--primary-50);
+  padding: 2px 6px;
+  border-radius: 6px;
+  font-size: 0.82rem;
+}
+
+/* --- Panel pesan (sukses/gagal) di kartu auth ----------------------------- */
+.pesan-panel {
+  border-radius: var(--radius-sm);
+  padding: 14px 16px;
+  margin-bottom: 16px;
+  border: 1px solid;
+  font-size: 0.95rem;
+  line-height: 1.5;
+}
+
+.pesan-panel b {
+  display: block;
+  margin-bottom: 4px;
+}
+
+.pesan-panel.ok {
+  background: var(--ok-bg);
+  border-color: rgba(21, 128, 61, 0.3);
+  color: var(--ok);
+}
+
+.pesan-panel.err {
+  background: var(--danger-bg);
+  border-color: rgba(163, 22, 33, 0.3);
+  color: var(--danger);
+}
+
+.pesan-panel.warn {
+  background: var(--warn-bg);
+  border-color: rgba(154, 92, 6, 0.3);
+  color: var(--warn);
+}
+
+/* --- Bar persentase horizontal ------------------------------------------- */
+.bar-row {
+  margin-bottom: 12px;
+}
+
+.bar-meta {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 5px;
+  font-size: 0.9rem;
+}
+
+.bar-meta b {
+  color: var(--ink-soft);
+  font-weight: 700;
+}
+
+.bar-meta .bar-angka {
+  font-weight: 800;
+  color: var(--primary-800);
+  font-variant-numeric: tabular-nums;
+}
+
+.bar-track {
+  height: 12px;
+  border-radius: 999px;
+  background: var(--primary-100);
+  overflow: hidden;
+}
+
+.bar-fill {
+  height: 100%;
+  border-radius: 999px;
+  background-image: linear-gradient(90deg, #0b3d91 0%, #1565d8 100%);
+  transition: width 0.4s ease;
+}
+
+.bar-fill.tone-accent {
+  background-image: linear-gradient(90deg, #0b3d91 0%, #d62839 100%);
+}
+
+.bar-fill.tone-ok {
+  background: var(--ok);
+}
+
+.bar-fill.tone-warn {
+  background: #d97706;
+}
+
+.bar-fill.tone-danger {
+  background: var(--danger);
+}
+
+.bar-kosong {
+  color: var(--muted);
+  font-size: 0.88rem;
+  padding: 6px 0 10px;
+}
+
+/* --- Slider penilaian 1-10 ----------------------------------------------- */
+.slider-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 12px;
+  align-items: center;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: #fff;
+  margin-bottom: 10px;
+}
+
+.slider-row .slider-label {
+  grid-column: 1 / -1;
+  font-weight: 700;
+  font-size: 0.95rem;
+  color: var(--ink-soft);
+  margin: 0;
+}
+
+.slider-row input[type="range"] {
+  width: 100%;
+  accent-color: var(--primary-700);
+  height: 28px;
+}
+
+.slider-row .slider-angka {
+  min-width: 46px;
+  text-align: center;
+  font-weight: 800;
+  font-size: 1.15rem;
+  color: var(--primary-800);
+  background: var(--primary-50);
+  border: 1px solid var(--primary-100);
+  border-radius: 10px;
+  padding: 6px 8px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* --- Pemilih siswa dengan pencarian + centang ---------------------------- */
+.picker {
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: #fff;
+  overflow: hidden;
+}
+
+.picker-head {
+  padding: 12px 12px 8px;
+  border-bottom: 1px solid var(--line);
+  background: var(--primary-50);
+}
+
+.picker-head .label {
+  margin-bottom: 6px;
+}
+
+.picker-tools {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.picker-tools .input {
+  flex: 1;
+}
+
+.picker-count {
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--primary-800);
+  white-space: nowrap;
+}
+
+.picker-list {
+  max-height: 260px;
+  overflow: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.picker-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 11px 14px;
+  border-bottom: 1px solid var(--line);
+  cursor: pointer;
+  min-height: 48px;
+}
+
+.picker-item:last-child {
+  border-bottom: none;
+}
+
+.picker-item:hover {
+  background: var(--primary-50);
+}
+
+.picker-item input[type="checkbox"] {
+  width: 20px;
+  height: 20px;
+  accent-color: var(--primary-700);
+  flex-shrink: 0;
+}
+
+.picker-item .picker-info {
+  min-width: 0;
+}
+
+.picker-item .picker-info b {
+  display: block;
+  font-size: 0.95rem;
+}
+
+.picker-item .picker-info span {
+  display: block;
+  font-size: 0.82rem;
+  color: var(--muted);
+}
+
+.picker-empty {
+  padding: 18px 14px;
+  text-align: center;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+/* --- Chip status & badge persentase -------------------------------------- */
+.pct-badge {
+  display: inline-block;
+  min-width: 52px;
+  text-align: center;
+  font-weight: 800;
+  font-size: 0.86rem;
+  padding: 4px 8px;
+  border-radius: 999px;
+  background: var(--primary-50);
+  color: var(--primary-800);
+  border: 1px solid var(--primary-100);
+  font-variant-numeric: tabular-nums;
+}
+
+/* --- Kartu ringkasan nilai keseluruhan ----------------------------------- */
+.nilai-besar {
+  text-align: center;
+  padding: 18px 12px;
+  border-radius: var(--radius);
+  background-image: linear-gradient(135deg, #0b3d91 0%, #1565d8 60%, #d62839 140%);
+  color: #fff;
+  margin-bottom: 16px;
+}
+
+.nilai-besar .angka {
+  font-size: clamp(2.2rem, 8vw, 3rem);
+  font-weight: 800;
+  line-height: 1.1;
+  font-variant-numeric: tabular-nums;
+}
+
+.nilai-besar .ket {
+  font-size: 0.9rem;
+  opacity: 0.9;
+  font-weight: 600;
+}
+
+/* --- Tab tambahan (parameter, kategori) ----------------------------------- */
+.baris-parameter {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  margin-bottom: 8px;
+  background: #fff;
+}
+
+.baris-parameter .grow {
+  flex: 1;
+  min-width: 140px;
+}
+
+.baris-parameter .grow b {
+  display: block;
+}
+
+.baris-parameter .grow span {
+  font-size: 0.82rem;
+  color: var(--muted);
+}
+
+/* --- Grid kartu pilihan ganda (siswa terpilih) --------------------------- */
+.terpilih-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.terpilih-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--primary-50);
+  border: 1px solid var(--primary-100);
+  color: var(--primary-800);
+  border-radius: 999px;
+  padding: 6px 12px;
+  font-size: 0.86rem;
+  font-weight: 700;
+}
+
+/* --- Detail hasil pertandingan ------------------------------------------- */
+.set-skor {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--primary-50);
+  border: 1px solid var(--primary-100);
+  border-radius: 10px;
+  padding: 4px 10px;
+  font-weight: 800;
+  font-size: 0.88rem;
+  margin: 2px 4px 2px 0;
+  font-variant-numeric: tabular-nums;
+}
+
+.set-input-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.set-input-row .input {
+  flex: 1;
+}
+
+/* --- Grid statistik ringkas ---------------------------------------------- */
+.kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+@media (min-width: 900px) {
+  .kpi-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+.kpi-card {
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 14px 16px;
+  box-shadow: var(--shadow);
+}
+
+.kpi-card .kpi-angka {
+  font-size: 1.6rem;
+  font-weight: 800;
+  color: var(--primary-800);
+  line-height: 1.2;
+  font-variant-numeric: tabular-nums;
+}
+
+.kpi-card .kpi-label {
+  font-size: 0.85rem;
+  color: var(--muted);
+  font-weight: 600;
+}
+
+.kpi-card.accent .kpi-angka {
+  color: var(--accent);
+}
+
+/* --- Dropdown sekolah dengan pencarian ----------------------------------- */
+.combo-wrap {
+  position: relative;
+}
+
+.combo-hasil {
+  margin-top: 6px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: #fff;
+  max-height: 190px;
+  overflow: auto;
+}
+
+.combo-hasil button {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 11px 14px;
+  border: none;
+  border-bottom: 1px solid var(--line);
+  background: #fff;
+  font: inherit;
+  font-size: 0.93rem;
+  cursor: pointer;
+  min-height: 46px;
+}
+
+.combo-hasil button:last-child {
+  border-bottom: none;
+}
+
+.combo-hasil button:hover {
+  background: var(--primary-50);
+}
+
+.combo-hasil button small {
+  display: block;
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
+/* --- Tata letak filter ---------------------------------------------------- */
+.filter-ekskul {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 10px;
+}
+
+@media (min-width: 720px) {
+  .filter-ekskul.cols-2 {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .filter-ekskul.cols-3 {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .filter-ekskul.cols-4 {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+/* --- Catatan bawah form -------------------------------------------------- */
+.hint-kecil {
+  font-size: 0.84rem;
+  color: var(--muted);
+  margin: 0 0 12px;
+}
+
+/* --- Header teks role di halaman auth ------------------------------------ */
+.eks-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--accent-light);
+  color: var(--accent-dark);
+  border: 1px solid rgba(214, 40, 57, 0.25);
+  border-radius: 999px;
+  padding: 6px 14px;
+  font-size: 0.82rem;
+  font-weight: 800;
+  margin-bottom: 12px;
+}
+
+/* --- Tombol pilih ganda pada baris siswa absensi ------------------------- */
+.absensi-baris {
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  padding: 12px;
+  margin-bottom: 10px;
+  background: #fff;
+}
+
+.absensi-baris .nama {
+  font-weight: 800;
+  margin-bottom: 8px;
+  display: block;
+}
+
+.status-pill-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.status-pill {
+  border: 1px solid var(--line);
+  background: #fff;
+  border-radius: 999px;
+  padding: 8px 14px;
+  font-size: 0.86rem;
+  font-weight: 700;
+  color: var(--ink-soft);
+  cursor: pointer;
+  min-height: 40px;
+}
+
+.status-pill.active {
+  background: var(--primary-700);
+  border-color: var(--primary-700);
+  color: #fff;
+}
+
+/* --- Menjaga modal agar tidak tertutup bottom navigation ----------------- */
+@media (max-width: 767px) {
+  .modal {
+    max-height: calc(100vh - var(--bottomnav-h) - 24px);
+  }
+
+  .modal-foot {
+    position: sticky;
+    bottom: 0;
+    background: #fff;
+  }
+}
+
+/* --- Halaman Profil siswa -------------------------------------------------- */
+.profil-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 10px;
+}
+
+@media (min-width: 560px) {
+  .profil-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+.profil-baris {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 10px 12px;
+  border: 1px solid var(--primary-100);
+  border-radius: var(--radius-sm);
+  background: var(--primary-50);
+  font-size: 0.92rem;
+}
+
+.profil-baris .muted {
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}

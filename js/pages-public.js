@@ -807,6 +807,10 @@ var PagesPublic = (function () {
     terapkanNavAktif(hrefDariHash());
     if (adaHash) navSpyJeda = Date.now() + 800;
 
+    // Listener cukup dipasang sekali walau init dipanggil berulang.
+    if (navAktifSudahDiikat) return;
+    navAktifSudahDiikat = true;
+
     document.addEventListener('click', function (e) {
       var link = e.target && e.target.closest ? e.target.closest('.nav-link') : null;
       if (!link) return;
@@ -833,10 +837,18 @@ var PagesPublic = (function () {
     setTimeout(navScrollSpy, 80);
   }
 
+  var navSudahDiikat = false;
+  var navAktifSudahDiikat = false;
+
   function bindNav() {
+    // Init bisa dipanggil lebih dari sekali (mis. oleh cloud.js setelah data
+    // cloud tiba) — ikat listener sekali saja agar toggle menu tidak dobel
+    // (buka lalu langsung tertutup lagi).
+    if (navSudahDiikat) return;
     var toggle = document.getElementById('menu-toggle');
     var menu = document.getElementById('mobile-menu');
     if (toggle && menu) {
+      navSudahDiikat = true;
       toggle.addEventListener('click', function () {
         var open = menu.classList.toggle('open');
         toggle.setAttribute('aria-expanded', open ? 'true' : 'false');

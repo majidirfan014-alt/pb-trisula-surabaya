@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0b3d91">
+  <link rel="icon" type="image/png" href="assets/favicon.png">
+  <title>Masuk Ekstrakurikuler — PB TRISULA SURABAYA</title>
+  <link rel="stylesheet" href="css/style.css?v=8">
+  <link rel="stylesheet" href="css/ekskul.css?v=3">
+</head>
+<body>
+  <div class="auth-wrap">
+    <header class="topbar" style="background:transparent;border:none">
+      <a class="brand" href="index.html" style="color:#fff">
+        <img class="brand-logo" src="assets/logo-pb-trisula.png" alt="Logo PB Trisula Surabaya" width="46" height="46">
+        <div class="brand-text" style="color:#fff">PB TRISULA SURABAYA<small style="color:rgba(255,255,255,.75)">Ekstrakurikuler</small></div>
+      </a>
+      <a class="btn btn-sm btn-light" href="ekskul-daftar.html">Daftar</a>
+    </header>
+
+    <main class="auth-main">
+      <div class="auth-card" id="eks-login-wrap">
+        <div class="back-bar">
+          <button type="button" class="btn-back" data-pub-back="ekskul.html">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5"/><path d="M11 6l-6 6 6 6"/></svg>
+            <span>Kembali</span>
+          </button>
+        </div>
+
+        <div class="auth-head">
+          <img class="brand-logo brand-logo-lg" src="assets/logo-pb-trisula.png" alt="Logo PB Trisula Surabaya" width="56" height="56">
+          <span class="eks-badge">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
+            Ekstrakurikuler Bulutangkis
+          </span>
+          <h1>Masuk ke Akun Ekstrakurikuler</h1>
+          <p>Gunakan nama pengguna dan kata sandi akun Anda. Siswa/siswi juga bisa memakai ID (contoh: EKS-001).</p>
+        </div>
+
+        <div id="eks-pesan" hidden></div>
+
+        <form id="eks-login-form" novalidate data-no-dirty>
+          <div class="field">
+            <label class="label" for="eks-username">Nama Pengguna <span class="req">*</span></label>
+            <input class="input" type="text" id="eks-username" name="username" placeholder="Masukkan nama pengguna" autocomplete="username" required>
+            <div class="field-error" data-error-for="username"></div>
+          </div>
+
+          <div class="field">
+            <label class="label" for="eks-password">Kata Sandi <span class="req">*</span></label>
+            <div class="pw-wrap">
+              <input class="input" type="password" id="eks-password" name="password" placeholder="Masukkan kata sandi" autocomplete="current-password" required>
+              <button type="button" class="pw-toggle" data-pw-toggle="eks-password">Lihat</button>
+            </div>
+            <div class="field-error" data-error-for="password"></div>
+          </div>
+
+          <button class="btn btn-block" type="submit">Masuk</button>
+        </form>
+
+        <div class="auth-foot">
+          Belum punya akun? <a href="ekskul-daftar.html">Daftar sekolah / siswa</a><br>
+          <a href="index.html">← Kembali ke beranda</a>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <script src="js/config.js?v=8"></script>
+  <script src="js/utils.js?v=8"></script>
+  <script src="js/store.js?v=8"></script>
+  <script src="js/auth.js?v=8"></script>
+  <script src="js/ekskul-store.js?v=3"></script>
+  <script>
+    (function () {
+      var jalan = false;
+
+      function bindBack() {
+        document.querySelectorAll('[data-pub-back]').forEach(function (btn) {
+          btn.addEventListener('click', function () {
+            window.location.href = btn.getAttribute('data-pub-back');
+          });
+        });
+      }
+
+      function bindPwToggle() {
+        document.querySelectorAll('[data-pw-toggle]').forEach(function (btn) {
+          btn.addEventListener('click', function () {
+            var input = document.getElementById(btn.getAttribute('data-pw-toggle'));
+            if (!input) return;
+            if (input.type === 'password') {
+              input.type = 'text';
+              btn.textContent = 'Sembunyi';
+            } else {
+              input.type = 'password';
+              btn.textContent = 'Lihat';
+            }
+          });
+        });
+      }
+
+      function tampilkanPesan(judul, isi, tipe) {
+        var box = document.getElementById('eks-pesan');
+        box.hidden = false;
+        box.className = 'pesan-panel ' + (tipe || 'err');
+        box.innerHTML = '<b>' + Utils.esc(judul) + '</b>' + Utils.esc(isi);
+      }
+
+      function boot() {
+        if (jalan) return;
+        jalan = true;
+        bindBack();
+        bindPwToggle();
+        EkskulStore.init();
+
+        // Bila sudah masuk, langsung ke dashboard.
+        if (EkskulAuth.getSession()) {
+          window.location.replace('ekskul-app.html');
+          return;
+        }
+
+        var form = document.getElementById('eks-login-form');
+        form.addEventListener('submit', function (e) {
+          e.preventDefault();
+          var username = document.getElementById('eks-username').value.trim();
+          var password = document.getElementById('eks-password').value;
+          var errors = {};
+          document.querySelectorAll('[data-error-for]').forEach(function (slot) {
+            slot.textContent = '';
+          });
+          document.querySelectorAll('.input-error').forEach(function (el) {
+            el.classList.remove('input-error');
+          });
+          var box = document.getElementById('eks-pesan');
+          box.hidden = true;
+
+          if (!username) errors.username = 'Nama pengguna wajib diisi.';
+          if (!password) errors.password = 'Kata sandi wajib diisi.';
+          if (Object.keys(errors).length) {
+            Utils.showErrors(form, errors);
+            return;
+          }
+
+          EkskulAuth.login(username, password).then(function (session) {
+            window.location.replace('ekskul-app.html');
+          }, function (err) {
+            // Pesan error umum untuk salah kata sandi / akun tidak dikenal.
+            var msg = err && err.message ? err.message : 'Nama pengguna atau kata sandi salah.';
+            tampilkanPesan('Gagal Masuk', msg, 'err');
+          });
+        });
+      }
+
+      if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot);
+      else boot();
+    })();
+  </script>
+</body>
+</html>
