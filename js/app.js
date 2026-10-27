@@ -369,6 +369,7 @@ var App = (function () {
 
     // Siapkan master lokasi latihan & migrasi data lama (aman dijalankan berulang).
     if (typeof Picker !== 'undefined' && Picker && Picker.init) Picker.init();
+  if (typeof MatchKategori !== 'undefined' && MatchKategori && MatchKategori.init) MatchKategori.init();
 
     // Muat foto landing page dari IndexedDB & migrasi foto lama ke referensi.
     if (typeof LandingStore !== 'undefined' && LandingStore && LandingStore.hidupkan) {

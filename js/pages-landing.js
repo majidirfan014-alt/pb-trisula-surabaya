@@ -327,6 +327,31 @@ var PagesLanding = (function () {
         document.getElementById('lp-file-galeri').click();
         return;
       }
+      if (e.target.closest('[data-lp-nomor-tambah]')) {
+        bacaForm();
+        if (!Array.isArray(draft.kontak.nomor)) draft.kontak.nomor = [];
+        if (draft.kontak.nomor.length < 5) {
+          draft.kontak.nomor.push({ label: '', tampil: '', tautan: '' });
+          belumSimpan = true;
+          App.setDirty(true);
+          renderTab();
+        }
+        return;
+      }
+      var nomorHapus = e.target.closest('[data-lp-nomor-hapus]');
+      if (nomorHapus) {
+        bacaForm();
+        var idxNomor = parseInt(nomorHapus.getAttribute('data-lp-nomor-hapus'), 10);
+        if (Array.isArray(draft.kontak.nomor) && draft.kontak.nomor.length > 1) {
+          draft.kontak.nomor.splice(idxNomor, 1);
+        } else {
+          draft.kontak.nomor = [{ label: '', tampil: '', tautan: '' }];
+        }
+        belumSimpan = true;
+        App.setDirty(true);
+        renderTab();
+        return;
+      }
       var coba = e.target.closest('[data-lp-coba-lagi]');
       if (coba) {
         cobaLagiCloud(coba.getAttribute('data-lp-coba-lagi'));
@@ -419,6 +444,20 @@ var PagesLanding = (function () {
 
     page.addEventListener('input', function (e) {
       if (e.target.closest('#lp-body')) tandaiBelumSimpan();
+      // Isi otomatis nomor tautan (+62...) dari nomor tampil bila masih kosong.
+      var tampilNomor = e.target.closest ? e.target.closest('[name^="nomor_tampil_"]') : null;
+      if (tampilNomor) {
+        var idxTampil = tampilNomor.name.replace('nomor_tampil_', '');
+        var tautanEl = page.querySelector('[name="nomor_tautan_' + idxTampil + '"]');
+        if (tautanEl && !tautanEl.value.trim() && tampilNomor.value.trim()) {
+          var digits = tampilNomor.value.replace(/[^\d]/g, '');
+          if (digits) {
+            tautanEl.value = digits.slice(0, 2) === '62' ? '+' + digits
+              : (digits.slice(0, 1) === '0' ? '+62' + digits.slice(1) : '+' + digits);
+          }
+        }
+        return;
+      }
       var judulEl = e.target.closest('[data-lp-judul]');
       if (judulEl) {
         var itJ = cariGaleri(judulEl.getAttribute('data-lp-judul'));
@@ -857,8 +896,21 @@ var PagesLanding = (function () {
       return el ? el.value.trim() : '';
     }
     if (tabAktif === 'kontak') {
-      d.kontak.phone = val('phone');
-      d.kontak.phoneLink = val('phoneLink');
+      var jumlahNomor = Array.isArray(d.kontak.nomor) ? d.kontak.nomor.length : 0;
+      var nomorBaru = [];
+      for (var ni = 0; ni < jumlahNomor; ni++) {
+        nomorBaru.push({
+          label: val('nomor_label_' + ni),
+          tampil: val('nomor_tampil_' + ni),
+          tautan: val('nomor_tautan_' + ni)
+        });
+      }
+      d.kontak.nomor = nomorBaru.filter(function (n) {
+        return n.label || n.tampil || n.tautan;
+      });
+      var pertama = (d.kontak.nomor.filter(function (n) { return n.tampil; })[0]) || null;
+      d.kontak.phone = pertama ? pertama.tampil : '';
+      d.kontak.phoneLink = pertama ? (pertama.tautan || '') : '';
       d.kontak.email = val('email');
       d.kontak.alamatSingkat = val('alamatSingkat');
       (d.sosmed || []).forEach(function (s, i) {
@@ -902,6 +954,7 @@ var PagesLanding = (function () {
     if (tabAktif === 'kontak') {
       return {
         phone: d.kontak.phone,
+        nomorList: d.kontak.nomor || [],
         email: d.kontak.email,
         alamatSingkat: d.kontak.alamatSingkat,
         sosmedList: d.sosmed || []
@@ -1034,11 +1087,27 @@ var PagesLanding = (function () {
     var html = '<div class="lp-error-box" hidden></div>';
 
     if (tabAktif === 'kontak') {
+      var daftarNomor = Array.isArray(d.kontak.nomor) ? d.kontak.nomor : [];
       html += '<div class="card lp-kartu">' +
         '<div class="card-title">' + UI.icon('user', 20) + 'Kontak & Top Bar</div>' +
+        '<h4 class="mb-1">Nomor Telepon / WhatsApp</h4>' +
+        '<p class="muted small">Bisa diisi lebih dari satu nomor (maksimal 5). Kolom bersifat opsional — nomor yang kosong tidak tampil di landing page.</p>' +
+        '<div class="list-rows mb-2" data-lp-nomor-list>' +
+        daftarNomor.map(function (n, i) {
+          return '<div class="list-row" style="flex-wrap:wrap;gap:8px">' +
+            '<div class="grow" style="display:flex;gap:8px;flex-wrap:wrap;min-width:260px">' +
+            '<input class="input" style="max-width:150px" name="nomor_label_' + i + '" value="' + Utils.esc(n.label || '') + '" placeholder="Label (contoh: Admin)" aria-label="Label nomor ' + (i + 1) + '">' +
+            '<input class="input" style="max-width:190px" name="nomor_tampil_' + i + '" value="' + Utils.esc(n.tampil || '') + '" placeholder="Nomor tampil (contoh: 0812-3456-7890)" aria-label="Nomor tampil ' + (i + 1) + '">' +
+            '<input class="input" style="max-width:190px" name="nomor_tautan_' + i + '" value="' + Utils.esc(n.tautan || '') + '" placeholder="Tautan (contoh: +6281234567890)" aria-label="Nomor tautan ' + (i + 1) + '">' +
+            '</div>' +
+            '<button type="button" class="btn btn-sm btn-danger" data-lp-nomor-hapus="' + i + '">Hapus</button>' +
+            '</div>';
+        }).join('') +
+        '</div>' +
+        (daftarNomor.length < 5
+          ? '<button type="button" class="btn btn-sm btn-secondary mb-2" data-lp-nomor-tambah>' + UI.icon('plus', 16) + ' Tambah Nomor</button>'
+          : '<p class="small muted">Maksimal 5 nomor.</p>') +
         '<div class="form-grid cols-2">' +
-        UI.field({ name: 'phone', label: 'Nomor Telepon / WhatsApp',  value: d.kontak.phone, help: 'contoh: 0812-3456-7890' }) +
-        UI.field({ name: 'phoneLink', label: 'Nomor untuk tautan telepon', value: d.kontak.phoneLink, help: 'contoh: +6281234567890' }) +
         UI.field({ name: 'email', label: 'Email',  value: d.kontak.email, type: 'email' }) +
         UI.field({ name: 'alamatSingkat', label: 'Alamat Singkat (Top Bar)',  value: d.kontak.alamatSingkat, help: 'contoh: Surabaya' }) +
         '</div>' +

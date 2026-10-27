@@ -670,21 +670,14 @@ var PagesMonitoring = (function () {
         value: isi.durasi, placeholder: 'Contoh: 3x seminggu, 45 menit'
       }) +
       '</div>' +
-      '<div class="field">' +
-      '<label class="label" for="f-' + a.key + '_intensitas">Intensitas Latihan</label>' +
-      '<div class="mon-nilai-row">' +
-      '<input class="mon-slider" type="range" min="1" max="10" step="1"' +
-      ' data-slider="' + a.key + '_intensitas" value="' + (n === null || n === undefined ? 5 : n) + '"' +
-      ' aria-label="Intensitas latihan ' + Utils.esc(a.label) + '">' +
-      '<input class="input" type="number" name="' + a.key + '_intensitas" id="f-' + a.key + '_intensitas"' +
-      ' min="1" max="10" step="1" placeholder="1 - 10" value="' + Utils.esc(nTeks) + '"' +
-      ' aria-label="Angka intensitas latihan ' + Utils.esc(a.label) + '">' +
-      '</div>' +
-      '<div class="mon-tingkat"><span class="int-badge ' + (tingkat ? tingkat.kelas : 'int-kosong') + '"' +
-      ' data-tingkat="' + a.key + '">' + (tingkat ? Utils.esc(tingkat.label) : 'Belum diisi') + '</span></div>' +
-      '<div class="help">Seberapa berat latihan minggu ini? 1 = sangat ringan, 10 = sangat berat.</div>' +
+      UI.skalaField({
+        name: a.key + '_intensitas',
+        label: 'Intensitas Latihan',
+        required: false,
+        value: nTeks,
+        help: 'Seberapa berat latihan minggu ini? 1 = sangat ringan, 10 = sangat berat.'
+      }) +
       (isi.konversi ? '<div class="mon-konversi">Hasil konversi dari data lama. Silakan periksa dan ubah bila perlu.</div>' : '') +
-      '<div class="field-error" data-error-for="' + a.key + '_intensitas"></div>' +
       '</div>' +
       UI.field({
         name: a.key + '_catatan', label: 'Catatan', type: 'textarea', rows: 2,
@@ -870,8 +863,7 @@ var PagesMonitoring = (function () {
         form.querySelector('[name="' + a.key + '_durasi"]').value = info.durasi;
         form.querySelector('[name="' + a.key + '_intensitas"]').value = info.intensitas === null ? '' : info.intensitas;
         form.querySelector('[name="' + a.key + '_catatan"]').value = info.catatan;
-        var slider = form.querySelector('[data-slider="' + a.key + '_intensitas"]');
-        if (slider) slider.value = info.intensitas === null ? 5 : info.intensitas;
+        UI.setSkala(form, a.key + '_intensitas', info.intensitas === null ? '' : info.intensitas);
         perbaruiTingkat(form, a.key + '_intensitas');
       });
       Utils.clearErrors(form);
@@ -931,6 +923,8 @@ var PagesMonitoring = (function () {
       renderRiwayat();
 
       var form = body.querySelector('#form-mon');
+
+      UI.bindSkala(form);
 
       form.addEventListener('input', function (e) {
         var slider = e.target.closest ? e.target.closest('[data-slider]') : null;
@@ -1171,8 +1165,7 @@ var PagesMonitoring = (function () {
             form.querySelector('[name="' + a.key + '_durasi"]').value = '';
             form.querySelector('[name="' + a.key + '_intensitas"]').value = '';
             form.querySelector('[name="' + a.key + '_catatan"]').value = '';
-            var slider = form.querySelector('[data-slider="' + a.key + '_intensitas"]');
-            if (slider) slider.value = 5;
+            UI.setSkala(form, a.key + '_intensitas', '');
             perbaruiTingkat(form, a.key + '_intensitas');
           });
           form.querySelector('[name="catatan_pelatih"]').value = '';

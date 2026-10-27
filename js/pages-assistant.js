@@ -318,27 +318,54 @@ var PagesAssistant = (function () {
         '<div class="detail-item"><div class="k">Tanggal Lahir</div><div class="v">' + (u.tgl_lahir ? Utils.fmtDate(u.tgl_lahir, true) : '-') + '</div></div>' +
         '<div class="detail-item"><div class="k">Usia</div><div class="v">' + Utils.esc(usia) + '</div></div>' +
         '<div class="detail-item"><div class="k">No. HP</div><div class="v">' + Utils.esc(u.no_hp || '-') + '</div></div>' +
+        '<div class="detail-item"><div class="k">Alamat</div><div class="v">' +
+        (u.alamat ? Utils.esc(u.alamat) : '<span class="sel-kosong">-</span>') + '</div></div>' +
         '<div class="detail-item"><div class="k">ID Login</div><div class="v">' + Utils.esc(u.username) + '</div></div>' +
         '<div class="detail-item"><div class="k">Status</div><div class="v">' + UI.statusBadge(u.status || 'aktif') + '</div></div>' +
         '</div></div>' +
         '<div class="card">' +
-        '<div class="card-title">' + UI.icon('save', 20) + 'Lisensi Pelatih</div>' +
-        (bisaUnduh
-          ? '<div class="file-chip">' +
-            (/^image\//.test(lis.tipe || '') ? '<img src="' + Utils.esc(lis.data) + '" alt="Lisensi pelatih" onerror="this.style.display=\'none\'">' : '') +
-            '<div><b>' + Utils.esc(lis.nama) + '</b>' +
-            '<div class="small muted">' + (/pdf/i.test(lis.tipe || '') ? 'PDF' : 'Gambar') + ' / ' + Math.round((lis.ukuran || 0) / 1024) + ' KB</div></div></div>' +
-            '<div class="flex gap-1 mt-2 flex-wrap">' +
-            '<a class="btn btn-sm btn-secondary" href="' + Utils.esc(lis.data) + '" target="_blank" rel="noopener">Lihat</a>' +
-            '<a class="btn btn-sm" href="' + Utils.esc(lis.data) + '" download="' + Utils.esc(lis.nama || 'lisensi') + '">Unduh</a>' +
-            '</div>'
-          : UI.emptyState('Lisensi pelatih belum diunggah.', 'alert')) +
+        '<div class="card-title">' + UI.icon('save', 20) + 'Berkas Saya</div>' +
+        '<div class="label">Lisensi Pelatih</div><div id="profil-lisensi"></div>' +
+        '<div class="label mt-2">Sertifikat Pelatihan</div><div id="profil-sertifikat"></div>' +
+        '<div class="label mt-2">Ijazah Terakhir</div><div id="profil-ijazah"></div>' +
         '<div class="notice mt-2">' + UI.icon('info', 20) +
-        '<div>Untuk mengganti foto atau lisensi, gunakan tombol <b>Edit Profil</b>.</div></div>' +
+        '<div>Untuk mengganti foto, lisensi, atau berkas, gunakan tombol <b>Edit Profil</b>.</div></div>' +
         '</div></div>';
     }
 
+    function renderBerkasProfil(container, daftar, labelKosong) {
+      if (!container) return;
+      if (!daftar || !daftar.length) {
+        container.innerHTML = '<div class="small muted">' + Utils.esc(labelKosong) + '</div>';
+        return;
+      }
+      container.innerHTML = daftar.map(function (ref, i) {
+        return '<div class="file-chip" data-berkas-i="' + i + '"><div class="grow"><b>' +
+          Utils.esc(ref && ref.nama ? ref.nama : 'berkas') + '</b>' +
+          '<div class="small muted">Memuat berkas...</div></div></div>';
+      }).join('');
+      daftar.forEach(function (ref, i) {
+        Docs.isiBerkas(ref).then(function (src) {
+          var el = container.querySelector('[data-berkas-i="' + i + '"]');
+          if (!el) return;
+          el.innerHTML = '<div class="grow"><b>' + Utils.esc(ref && ref.nama ? ref.nama : 'berkas') + '</b>' +
+            '<div class="small muted">' + Utils.esc(ref && ref.tipe ? ref.tipe : '') + '</div></div>' +
+            (src
+              ? '<a class="btn btn-sm btn-secondary" href="' + Utils.esc(src) + '" target="_blank" rel="noopener">Lihat</a>' +
+                '<a class="btn btn-sm" href="' + Utils.esc(src) + '" download="' + Utils.esc(ref && ref.nama ? ref.nama : 'berkas') + '">Unduh</a>'
+              : '<span class="small muted">Berkas tidak tersedia</span>');
+        }).catch(function () {});
+      });
+    }
+
     render();
+    var uProfil = Store.find('users', user.id) || user;
+    renderBerkasProfil(document.getElementById('profil-lisensi'),
+      uProfil.lisensi ? [uProfil.lisensi] : [], 'Lisensi pelatih belum diunggah.');
+    renderBerkasProfil(document.getElementById('profil-sertifikat'),
+      uProfil.sertifikat || [], 'Belum ada sertifikat pelatihan.');
+    renderBerkasProfil(document.getElementById('profil-ijazah'),
+      uProfil.ijazah ? [uProfil.ijazah] : [], 'Ijazah belum diunggah.');
 
     page.addEventListener('click', function (e) {
       if (!e.target.closest('[data-edit-profil]')) return;
@@ -501,9 +528,8 @@ var PagesAssistant = (function () {
       } else {
         html += '<div class="param-grid">' + params.map(function (p) {
           return '<div class="param-item">' +
-            '<label class="label">' + Utils.esc(p.nama) + ' <span class="small muted">(' + Utils.esc(p.satuan) + ')</span></label>' +
-            '<input class="input" type="number" name="p_' + Utils.esc(p.id) + '" min="1" max="10" step="1" placeholder="1 - 10">' +
-            '<div class="field-error" data-error-for="p_' + Utils.esc(p.id) + '"></div></div>';
+            UI.skalaField({ name: 'p_' + p.id, label: p.nama, required: false, help: p.satuan }) +
+            '</div>';
         }).join('') + '</div>';
       }
       html += '<div class="field" id="lh-override" hidden>' +
@@ -551,9 +577,14 @@ var PagesAssistant = (function () {
             '<div class="grow"><b>' + Utils.esc(a ? a.nama : id) + '</b><span>' + Utils.esc(id) + '</span></div>' +
             '<div class="flex gap-1 flex-wrap">' +
             paramsAktif.map(function (p) {
-              return '<div style="min-width:96px">' +
-                '<div class="small muted">' + Utils.esc(p.nama) + '</div>' +
-                '<input class="input" type="number" min="1" max="10" step="1" name="ov_' + Utils.esc(id) + '_' + Utils.esc(p.id) + '" placeholder="dasar" aria-label="Nilai ' + Utils.esc(p.nama) + ' untuk ' + Utils.esc(a ? a.nama : id) + '">' +
+              return '<div style="min-width:210px">' +
+                UI.skalaField({
+                  name: 'ov_' + id + '_' + p.id,
+                  label: p.nama,
+                  required: false,
+                  compact: true,
+                  help: 'kosong = nilai dasar'
+                }) +
                 '</div>';
             }).join('') +
             '</div></div>';
@@ -561,6 +592,8 @@ var PagesAssistant = (function () {
       }
 
       renderOverride();
+
+      UI.bindSkala(form);
 
       UI.bindSubmit(form, function () {
         Utils.clearErrors(form);
@@ -758,8 +791,9 @@ var PagesAssistant = (function () {
       '<div class="filter-bar">' +
       '<select class="input" id="ip-kategori" style="max-width:220px" aria-label="Filter kategori pertandingan">' +
       '<option value="">Semua kategori</option>' +
-      '<option value="Tournament">Tournament</option>' +
-      '<option value="Friendly Match">Friendly Match</option>' +
+      MatchKategori.opsiFilter().map(function (k) {
+        return '<option value="' + Utils.esc(k) + '">' + Utils.esc(k) + '</option>';
+      }).join('') +
       '<option value="__belum">Belum dikategorikan</option>' +
       '</select>' +
       '</div>' +
@@ -781,10 +815,19 @@ var PagesAssistant = (function () {
         UI.field({ name: 'turnamen', label: 'Turnamen', required: true, placeholder: 'contoh: Surabaya Open 2026' }) +
         UI.field({
           name: 'kategori', label: 'Kategori Pertandingan', type: 'select', required: true, value: '',
-          options: [{ value: '', label: '-- Pilih kategori --' }].concat(
-            (CONFIG.KATEGORI_PERTANDINGAN || []).map(function (k) {
-              return { value: k, label: k };
-            }))
+          options: MatchKategori.opsiDropdown('')
+        }) +
+        '<div data-kategori-lain-wrap hidden>' +
+        UI.field({
+          name: 'kategori_lain', label: 'Kategori (isi sendiri)', required: true,
+          placeholder: 'contoh: Pra Remaja Putra',
+          help: 'Kategori yang Anda tulis otomatis tersimpan untuk input berikutnya.'
+        }) +
+        '</div>' +
+        UI.chipPilihan({
+          name: 'kelas', label: 'Kelas', required: true, value: '',
+          options: ['SD', 'SMP', 'SMA'],
+          help: 'Tingkat sekolah atlet saat bertanding.'
         }) +
         UI.field({ name: 'lawan', label: 'Lawan', required: true, placeholder: 'contoh: PB Djarum Kudus' }) +
         UI.field({ name: 'hasil', label: 'Hasil', type: 'select', value: 'Menang', options: ['Menang', 'Kalah'] }) +
@@ -818,6 +861,16 @@ var PagesAssistant = (function () {
       }
 
       pasangPickerAtlet([]);
+
+      UI.bindChipPilihan(form);
+
+      var selKatIp = form.querySelector('[name="kategori"]');
+      var wrapLainIp = form.querySelector('[data-kategori-lain-wrap]');
+      function perbaruiKategoriLainIp() {
+        if (wrapLainIp) wrapLainIp.hidden = selKatIp.value !== MatchKategori.NILAI_LAINNYA;
+      }
+      selKatIp.addEventListener('change', perbaruiKategoriLainIp);
+      perbaruiKategoriLainIp();
 
       form.querySelector('[name="nomor"]').addEventListener('change', function () {
         pasangPickerAtlet(pickerApi.getValue());
@@ -854,6 +907,10 @@ var PagesAssistant = (function () {
         if (!data.tanggal) errors.tanggal = 'Tanggal wajib diisi.';
         if (!data.turnamen) errors.turnamen = 'Turnamen wajib diisi.';
         if (!data.kategori) errors.kategori = 'Kategori pertandingan wajib dipilih.';
+        else if (data.kategori === MatchKategori.NILAI_LAINNYA && !String(data.kategori_lain || '').trim()) {
+          errors.kategori_lain = 'Tulis kategori pertandingan Anda.';
+        }
+        if (!data.kelas) errors.kelas = 'Kelas wajib dipilih.';
         if (!data.lawan) errors.lawan = 'Lawan wajib diisi.';
         if (!data.hasil) errors.hasil = 'Hasil wajib dipilih.';
 
@@ -885,7 +942,8 @@ var PagesAssistant = (function () {
           nomor: nomor,
           tanggal: data.tanggal,
           turnamen: data.turnamen,
-          kategori: data.kategori || '',
+          kategori: MatchKategori.nilaiDariForm(data),
+          kelas: data.kelas || '',
           lawan: data.lawan,
           skor_set: sets,
           hasil: data.hasil,
@@ -910,7 +968,7 @@ var PagesAssistant = (function () {
         return;
       }
       listHost.innerHTML = '<div class="table-wrap"><table class="table"><thead><tr>' +
-        '<th>Tanggal</th><th>Atlet</th><th>Kategori</th><th>Turnamen</th><th>Lawan</th><th>Skor</th><th>Hasil</th><th>Input Oleh</th>' +
+        '<th>Tanggal</th><th>Atlet</th><th>Kategori</th><th>Kelas</th><th>Turnamen</th><th>Lawan</th><th>Skor</th><th>Hasil</th><th>Input Oleh</th>' +
         '</tr></thead><tbody>' +
         rows.slice(0, 30).map(function (m) {
           return '<tr>' +
@@ -918,6 +976,7 @@ var PagesAssistant = (function () {
             '<td><b>' + Utils.esc(Shared.labelAtletMatch(m)) + '</b>' +
             (m.nomor === 'Ganda' ? ' <span class="small muted">(Ganda)</span>' : '') + '</td>' +
             '<td>' + Shared.badgeKategori(m.kategori) + '</td>' +
+            '<td>' + (m.kelas ? UI.badge(m.kelas, 'primary') : '<span class="sel-kosong">-</span>') + '</td>' +
             '<td>' + Utils.esc(m.turnamen) + '</td>' +
             '<td>' + Utils.esc(m.lawan) + '</td>' +
             '<td><div class="score-pills">' + (m.skor_set || []).map(function (s) {

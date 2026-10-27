@@ -233,6 +233,8 @@ var Auth = (function () {
         tgl_bergabung: payload.tgl_bergabung || new Date().toISOString().slice(0, 10),
         jenis_latihan: payload.jenis_latihan || 'club',
         tgl_lahir: payload.tgl_lahir,
+        tempat_lahir: payload.tempat_lahir || '',
+        orang_tua: payload.orang_tua || '',
         jk: payload.jk,
         tinggi: Number(payload.tinggi),
         berat: Number(payload.berat),
@@ -270,7 +272,10 @@ var Auth = (function () {
     }).then(function (user) {
       return Store.update('users', user.id, {
         tgl_lahir: payload.tgl_lahir || '',
-        lisensi: payload.lisensi || null
+        alamat: payload.alamat || '',
+        lisensi: payload.lisensi || null,
+        sertifikat: payload.sertifikat || [],
+        ijazah: payload.ijazah || null
       });
     });
   }

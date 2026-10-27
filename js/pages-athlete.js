@@ -615,6 +615,7 @@ var PagesAthlete = (function () {
       host.innerHTML = '<div class="list-rows">' + rows.map(function (m) {
         return '<div class="list-row">' +
           '<div class="grow"><b>' + Utils.esc(m.turnamen) + '</b> ' + Shared.badgeKategori(m.kategori) +
+          (m.kelas ? ' ' + UI.badge(m.kelas, 'primary') : '') +
           '<span>vs ' + Utils.esc(m.lawan) + ' / ' + Utils.fmtDate(m.tanggal, true) + '</span>' +
           '<div class="small muted">' + (m.skor_set || []).map(function (s) {
             return Utils.esc(s);
@@ -641,6 +642,8 @@ var PagesAthlete = (function () {
         (m.nomor === 'Ganda' ? ' <span class="small muted">(Ganda)</span>' : '') + '</div></div>' +
         '<div class="detail-item"><div class="k">Turnamen</div><div class="v">' + Utils.esc(m.turnamen) + '</div></div>' +
         '<div class="detail-item"><div class="k">Kategori</div><div class="v">' + Shared.badgeKategori(m.kategori) + '</div></div>' +
+        '<div class="detail-item"><div class="k">Kelas</div><div class="v">' +
+        (m.kelas ? UI.badge(m.kelas, 'primary') : '<span class="sel-kosong">-</span>') + '</div></div>' +
         '<div class="detail-item"><div class="k">Lawan</div><div class="v">' + Utils.esc(m.lawan) + '</div></div>' +
         '<div class="detail-item"><div class="k">Hasil</div><div class="v">' + UI.statusBadge(m.hasil) + '</div></div>' +
         '<div class="detail-item"><div class="k">Skor per Set</div><div class="v"><div class="score-pills">' +
@@ -670,22 +673,30 @@ var PagesAthlete = (function () {
       UI.pageHeader('Profil Atlet', 'Biodata dan pengaturan akun Anda.') +
       '<div class="grid-2 equal">' +
       '<div class="card">' +
-      '<div class="flex items-center gap-2 mb-2">' + UI.avatar(athlete, 84) +
+      '<div class="biodata-kepala">' + UI.avatar(athlete, 84) +
       '<div><h3 class="mt-0 mb-0">' + Utils.esc(athlete.nama) + '</h3>' +
       '<div class="flex items-center gap-1 mt-1">' + UI.badge(athlete.id_atlet, 'primary') + UI.statusBadge(athlete.status) + '</div></div></div>' +
-      '<div class="detail-grid">' +
-      '<div class="detail-item"><div class="k">Tanggal Lahir</div><div class="v">' + Utils.fmtDate(athlete.tgl_lahir, true) + '</div></div>' +
-      '<div class="detail-item"><div class="k">Usia</div><div class="v">' + Utils.age(athlete.tgl_lahir) + ' tahun</div></div>' +
-      '<div class="detail-item"><div class="k">Tanggal Bergabung</div><div class="v">' + Utils.fmtDate(athlete.tgl_bergabung, true) + '</div></div>' +
-      '<div class="detail-item"><div class="k">Jenis Latihan</div><div class="v">' + Utils.esc(UI.labelJenisLatihan(athlete.jenis_latihan)) + '</div></div>' +
-      '<div class="detail-item"><div class="k">Jenis Kelamin</div><div class="v">' + Utils.esc(athlete.jk) + '</div></div>' +
-      '<div class="detail-item"><div class="k">Tinggi Badan</div><div class="v">' + Utils.esc(athlete.tinggi) + ' cm</div></div>' +
-      '<div class="detail-item"><div class="k">Berat Badan</div><div class="v">' + Utils.esc(athlete.berat) + ' kg</div></div>' +
-      '<div class="detail-item"><div class="k">BMI</div><div class="v">' + Utils.esc(athlete.bmi) + ' (' + Utils.esc(athlete.kategori_bmi) + ')</div></div>' +
-      '<div class="detail-item"><div class="k">Asal Sekolah</div><div class="v">' + Utils.esc(athlete.sekolah) + '</div></div>' +
-      '<div class="detail-item"><div class="k">Asal PB</div><div class="v">' + Utils.esc(athlete.asal_pb || '-') + '</div></div>' +
-      '<div class="detail-item"><div class="k">No. HP</div><div class="v">' + Utils.esc(athlete.no_hp) + '</div></div>' +
-      '<div class="detail-item"><div class="k">ID Login</div><div class="v">' + Utils.esc(user.username) + '</div></div>' +
+      '<h4 class="mt-3 mb-1">Biodata</h4>' +
+      '<div class="biodata-excel">' +
+      UI.biodataRow('Tanggal Bergabung', Utils.fmtDate(athlete.tgl_bergabung, true), !athlete.tgl_bergabung) +
+      UI.biodataRow('Nama Atlet', Utils.esc(athlete.nama), false) +
+      UI.biodataRow('Jenis Kelamin', Utils.esc(athlete.jk === 'Laki-laki' ? 'L (Laki-laki)' : (athlete.jk === 'Perempuan' ? 'P (Perempuan)' : athlete.jk)), !athlete.jk) +
+      UI.biodataRow('Tempat Lahir', Utils.esc(athlete.tempat_lahir || ''), !athlete.tempat_lahir) +
+      UI.biodataRow('Tanggal Lahir', Utils.fmtDate(athlete.tgl_lahir, true), !athlete.tgl_lahir) +
+      UI.biodataRow('Usia', Utils.esc(Utils.age(athlete.tgl_lahir)) + ' tahun', false) +
+      UI.biodataRow('Agama', Utils.esc(athlete.agama || ''), !athlete.agama) +
+      UI.biodataRow('Asal Sekolah', Utils.esc(athlete.sekolah || ''), !athlete.sekolah) +
+      UI.biodataRow('Alamat', Utils.esc(athlete.alamat || ''), !athlete.alamat) +
+      UI.biodataRow('Nama Orang Tua / Wali', Utils.esc(athlete.orang_tua || ''), !athlete.orang_tua) +
+      '</div>' +
+      '<h4 class="mt-3 mb-1">Data Tambahan</h4>' +
+      '<div class="biodata-excel">' +
+      UI.biodataRow('Jenis Latihan', Utils.esc(UI.labelJenisLatihan(athlete.jenis_latihan)), !athlete.jenis_latihan) +
+      UI.biodataRow('Asal PB', Utils.esc(athlete.asal_pb || ''), !athlete.asal_pb) +
+      UI.biodataRow('No. HP', Utils.esc(athlete.no_hp || ''), !athlete.no_hp) +
+      UI.biodataRow('Tinggi / Berat', Utils.esc(athlete.tinggi) + ' cm / ' + Utils.esc(athlete.berat) + ' kg', false) +
+      UI.biodataRow('BMI', Utils.esc(athlete.bmi) + ' (' + Utils.esc(athlete.kategori_bmi) + ')', false) +
+      UI.biodataRow('ID Login', Utils.esc(user.username), false) +
       '</div>' +
       '<h4 class="mt-3">Dokumen Pendaftaran</h4>' +
       Docs.viewerHtml(athlete.dokumen || {}) +

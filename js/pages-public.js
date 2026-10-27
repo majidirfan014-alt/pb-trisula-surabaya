@@ -166,10 +166,35 @@ var PagesPublic = (function () {
     });
 
     var kiri = '';
-    if (c.phone) {
-      kiri += '<a class="strip-item" href="tel:' + Utils.esc(c.phoneLink || c.phone) + '">' +
-        '<svg class="icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M5 4h4l2 5-2 2a12 12 0 0 0 4 4l2-2 5 2v4a1 1 0 0 1-1 1A16 16 0 0 1 4 5a1 1 0 0 1 1-1z"/></svg>' +
-        Utils.esc(c.phone) + '</a>';
+    var nomorList = (Array.isArray(c.nomor) ? c.nomor : []).filter(function (n) {
+      return n && String(n.tampil || '').trim();
+    });
+    if (!nomorList.length && c.phone) {
+      nomorList = [{ label: '', tampil: c.phone, tautan: c.phoneLink || c.phone }];
+    }
+    var ikonTelepon = '<svg class="icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M5 4h4l2 5-2 2a12 12 0 0 0 4 4l2-2 5 2v4a1 1 0 0 1-1 1A16 16 0 0 1 4 5a1 1 0 0 1 1-1z"/></svg>';
+    function tautanNomor(n) {
+      var t = String(n.tautan || n.tampil || '').trim();
+      var digits = t.replace(/[^\d]/g, '');
+      var bersih = t.replace(/[\s\-().]/g, '');
+      if (digits.length >= 9 && /^(08|62|\+62)/.test(bersih)) {
+        var intl = digits.slice(0, 2) === '62' ? digits
+          : (digits.slice(0, 1) === '0' ? '62' + digits.slice(1) : digits);
+        return 'https://wa.me/' + intl;
+      }
+      return 'tel:' + t;
+    }
+    nomorList.forEach(function (n, i) {
+      kiri += '<a class="strip-item strip-nomor' + (i > 0 ? ' strip-nomor-tambahan' : '') + '"' +
+        ' href="' + Utils.esc(tautanNomor(n)) + '"' + (String(tautanNomor(n)).indexOf('wa.me') !== -1 ? ' target="_blank" rel="noopener"' : '') + '>' +
+        ikonTelepon +
+        Utils.esc(n.tampil) +
+        (n.label ? ' <span class="strip-nomor-label">(' + Utils.esc(n.label) + ')</span>' : '') +
+        '</a>';
+    });
+    if (nomorList.length > 1) {
+      kiri += '<button type="button" class="strip-item strip-nomor-lain" data-strip-nomor-toggle>' +
+        '+' + (nomorList.length - 1) + ' nomor</button>';
     }
     if (c.email) {
       kiri += '<a class="strip-item strip-item-hide" href="mailto:' + Utils.esc(c.email) + '">' +
@@ -877,12 +902,62 @@ var PagesPublic = (function () {
     renderGallery();
   }
 
+  // Tombol "+N nomor" di top bar (HP): buka daftar nomor lainnya.
+  function bindStripNomor() {
+    var host = document.getElementById('strip');
+    if (!host || host._nomorBound) return;
+    host._nomorBound = true;
+    host.addEventListener('click', function (e) {
+      var t = e.target.closest ? e.target.closest('[data-strip-nomor-toggle]') : null;
+      if (!t) return;
+      var c = cfg().kontak || {};
+      var nomorList = (Array.isArray(c.nomor) ? c.nomor : []).filter(function (n) {
+        return n && String(n.tampil || '').trim();
+      });
+      if (!nomorList.length && c.phone) {
+        nomorList = [{ label: '', tampil: c.phone, tautan: c.phoneLink || c.phone }];
+      }
+      function tautan(n) {
+        var tt = String(n.tautan || n.tampil || '').trim();
+        var digits = tt.replace(/[^\d]/g, '');
+        var bersih = tt.replace(/[\s\-().]/g, '');
+        if (digits.length >= 9 && /^(08|62|\+62)/.test(bersih)) {
+          var intl = digits.slice(0, 2) === '62' ? digits
+            : (digits.slice(0, 1) === '0' ? '62' + digits.slice(1) : digits);
+          return 'https://wa.me/' + intl;
+        }
+        return 'tel:' + tt;
+      }
+      var body = '<div class="list-rows">' + nomorList.map(function (n) {
+        return '<a class="list-row" href="' + Utils.esc(tautan(n)) + '"' +
+          (String(tautan(n)).indexOf('wa.me') !== -1 ? ' target="_blank" rel="noopener"' : '') + '>' +
+          '<div class="grow"><b>' + Utils.esc(n.tampil) + '</b>' +
+          (n.label ? '<span>' + Utils.esc(n.label) + '</span>' : '<span>' + Utils.esc(tautan(n)) + '</span>') +
+          '</div></a>';
+      }).join('') + '</div>';
+      if (typeof UI !== 'undefined' && UI && UI.modalShell) {
+        var hostModal = document.getElementById('modal-host');
+        if (!hostModal) {
+          hostModal = document.createElement('div');
+          hostModal.id = 'modal-host';
+          document.body.appendChild(hostModal);
+        }
+        hostModal.innerHTML =
+          UI.modalShell('m-strip-nomor', 'Nomor Kontak',
+            body,
+            '<button type="button" class="btn btn-ghost" data-modal-close="m-strip-nomor">Tutup</button>');
+        UI.openModal('m-strip-nomor');
+      }
+    });
+  }
+
   function init() {
     landing = null;
     renderLightbox();
     renderSemua();
     bindNav();
     bindNavAktif();
+    bindStripNomor();
     if (typeof Cloud !== 'undefined' && Cloud && Cloud.init) {
       Cloud.init().then(function () {
         if (Cloud.siap && Cloud.siap() && Cloud.migrasiFotoLama) {

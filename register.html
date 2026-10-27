@@ -54,6 +54,19 @@
               </div>
 
               <div class="field">
+                <label class="label" for="f-tempat_lahir">Tempat Lahir</label>
+                <input class="input" type="text" id="f-tempat_lahir" name="tempat_lahir" placeholder="contoh: Surabaya">
+                <div class="help">Opsional.</div>
+                <div class="field-error" data-error-for="tempat_lahir"></div>
+              </div>
+
+              <div class="field">
+                <label class="label" for="f-orang_tua">Nama Orang Tua / Wali <span class="req">*</span></label>
+                <input class="input" type="text" id="f-orang_tua" name="orang_tua" placeholder="contoh: Budi Santoso (Ayah)" required>
+                <div class="field-error" data-error-for="orang_tua"></div>
+              </div>
+
+              <div class="field">
                 <label class="label" for="f-tgl_bergabung">Tanggal Bergabung <span class="req">*</span></label>
                 <input class="input" type="date" id="f-tgl_bergabung" name="tgl_bergabung" autocomplete="off" required>
                 <div class="help">Tanggal pertama bergabung dengan PB Trisula.</div>
@@ -216,9 +229,24 @@
                 <div class="help">Angka saja, contoh 081234567890 atau +6281234567890 (10–15 digit).</div>
                 <div class="field-error" data-error-for="no_hp"></div>
               </div>
+              <div class="field">
+                <label class="label" for="a-alamat">Alamat <span class="req">*</span></label>
+                <textarea class="input" id="a-alamat" name="alamat" rows="3" placeholder="Nama jalan, nomor rumah, kelurahan, kecamatan, kota" required></textarea>
+                <div class="field-error" data-error-for="alamat"></div>
+              </div>
             </div>
 
             <div>
+                            <div class="field">
+                <label class="label">Sertifikat Pelatihan <span class="req">*</span></label>
+                <div id="sertifikat-box"></div>
+              </div>
+
+              <div class="field">
+                <label class="label">Ijazah Terakhir <span class="req">*</span></label>
+                <div id="ijazah-box"></div>
+              </div>
+
               <div class="field">
                 <label class="label">Lisensi Pelatih <span class="req">*</span></label>
                 <div id="lisensi-box"></div>

@@ -148,6 +148,162 @@ var UI = (function () {
       control + help + error + '</div>';
   }
 
+  /* ---------- Baris tabel biodata gaya lembar Excel ---------- */
+  function biodataRow(label, nilaiHtml, kosong) {
+    return '<div class="biodata-row">' +
+      '<div class="biodata-label">' + Utils.esc(label) + '</div>' +
+      '<div class="biodata-value">' + (kosong ? '<span class="sel-kosong">-</span>' : (nilaiHtml || '')) + '</div>' +
+      '</div>';
+  }
+
+  /* ---------- Pilihan chip satu nilai (contoh: Kelas SD/SMP/SMA) ---------- */
+  function chipPilihan(opts) {
+    opts = opts || {};
+    var name = opts.name;
+    var value = opts.value === undefined || opts.value === null ? '' : opts.value;
+    var tombol = (opts.options || []).map(function (o) {
+      var v = typeof o === 'string' ? o : o.value;
+      var l = typeof o === 'string' ? o : o.label;
+      return '<button type="button" class="chip' + (String(value) === String(v) ? ' active' : '') + '"' +
+        ' data-chip-val="' + Utils.esc(v) + '" aria-pressed="' + (String(value) === String(v) ? 'true' : 'false') + '">' +
+        Utils.esc(l) + '</button>';
+    }).join('');
+    return '<div class="field">' +
+      '<label class="label">' + Utils.esc(opts.label || 'Pilihan') + (opts.required !== false ? ' <span class="req">*</span>' : '') + '</label>' +
+      '<input type="hidden" name="' + Utils.esc(name) + '" value="' + Utils.esc(value) + '">' +
+      '<div class="chip-row" data-chip-row>' + tombol + '</div>' +
+      (opts.help ? '<div class="help">' + Utils.esc(opts.help) + '</div>' : '') +
+      '<div class="field-error" data-error-for="' + Utils.esc(name) + '"></div>' +
+      '</div>';
+  }
+
+  function bindChipPilihan(root) {
+    if (!root || root._chipBound) return;
+    root._chipBound = true;
+    root.addEventListener('click', function (e) {
+      var btn = e.target.closest ? e.target.closest('[data-chip-val]') : null;
+      if (!btn || !root.contains(btn)) return;
+      var field = btn.closest('.field');
+      if (!field) return;
+      var input = field.querySelector('input[type="hidden"]');
+      if (input) input.value = btn.getAttribute('data-chip-val');
+      var row = btn.closest('[data-chip-row]');
+      if (row) {
+        var btns = row.querySelectorAll('[data-chip-val]');
+        for (var i = 0; i < btns.length; i++) {
+          var aktif = btns[i] === btn;
+          btns[i].classList.toggle('active', aktif);
+          btns[i].setAttribute('aria-pressed', aktif ? 'true' : 'false');
+        }
+      }
+    });
+  }
+
+  /* ---------- Pemilih skala 1-10 (tombol bulat sekali sentuh) ----------
+     Nilai disimpan lewat input tersembunyi bernilai angka bulat 1-10 atau
+     kosong (batal pilih), sehingga format data tetap sama dengan input
+     angka sebelumnya. Mendukung keyboard: panah kiri/kanan, angka 1-9,
+     0 untuk 10, Delete/Backspace untuk mengosongkan. */
+  function skalaLabel(nilai) {
+    if (nilai === '' || nilai === null || nilai === undefined) return 'Dipilih: -';
+    var n = Number(nilai);
+    if (isNaN(n)) return 'Dipilih: -';
+    var kat = n <= 3 ? 'Rendah' : n <= 6 ? 'Sedang' : n <= 8 ? 'Baik' : 'Sangat Baik';
+    return 'Dipilih: ' + n + ' (' + kat + ')';
+  }
+
+  function skalaField(opts) {
+    opts = opts || {};
+    var name = opts.name;
+    var value = opts.value === undefined || opts.value === null ? '' : opts.value;
+    if (value !== '' && Number(value) >= 1 && Number(value) <= 10) value = String(Number(value));
+    else value = '';
+    var label = opts.label || 'Skala 1-10';
+    var required = opts.required !== false;
+    var help = opts.help ? '<div class="help">' + Utils.esc(opts.help) + '</div>' : '';
+    var tombol = '';
+    for (var i = 1; i <= 10; i++) {
+      var aktif = value === String(i);
+      tombol += '<button type="button" class="skala-btn' + (aktif ? ' aktif' : '') + '"' +
+        ' data-skala-val="' + i + '" aria-pressed="' + (aktif ? 'true' : 'false') + '">' + i + '</button>';
+    }
+    return '<div class="field skala-field' + (opts.compact ? ' skala-compact' : '') + '">' +
+      '<label class="label" for="f-' + Utils.esc(name) + '">' + Utils.esc(label) + (required ? ' <span class="req">*</span>' : '') + '</label>' +
+      '<input type="hidden" class="skala-value" name="' + Utils.esc(name) + '" id="f-' + Utils.esc(name) + '" value="' + Utils.esc(value) + '">' +
+      '<div class="skala-wrap">' +
+      '<div class="skala-btns" role="group" tabindex="0" aria-label="Pilih skala 1 sampai 10">' + tombol + '</div>' +
+      (opts.compact ? '' : '<div class="skala-keterangan">1-3 Rendah &middot; 4-6 Sedang &middot; 7-8 Baik &middot; 9-10 Sangat Baik</div>') +
+      '<div class="skala-dipilih" data-skala-info>' + Utils.esc(skalaLabel(value)) + '</div>' +
+      '</div>' +
+      '<div class="field-error" data-error-for="' + Utils.esc(name) + '"></div>' +
+      '</div>';
+  }
+
+  // Pasang interaksi untuk semua .skala-field di dalam root (sekali per root).
+  function setSkalaDiField(field, val) {    var input = field.querySelector('.skala-value');
+    if (!input) return;
+    input.value = val;
+    var btns = field.querySelectorAll('.skala-btn');
+    for (var i = 0; i < btns.length; i++) {
+      var aktif = String(val) === btns[i].getAttribute('data-skala-val');
+      btns[i].classList.toggle('aktif', aktif);
+      btns[i].setAttribute('aria-pressed', aktif ? 'true' : 'false');
+    }
+    var info = field.querySelector('[data-skala-info]');
+    if (info) info.textContent = skalaLabel(val);
+  }
+
+  function setSkala(container, name, val) {
+    if (!container) return;
+    var input = container.querySelector('input.skala-value[name="' + name + '"]');
+    if (!input) return;
+    var field = input.closest('.skala-field');
+    if (field) setSkalaDiField(field, val === null || val === undefined ? '' : String(val));
+  }
+
+  function bindSkala(root) {
+    if (!root || root._skalaBound) return;
+    root._skalaBound = true;
+
+    function setValue(field, val) {
+      setSkalaDiField(field, val);
+    }
+
+    root.addEventListener('click', function (e) {
+      var btn = e.target.closest ? e.target.closest('.skala-btn') : null;
+      if (!btn || !root.contains(btn)) return;
+      var field = btn.closest('.skala-field');
+      if (!field) return;
+      var val = btn.getAttribute('data-skala-val');
+      var kini = field.querySelector('.skala-value').value;
+      setValue(field, kini === val ? '' : val);
+    });
+
+    root.addEventListener('keydown', function (e) {
+      var group = e.target.closest ? e.target.closest('.skala-btns') : null;
+      if (!group || !root.contains(group)) return;
+      var field = group.closest('.skala-field');
+      if (!field) return;
+      var kini = Number(field.querySelector('.skala-value').value) || 0;
+      var baru;
+      if (e.key === 'ArrowRight' || e.key === 'ArrowUp') {
+        baru = kini >= 10 ? 10 : kini + 1;
+      } else if (e.key === 'ArrowLeft' || e.key === 'ArrowDown') {
+        baru = kini <= 1 ? '' : kini - 1;
+      } else if (/^[1-9]$/.test(e.key)) {
+        baru = e.key;
+      } else if (e.key === '0') {
+        baru = '10';
+      } else if (e.key === 'Backspace' || e.key === 'Delete') {
+        baru = '';
+      } else {
+        return;
+      }
+      e.preventDefault();
+      setValue(field, String(baru));
+    });
+  }
+
   function modalShell(id, title, body, footer) {
     return '<div class="modal-backdrop" id="' + id + '" hidden>' +
       '<div class="modal" role="dialog" aria-modal="true" aria-label="' + Utils.esc(title) + '">' +
@@ -416,6 +572,13 @@ var UI = (function () {
     statusBadge: statusBadge,
     labelStatusAtlet: labelStatusAtlet,
     labelJenisLatihan: labelJenisLatihan,
+    skalaField: skalaField,
+    bindSkala: bindSkala,
+    setSkala: setSkala,
+    skalaLabel: skalaLabel,
+    chipPilihan: chipPilihan,
+    bindChipPilihan: bindChipPilihan,
+    biodataRow: biodataRow,
     avatar: avatar,
     statCard: statCard,
     emptyState: emptyState,

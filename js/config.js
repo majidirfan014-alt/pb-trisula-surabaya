@@ -29,6 +29,9 @@ var CONFIG = {
     kontak: {
       phone: '0812-3456-7890',
       phoneLink: '+6281234567890',
+      // Daftar nomor telepon/WhatsApp (maksimal 5 baris). Field phone/
+      // phoneLink tetap diisi dari nomor pertama untuk kompatibilitas lama.
+      nomor: [{ label: '', tampil: '0812-3456-7890', tautan: '+6281234567890' }],
       email: 'pbtrisulasurabaya@gmail.com',
       alamatSingkat: 'Surabaya'
     },

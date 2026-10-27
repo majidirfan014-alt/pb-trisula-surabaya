@@ -455,10 +455,50 @@ var LandingStore = (function () {
     return base;
   }
 
+  // Normalisasi nomor tampil (mis. 0812-3456-7890) menjadi format tautan
+  // internasional +62... untuk tel:/wa.me.
+  function normalisasiTautan(tampil) {
+    var v = String(tampil || '').trim();
+    if (!v) return '';
+    var digits = v.replace(/[^\d]/g, '');
+    if (!digits) return '';
+    if (digits.slice(0, 2) === '62') return '+' + digits;
+    if (digits.slice(0, 1) === '0') return '+62' + digits.slice(1);
+    return '+' + digits;
+  }
+
+  // Migrasi data lama (satu nomor: kontak.phone/phoneLink) menjadi daftar
+  // nomor (kontak.nomor). Aman diulang; data lama tidak dihapus.
+  function migrasiNomor(kontak) {
+    if (!kontak) return kontak;
+    if (!Array.isArray(kontak.nomor)) {
+      kontak.nomor = [];
+      if (kontak.phone) {
+        kontak.nomor.push({
+          label: '',
+          tampil: String(kontak.phone),
+          tautan: kontak.phoneLink || normalisasiTautan(kontak.phone)
+        });
+      }
+    }
+    return kontak;
+  }
   function get() {
     var hasil = defaults();
     var simpanan = bacaMentah();
     if (simpanan) gabung(hasil, simpanan);
+    // Migrasi nomor telepon: pakai daftar yang tersimpan bila ada; selain itu
+    // bangun dari data lama (phone/phoneLink) — bukan dari nilai default —
+    // agar nomor lama pengguna tidak tertimpa oleh nomor contoh.
+    var simpananNomor = simpanan && simpanan.kontak && Array.isArray(simpanan.kontak.nomor);
+    if (!simpananNomor) {
+      var kontakSimpan = (simpanan && simpanan.kontak) || {};
+      var phone = kontakSimpan.phone || hasil.kontak.phone;
+      var link = kontakSimpan.phoneLink || hasil.kontak.phoneLink;
+      hasil.kontak.nomor = phone
+        ? [{ label: '', tampil: String(phone), tautan: link || normalisasiTautan(phone) }]
+        : [];
+    }
     return hasil;
   }
 
@@ -730,6 +770,14 @@ var LandingStore = (function () {
     var k = (nilai || {});
     if (nama === 'kontak') {
       if (k.phone && !validasiTelepon(k.phone)) errors.push('Nomor telepon hanya boleh angka dan tanda + - ( ) .');
+      (k.nomorList || []).forEach(function (n, i) {
+        if (n && n.tampil && !validasiTelepon(n.tampil)) {
+          errors.push('Nomor telepon ke-' + (i + 1) + ' hanya boleh angka dan tanda + - ( ) .');
+        }
+        if (n && n.tautan && !validasiTelepon(n.tautan)) {
+          errors.push('Nomor untuk tautan ke-' + (i + 1) + ' hanya boleh angka dan tanda + - ( ) .');
+        }
+      });
       if (k.email && !validasiEmail(k.email)) errors.push('Format email tidak benar.');
       (k.sosmedList || []).forEach(function (s) {
         if (s.url && !validasiUrl(s.url)) errors.push('Tautan ' + (s.nama || 'media sosial') + ' harus diawali http:// atau https://');

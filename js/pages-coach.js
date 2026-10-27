@@ -7,6 +7,12 @@ var PagesCoach = (function () {
       '<div class="form-grid cols-2">' +
       UI.field({ name: 'nama', label: 'Nama Atlet', required: true, value: a.nama, placeholder: 'Nama lengkap' }) +
       UI.field({ name: 'tgl_lahir', label: 'Tanggal Lahir', type: 'date', required: true, value: a.tgl_lahir }) +
+      UI.field({ name: 'tempat_lahir', label: 'Tempat Lahir', value: a.tempat_lahir, placeholder: 'contoh: Surabaya', help: 'Opsional.' }) +
+      UI.field({
+        name: 'agama', label: 'Agama', type: 'select', value: a.agama || '',
+        options: [{ value: '', label: '-- Pilih --' }].concat(CONFIG.AGAMA || ['Islam', 'Kristen', 'Katolik', 'Hindu', 'Buddha', 'Konghucu', 'Lainnya'])
+      }) +
+      UI.field({ name: 'orang_tua', label: 'Nama Orang Tua / Wali', required: true, value: a.orang_tua, placeholder: 'contoh: Budi Santoso (Ayah)' }) +
       UI.field({
         name: 'tgl_bergabung', label: 'Tanggal Bergabung', type: 'date', required: true,
         value: a.tgl_bergabung || (a.dibuat_pada ? String(a.dibuat_pada).slice(0, 10) : ''),
@@ -28,6 +34,7 @@ var PagesCoach = (function () {
       UI.field({ name: 'asal_pb', label: 'Asal PB', value: a.asal_pb, placeholder: 'Opsional' }) +
       UI.field({ name: 'no_hp', label: 'No. HP', required: true, value: a.no_hp, placeholder: '08xxxxxxxxxx' }) +
       '</div>' +
+      UI.field({ name: 'alamat', label: 'Alamat Rumah', type: 'textarea', rows: 2, value: a.alamat, placeholder: 'Nama jalan, nomor rumah, kelurahan, kecamatan, kota', help: 'Opsional.' }) +
       '<div class="form-grid cols-2">' +
       UI.field({ name: 'username', label: 'ID Login', required: !isEdit, value: a.username || (a.id_atlet ? a.id_atlet.toLowerCase() : ''), help: isEdit ? 'Tidak dapat diubah.' : 'Kosongkan untuk memakai ID atlet otomatis.', disabled: isEdit }) +
       UI.field({ name: 'password', label: isEdit ? 'Kata Sandi Baru (opsional)' : 'Kata Sandi', type: 'password', required: !isEdit, value: '', help: isEdit ? 'Biarkan kosong bila tidak diubah.' : 'Minimal 6 karakter.' }) +
@@ -119,6 +126,7 @@ var PagesCoach = (function () {
       var errors = {};
       if (!data.nama) errors.nama = 'Nama wajib diisi.';
       if (!data.tgl_lahir) errors.tgl_lahir = 'Tanggal lahir wajib diisi.';
+      if (!data.orang_tua) errors.orang_tua = 'Nama orang tua / wali wajib diisi.';
       if (!data.tgl_bergabung) errors.tgl_bergabung = 'Tanggal bergabung wajib diisi.';
       else {
         var tglBergabung = Utils.parseISO(data.tgl_bergabung);
@@ -157,11 +165,19 @@ var PagesCoach = (function () {
 
       if (athlete) {
         var bmi = Utils.bmi(data.tinggi, data.berat);
+        // Berkas dokumen lama yang tidak lagi dikelola form (mis. Surat
+        // Kebenaran Usia) tetap dipertahankan — hanya ditimpa bagian yang
+        // dikelola form (KK & Akte).
+        var dokumenEdit = Object.assign({}, athlete.dokumen || {}, dokumen);
         Store.update('athletes', athlete.id, {
           nama: data.nama,
           tgl_bergabung: data.tgl_bergabung,
           jenis_latihan: data.jenis_latihan,
           tgl_lahir: data.tgl_lahir,
+          tempat_lahir: data.tempat_lahir || '',
+          orang_tua: data.orang_tua,
+          agama: data.agama || '',
+          alamat: data.alamat || '',
           jk: data.jk,
           tinggi: Number(data.tinggi),
           berat: Number(data.berat),
@@ -171,7 +187,7 @@ var PagesCoach = (function () {
           asal_pb: data.asal_pb,
           no_hp: data.no_hp,
           foto: photoData,
-          dokumen: dokumen
+          dokumen: dokumenEdit
         });
         Store.update('users', athlete.user_id, {
           nama: data.nama,
@@ -211,6 +227,10 @@ var PagesCoach = (function () {
           tgl_bergabung: data.tgl_bergabung,
           jenis_latihan: data.jenis_latihan,
           tgl_lahir: data.tgl_lahir,
+          tempat_lahir: data.tempat_lahir || '',
+          orang_tua: data.orang_tua,
+          agama: data.agama || '',
+          alamat: data.alamat || '',
           jk: data.jk,
           tinggi: Number(data.tinggi),
           berat: Number(data.berat),
@@ -248,57 +268,48 @@ var PagesCoach = (function () {
   function openAthleteDetail(idAtlet) {
     var a = UI.athleteById(idAtlet);
     if (!a) return;
-    var rate = Shared.attendanceRate(a.id_atlet, 30);
-    var t = Shared.trend(a.id_atlet, 21);
-    var tests = Shared.latestTests(a.id_atlet);
-    var matches = Shared.matchesFor(a.id_atlet).slice(0, 3);
     var user = Store.find('users', a.user_id);
 
+    function v(value) {
+      var s = String(value === undefined || value === null ? '' : value).trim();
+      return { kosong: !s, html: Utils.esc(s) };
+    }
+
+    var jkSingkat = a.jk === 'Laki-laki' ? 'L (Laki-laki)' : (a.jk === 'Perempuan' ? 'P (Perempuan)' : (a.jk || ''));
+
     var body =
-      '<div class="flex items-center gap-2 mb-2">' + UI.avatar(a, 68) +
+      '<div class="biodata-kepala">' + UI.avatar(a, 68) +
       '<div><h3 class="mt-0 mb-0">' + Utils.esc(a.nama) + '</h3>' +
       '<div class="flex items-center gap-1 mt-1">' + UI.badge(a.id_atlet, 'primary') + UI.statusBadge(a.status) + '</div></div></div>' +
-      '<div class="detail-grid">' +
-      '<div class="detail-item"><div class="k">Tanggal Lahir</div><div class="v">' + Utils.fmtDate(a.tgl_lahir, true) + ' (' + Utils.age(a.tgl_lahir) + ' th)</div></div>' +
-      '<div class="detail-item"><div class="k">Tanggal Bergabung</div><div class="v">' + Utils.fmtDate(a.tgl_bergabung, true) + '</div></div>' +
-      '<div class="detail-item"><div class="k">Jenis Latihan</div><div class="v">' + Utils.esc(UI.labelJenisLatihan(a.jenis_latihan)) + '</div></div>' +
-      '<div class="detail-item"><div class="k">Jenis Kelamin</div><div class="v">' + Utils.esc(a.jk) + '</div></div>' +
-      '<div class="detail-item"><div class="k">Tinggi / Berat</div><div class="v">' + Utils.esc(a.tinggi) + ' cm / ' + Utils.esc(a.berat) + ' kg</div></div>' +
-      '<div class="detail-item"><div class="k">BMI</div><div class="v">' + Utils.esc(a.bmi) + ' (' + Utils.esc(a.kategori_bmi) + ')</div></div>' +
-      '<div class="detail-item"><div class="k">Asal Sekolah</div><div class="v">' + Utils.esc(a.sekolah) + '</div></div>' +
-      '<div class="detail-item"><div class="k">Asal PB</div><div class="v">' + Utils.esc(a.asal_pb || '-') + '</div></div>' +
-      '<div class="detail-item"><div class="k">No. HP</div><div class="v">' + Utils.esc(a.no_hp) + '</div></div>' +
-      '<div class="detail-item"><div class="k">Status Keanggotaan</div><div class="v">' + UI.statusBadge(a.status) + '</div></div>' +
-      '<div class="detail-item"><div class="k">ID Login</div><div class="v">' + Utils.esc(user ? user.username : '-') + '</div></div>' +
-      '<div class="detail-item"><div class="k">Kehadiran 30 Hari</div><div class="v">' + (rate === null ? '-' : rate + '%') + '</div></div>' +
-      '<div class="detail-item"><div class="k">Tren Latihan</div><div class="v">' + (t ? UI.badge(t.label, t.tone) : '-') + '</div></div>' +
-      '</div>';
 
-    body += '<h4 class="mt-3">Riwayat Status</h4>' + riwayatStatusHtml(a);
+      '<h4 class="mt-3 mb-1">Biodata</h4>' +
+      '<div class="biodata-excel">' +
+      UI.biodataRow('Tanggal Bergabung', Utils.fmtDate(a.tgl_bergabung, true), !a.tgl_bergabung) +
+      UI.biodataRow('Nama Atlet', Utils.esc(a.nama), false) +
+      UI.biodataRow('Jenis Kelamin', Utils.esc(jkSingkat), !a.jk) +
+      (function () { var t = v(a.tempat_lahir); return UI.biodataRow('Tempat Lahir', t.html, t.kosong); })() +
+      UI.biodataRow('Tanggal Lahir', Utils.fmtDate(a.tgl_lahir, true), !a.tgl_lahir) +
+      UI.biodataRow('Usia', Utils.esc(Utils.age(a.tgl_lahir)) + ' tahun', false) +
+      (function () { var t = v(a.agama); return UI.biodataRow('Agama', t.html, t.kosong); })() +
+      (function () { var t = v(a.sekolah); return UI.biodataRow('Asal Sekolah', t.html, t.kosong); })() +
+      (function () { var t = v(a.alamat); return UI.biodataRow('Alamat', t.html, t.kosong); })() +
+      (function () { var t = v(a.orang_tua); return UI.biodataRow('Nama Orang Tua / Wali', t.html, t.kosong); })() +
+      '</div>' +
 
-    body += '<h4 class="mt-3">Tes Fisik Terakhir</h4>';
-    if (tests.length) {
-      body += '<div class="chip-row">' + tests.map(function (t2) {
-        return UI.badge(t2.jenis_tes + ': ' + t2.hasil + ' ' + t2.satuan, 'primary');
-      }).join('') + '</div>';
-    } else {
-      body += UI.emptyState('Belum ada hasil tes fisik.', 'activity');
-    }
+      '<h4 class="mt-3 mb-1">Data Tambahan</h4>' +
+      '<div class="biodata-excel">' +
+      UI.biodataRow('Jenis Latihan', Utils.esc(UI.labelJenisLatihan(a.jenis_latihan)), !a.jenis_latihan) +
+      (function () { var t = v(a.asal_pb); return UI.biodataRow('Asal PB', t.html, t.kosong); })() +
+      (function () { var t = v(a.no_hp); return UI.biodataRow('No. HP', t.html, t.kosong); })() +
+      UI.biodataRow('Tinggi / Berat', Utils.esc(a.tinggi) + ' cm / ' + Utils.esc(a.berat) + ' kg', false) +
+      UI.biodataRow('BMI', Utils.esc(a.bmi) + ' (' + Utils.esc(a.kategori_bmi) + ')', false) +
+      UI.biodataRow('Status Keanggotaan', UI.statusBadge(a.status), false) +
+      UI.biodataRow('ID Login', Utils.esc(user ? user.username : '-'), !user) +
+      '</div>' +
 
-    body += '<h4 class="mt-2">Pertandingan Terakhir</h4>';
-    if (matches.length) {
-      body += '<div class="list-rows">' + matches.map(function (m) {
-        return '<div class="list-row"><div class="grow"><b>' + Utils.esc(m.turnamen) + '</b>' +
-          '<span>' + Utils.fmtDate(m.tanggal) + ' vs ' + Utils.esc(m.lawan) + '</span></div>' +
-          UI.statusBadge(m.hasil) + '</div>';
-      }).join('') + '</div>';
-    } else {
-      body += UI.emptyState('Belum ada catatan pertandingan.', 'trophy');
-    }
-
-    body += '<div id="m-detail-kemajuan"></div>';
-    body += '<h4 class="mt-3">Kartu Atlet</h4><div id="m-detail-kartu"></div>';
-    body += '<h4 class="mt-3">Dokumen Pendaftaran</h4>' + Docs.viewerHtml(a.dokumen || {});
+      '<h4 class="mt-3">Dokumen Pendaftaran</h4>' + Docs.viewerHtml(a.dokumen || {}) +
+      '<h4 class="mt-3">Riwayat Status</h4>' + riwayatStatusHtml(a) +
+      '<h4 class="mt-3">Kartu Atlet</h4><div id="m-detail-kartu"></div>';
 
     document.getElementById('modal-host').innerHTML =
       UI.modalShell('m-detail', 'Detail Atlet',
@@ -307,9 +318,6 @@ var PagesCoach = (function () {
         '<button type="button" class="btn" id="m-detail-edit">Edit Data</button>');
     UI.openModal('m-detail');
 
-    if (typeof Kemajuan !== 'undefined' && Kemajuan && Kemajuan.render) {
-      Kemajuan.render(document.getElementById('m-detail-kemajuan'), { idAtlet: a.id_atlet });
-    }
     if (typeof KartuAtlet !== 'undefined' && KartuAtlet && KartuAtlet.render) {
       KartuAtlet.render(document.getElementById('m-detail-kartu'), a);
     }
@@ -463,10 +471,65 @@ var PagesCoach = (function () {
     });
   }
 
+  // Ekspor Daftar Atlet ke Excel dengan kolom sama seperti tabel.
+  function eksporDaftarAtlet() {
+    function fmtTgl(iso) {
+      if (!iso) return '';
+      var t = String(iso).slice(0, 10).split('-');
+      return t[2] + '/' + t[1] + '/' + t[0];
+    }
+    return Ekspor.muatXlsx().then(function (XLSX) {
+      var kolom = ['No', 'Tanggal Bergabung', 'Nama Atlet', 'L/P', 'Tempat Lahir',
+        'Tanggal Lahir', 'Usia', 'Agama', 'Asal Sekolah', 'Alamat', 'Nama Orang Tua', 'Status'];
+      var rows = Store.all('athletes').map(function (a, i) {
+        return [
+          i + 1,
+          fmtTgl(a.tgl_bergabung),
+          a.nama + ' (' + a.id_atlet + ')',
+          a.jk === 'Laki-laki' ? 'L' : (a.jk === 'Perempuan' ? 'P' : (a.jk || '')),
+          a.tempat_lahir || '',
+          fmtTgl(a.tgl_lahir),
+          a.tgl_lahir ? Utils.age(a.tgl_lahir) : '',
+          a.agama || '',
+          a.sekolah || '',
+          a.alamat || '',
+          a.orang_tua || '',
+          UI.labelStatusAtlet(a.status || 'aktif')
+        ];
+      });
+      var ws = XLSX.utils.aoa_to_sheet([['DAFTAR ATLET PB TRISULA SURABAYA'], [], kolom].concat(rows));
+      ws['!cols'] = [{ wch: 5 }, { wch: 17 }, { wch: 30 }, { wch: 5 }, { wch: 16 },
+        { wch: 13 }, { wch: 6 }, { wch: 12 }, { wch: 22 }, { wch: 30 }, { wch: 24 }, { wch: 12 }];
+      try {
+        ws['!merges'] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: kolom.length - 1 } }];
+        var gayaHeader = {
+          fill: { fgColor: { rgb: 'FF0B3D91' } },
+          font: { color: { rgb: 'FFFFFFFF' }, bold: true },
+          alignment: { horizontal: 'center', vertical: 'center' }
+        };
+        var gayaJudul = { font: { bold: true, sz: 14 }, alignment: { horizontal: 'center' } };
+        if (ws['A1']) ws['A1'].s = gayaJudul;
+        for (var c = 0; c < kolom.length; c++) {
+          var alamat = XLSX.utils.encode_cell({ r: 2, c: c });
+          if (ws[alamat]) ws[alamat].s = gayaHeader;
+        }
+      } catch (e) {}
+      var wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, 'Daftar Atlet');
+      var wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+      Ekspor.simpanBlob(
+        new Blob([wbout], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }),
+        'Daftar-Atlet_PB-Trisula_' + Utils.todayISO() + '.xlsx'
+      );
+      return true;
+    });
+  }
+
   function daftarAtlet(root, user, app) {
     root.innerHTML =
       '<div class="page">' +
       UI.pageHeader('Daftar Atlet', 'Cari, lihat detail, dan kelola data atlet.',
+        '<button type="button" class="btn btn-secondary" data-ekspor-atlet>' + UI.icon('save', 20) + ' Ekspor Excel</button>' +
         '<button type="button" class="btn" data-add-atlet>' + UI.icon('plus', 20) + ' Tambah Atlet</button>') +
       '<div class="card">' +
       '<div class="filter-bar">' +
@@ -481,12 +544,38 @@ var PagesCoach = (function () {
         return '<option value="' + Utils.esc(o.value) + '">' + Utils.esc(o.label) + '</option>';
       }).join('') +
       '</select>' +
+      '<select class="input" id="filter-jenis" style="max-width:160px" aria-label="Filter jenis latihan">' +
+      '<option value="">Semua jenis latihan</option>' +
+      (CONFIG.JENIS_LATIHAN || []).map(function (o) {
+        return '<option value="' + Utils.esc(o.value) + '">' + Utils.esc(o.label) + '</option>';
+      }).join('') +
+      '</select>' +
+      '<select class="input" id="filter-lengkap" style="max-width:190px" aria-label="Filter kelengkapan data">' +
+      '<option value="">Semua data</option>' +
+      '<option value="lengkap">Data lengkap</option>' +
+      '<option value="belum">Data belum lengkap</option>' +
+      '</select>' +
       '</div>' +
       '<div id="daftar-atlet-list"></div>' +
       '</div></div>';
 
     var page = root.querySelector('.page');
     var listBox = page.querySelector('#daftar-atlet-list');
+
+    function sel(v) {
+      var s = String(v === undefined || v === null ? '' : v).trim();
+      return s ? Utils.esc(s) : '<span class="sel-kosong">-</span>';
+    }
+
+    function tanggalPendek(iso) {
+      if (!iso) return '<span class="sel-kosong">-</span>';
+      var t = String(iso).slice(0, 10).split('-');
+      return Utils.esc(t[2] + '/' + t[1] + '/' + t[0]);
+    }
+
+    function belumLengkap(a) {
+      return !a.tgl_bergabung || !a.jk || !a.tempat_lahir || !a.agama || !a.sekolah || !a.alamat || !a.orang_tua;
+    }
 
     function fillSchools() {
       var select = page.querySelector('#filter-sekolah');
@@ -507,39 +596,52 @@ var PagesCoach = (function () {
       var jk = page.querySelector('#filter-jk').value;
       var sekolah = page.querySelector('#filter-sekolah').value;
       var status = page.querySelector('#filter-status').value;
+      var jenis = page.querySelector('#filter-jenis').value;
+      var lengkap = page.querySelector('#filter-lengkap').value;
       var rows = Store.all('athletes').filter(function (a) {
         if (jk && a.jk !== jk) return false;
         if (sekolah && a.sekolah !== sekolah) return false;
         if (status && (a.status || 'aktif') !== status) return false;
+        if (jenis && (a.jenis_latihan || '') !== jenis) return false;
+        if (lengkap === 'belum' && !belumLengkap(a)) return false;
+        if (lengkap === 'lengkap' && belumLengkap(a)) return false;
         if (q && (a.nama || '').toLowerCase().indexOf(q) === -1 && (a.id_atlet || '').toLowerCase().indexOf(q) === -1) return false;
         return true;
       });
 
       if (!rows.length) return UI.emptyState('Tidak ada atlet yang cocok.', 'users');
 
-      return '<div class="table-wrap"><table class="table"><thead><tr>' +
-        '<th>Atlet</th><th>ID</th><th>Usia</th><th>Bergabung</th><th>BMI</th><th>Sekolah</th><th>Kehadiran</th><th>Status</th><th class="align-center">Aksi</th>' +
+      return '<div class="table-wrap"><table class="table tabel-excel"><thead><tr>' +
+        '<th class="kol-sticky kol-no">No</th>' +
+        '<th class="kol-sticky kol-bergabung">Tanggal Bergabung</th>' +
+        '<th class="kol-sticky kol-nama">Nama Atlet</th>' +
+        '<th>L/P</th><th>Tempat Lahir</th><th>Tanggal Lahir</th><th>Usia</th><th>Agama</th>' +
+        '<th>Asal Sekolah</th><th>Alamat</th><th>Nama Orang Tua</th><th>Status</th>' +
+        '<th class="align-center">Aksi</th>' +
         '</tr></thead><tbody>' +
-        rows.map(function (a) {
-          var rate = Shared.attendanceRate(a.id_atlet, 30);
+        rows.map(function (a, i) {
           return '<tr>' +
-            '<td><div class="flex items-center gap-1">' + UI.avatar(a, 38) + '<div><b>' + Utils.esc(a.nama) + '</b>' +
-            '<div class="small muted">' + Utils.esc(a.jk) + '</div></div></div></td>' +
-            '<td>' + UI.badge(a.id_atlet, 'primary') + '</td>' +
-            '<td>' + Utils.age(a.tgl_lahir) + ' th</td>' +
-            '<td>' + Utils.fmtDate(a.tgl_bergabung, true) +
-            '<div class="small muted">' + Utils.esc(UI.labelJenisLatihan(a.jenis_latihan)) + '</div></td>' +
-            '<td>' + Utils.esc(a.bmi) + '<div class="small muted">' + Utils.esc(a.kategori_bmi) + '</div></td>' +
-            '<td>' + Utils.esc(a.sekolah) + '</td>' +
-            '<td>' + (rate === null ? '-' : rate + '%') + '</td>' +
-            '<td><select class="input" style="max-width:132px" data-status-atlet="' + Utils.esc(a.id_atlet) + '"' +
+            '<td class="kol-sticky kol-no" data-label="No">' + (i + 1) + '</td>' +
+            '<td class="kol-sticky kol-bergabung" data-label="Tanggal Bergabung">' + tanggalPendek(a.tgl_bergabung) + '</td>' +
+            '<td class="kol-sticky kol-nama" data-label="Nama Atlet"><div class="flex items-center gap-1">' + UI.avatar(a, 38) +
+            '<div><b>' + Utils.esc(a.nama) + '</b> ' + UI.badge(a.id_atlet, 'primary') +
+            (belumLengkap(a) ? ' ' + UI.badge('Belum lengkap', 'warn') : '') + '</div></div></td>' +
+            '<td data-label="L/P">' + sel(a.jk === 'Laki-laki' ? 'L' : (a.jk === 'Perempuan' ? 'P' : a.jk)) + '</td>' +
+            '<td data-label="Tempat Lahir">' + sel(a.tempat_lahir) + '</td>' +
+            '<td data-label="Tanggal Lahir">' + tanggalPendek(a.tgl_lahir) + '</td>' +
+            '<td data-label="Usia">' + Utils.age(a.tgl_lahir) + '</td>' +
+            '<td data-label="Agama">' + sel(a.agama) + '</td>' +
+            '<td data-label="Asal Sekolah">' + sel(a.sekolah) + '</td>' +
+            '<td data-label="Alamat">' + sel(a.alamat) + '</td>' +
+            '<td data-label="Nama Orang Tua">' + sel(a.orang_tua) + '</td>' +
+            '<td data-label="Status"><select class="input" style="max-width:132px" data-status-atlet="' + Utils.esc(a.id_atlet) + '"' +
             ' aria-label="Status atlet ' + Utils.esc(a.nama) + '">' +
             CONFIG.STATUS_ATLET.map(function (o) {
               var dipilih = ((a.status || 'aktif') === o.value) ? ' selected' : '';
               return '<option value="' + Utils.esc(o.value) + '"' + dipilih + '>' + Utils.esc(o.label) + '</option>';
             }).join('') +
             '</select></td>' +
-            '<td class="align-center"><div class="flex gap-1" style="justify-content:center">' +
+            '<td class="align-center" data-label="Aksi"><div class="flex gap-1" style="justify-content:center">' +
             '<button type="button" class="btn btn-sm btn-ghost" data-detail-atlet="' + Utils.esc(a.id_atlet) + '">Detail</button>' +
             '<button type="button" class="btn btn-sm btn-secondary" data-edit-atlet="' + Utils.esc(a.id_atlet) + '">Edit</button>' +
             '<button type="button" class="btn btn-sm" data-bayar-atlet="' + Utils.esc(a.id_atlet) + '">Bayar</button>' +
@@ -573,10 +675,19 @@ var PagesCoach = (function () {
         return;
       }
       if (e.target.id === 'filter-cari' || e.target.id === 'filter-jk' ||
-        e.target.id === 'filter-sekolah' || e.target.id === 'filter-status') refresh();
+        e.target.id === 'filter-sekolah' || e.target.id === 'filter-status' ||
+        e.target.id === 'filter-jenis' || e.target.id === 'filter-lengkap') refresh();
     });
 
     page.addEventListener('click', function (e) {
+      if (e.target.closest('[data-ekspor-atlet]')) {
+        eksporDaftarAtlet().then(function () {
+          UI.toast('Berkas Excel daftar atlet berhasil dibuat.', 'success');
+        }).catch(function (err) {
+          UI.toast(err.message, 'danger');
+        });
+        return;
+      }
       if (e.target.closest('[data-add-atlet]')) {
         openAthleteForm(null);
         return;
@@ -1342,9 +1453,7 @@ var PagesCoach = (function () {
       } else {
         html += '<div class="param-grid">' + params.map(function (p) {
           return '<div class="param-item">' +
-            '<label class="label">' + Utils.esc(p.nama) + ' <span class="small muted">(' + Utils.esc(p.satuan) + ')</span></label>' +
-            '<input class="input" type="number" name="p_' + Utils.esc(p.id) + '" min="1" max="10" step="1" placeholder="1 - 10">' +
-            '<div class="field-error" data-error-for="p_' + Utils.esc(p.id) + '"></div>' +
+            UI.skalaField({ name: 'p_' + p.id, label: p.nama, required: false, help: p.satuan }) +
             '</div>';
         }).join('') + '</div>';
       }
@@ -1473,9 +1582,14 @@ var PagesCoach = (function () {
               '<div class="grow"><b>' + Utils.esc(a ? a.nama : id) + '</b><span>' + Utils.esc(id) + '</span></div>' +
               '<div class="flex gap-1 flex-wrap">' +
               paramsAktif.map(function (p) {
-                return '<div style="min-width:96px">' +
-                  '<div class="small muted">' + Utils.esc(p.nama) + '</div>' +
-                  '<input class="input" type="number" min="1" max="10" step="1" name="ov_' + Utils.esc(id) + '_' + Utils.esc(p.id) + '" placeholder="dasar" aria-label="Nilai ' + Utils.esc(p.nama) + ' untuk ' + Utils.esc(a ? a.nama : id) + '">' +
+                return '<div style="min-width:210px">' +
+                  UI.skalaField({
+                    name: 'ov_' + id + '_' + p.id,
+                    label: p.nama,
+                    required: false,
+                    compact: true,
+                    help: 'kosong = nilai dasar'
+                  }) +
                   '</div>';
               }).join('') +
               '</div></div>';
@@ -1483,6 +1597,8 @@ var PagesCoach = (function () {
         }
 
         renderOverride();
+
+        UI.bindSkala(form);
 
         UI.bindSubmit(form, function () {
           Utils.clearErrors(form);
@@ -1678,10 +1794,19 @@ var PagesCoach = (function () {
       UI.field({
         name: 'kategori', label: 'Kategori Pertandingan', type: 'select', required: true,
         value: m.kategori || '',
-        options: [{ value: '', label: '-- Pilih kategori --' }].concat(
-          (CONFIG.KATEGORI_PERTANDINGAN || []).map(function (k) {
-            return { value: k, label: k };
-          }))
+        options: MatchKategori.opsiDropdown(m.kategori)
+      }) +
+      '<div data-kategori-lain-wrap hidden>' +
+      UI.field({
+        name: 'kategori_lain', label: 'Kategori (isi sendiri)', required: true,
+        value: '', placeholder: 'contoh: Pra Remaja Putra',
+        help: 'Kategori yang Anda tulis otomatis tersimpan untuk input berikutnya.'
+      }) +
+      '</div>' +
+      UI.chipPilihan({
+        name: 'kelas', label: 'Kelas', required: true, value: m.kelas || '',
+        options: ['SD', 'SMP', 'SMA'],
+        help: 'Tingkat sekolah atlet saat bertanding.'
       }) +
       UI.field({ name: 'lawan', label: 'Lawan', required: true, value: m.lawan, placeholder: 'contoh: PB Jaya Raya' }) +
       UI.field({ name: 'hasil', label: 'Hasil', type: 'select', required: true, value: m.hasil || 'Menang', options: ['Menang', 'Kalah'] }) +
@@ -1740,6 +1865,16 @@ var PagesCoach = (function () {
       pasangPickerAtlet(pickerApi.getValue());
     });
 
+    UI.bindChipPilihan(form);
+
+    var selKategori = form.querySelector('[name="kategori"]');
+    var wrapLain = form.querySelector('[data-kategori-lain-wrap]');
+    function perbaruiKategoriLain() {
+      if (wrapLain) wrapLain.hidden = selKategori.value !== MatchKategori.NILAI_LAINNYA;
+    }
+    selKategori.addEventListener('change', perbaruiKategoriLain);
+    perbaruiKategoriLain();
+
     form.addEventListener('click', function (e) {
       var add = e.target.closest('[data-add-set]');
       if (add) {
@@ -1773,6 +1908,10 @@ var PagesCoach = (function () {
       if (!data.tanggal) errors.tanggal = 'Tanggal wajib diisi.';
       if (!data.turnamen) errors.turnamen = 'Turnamen wajib diisi.';
       if (!data.kategori) errors.kategori = 'Kategori pertandingan wajib dipilih.';
+      else if (data.kategori === MatchKategori.NILAI_LAINNYA && !String(data.kategori_lain || '').trim()) {
+        errors.kategori_lain = 'Tulis kategori pertandingan Anda.';
+      }
+      if (!data.kelas) errors.kelas = 'Kelas wajib dipilih.';
       if (!data.lawan) errors.lawan = 'Lawan wajib diisi.';
       if (!data.hasil) errors.hasil = 'Hasil wajib dipilih.';
 
@@ -1806,7 +1945,8 @@ var PagesCoach = (function () {
         nomor: nomor,
         tanggal: data.tanggal,
         turnamen: data.turnamen,
-        kategori: data.kategori || '',
+        kategori: MatchKategori.nilaiDariForm(data),
+        kelas: data.kelas || '',
         lawan: data.lawan,
         skor_set: sets,
         hasil: data.hasil,
@@ -1821,10 +1961,59 @@ var PagesCoach = (function () {
     });
   }
 
+  // Kelola kategori pertandingan (Superadmin): ubah nama kategori buatan
+  // sendiri dan aktif/nonaktifkan kategori yang tersedia di dropdown.
+  function bukaKelolaKategori(onSelesai) {
+    function isiHtml() {
+      var daftar = MatchKategori.semua();
+      return '<div class="list-rows">' + daftar.map(function (k) {
+        return '<div class="list-row" style="flex-wrap:wrap">' +
+          '<div class="grow">' +
+          (k.bawaan
+            ? '<b>' + Utils.esc(k.nama) + '</b>'
+            : '<input class="input" style="max-width:260px" data-kat-nama="' + Utils.esc(k.id) + '" value="' + Utils.esc(k.nama) + '" aria-label="Nama kategori">') +
+          '<span>' + (k.bawaan ? 'Kategori bawaan' : 'Kategori buatan sendiri') + '</span></div>' +
+          (k.bawaan ? '' : '<button type="button" class="btn btn-sm btn-secondary" data-kat-simpan="' + Utils.esc(k.id) + '">Simpan Nama</button>') +
+          '<button type="button" class="btn btn-sm ' + (k.aktif === false ? '' : 'btn-danger') + '" data-kat-toggle="' + Utils.esc(k.id) + '">' +
+          (k.aktif === false ? 'Aktifkan' : 'Nonaktifkan') + '</button>' +
+          '</div>';
+      }).join('') + '</div>' +
+        '<p class="small muted mt-2">Kategori yang dinonaktifkan tidak muncul di form input baru, tetapi data lama tetap tampil.</p>';
+    }
+
+    var host = document.getElementById('modal-host') || document.body;
+    host.innerHTML = UI.modalShell('m-kelola-kategori', 'Kelola Kategori Pertandingan',
+      UI.backButton({ closeModal: 'm-kelola-kategori' }) + '<div id="kat-list">' + isiHtml() + '</div>',
+      '<button type="button" class="btn" data-back-close="m-kelola-kategori">Selesai</button>');
+    UI.openModal('m-kelola-kategori');
+
+    var body = document.getElementById('m-kelola-kategori-body');
+    body.addEventListener('click', function (e) {
+      var el;
+      if ((el = e.target.closest('[data-kat-toggle]'))) {
+        MatchKategori.toggle(el.getAttribute('data-kat-toggle'));
+        document.getElementById('kat-list').innerHTML = isiHtml();
+        if (onSelesai) onSelesai();
+        return;
+      }
+      if ((el = e.target.closest('[data-kat-simpan]'))) {
+        var id = el.getAttribute('data-kat-simpan');
+        var input = body.querySelector('[data-kat-nama="' + id + '"]');
+        if (input && input.value.trim()) {
+          MatchKategori.ubahNama(id, input.value);
+          UI.toast('Nama kategori diperbarui.', 'success');
+          document.getElementById('kat-list').innerHTML = isiHtml();
+          if (onSelesai) onSelesai();
+        }
+      }
+    });
+  }
+
   function pertandingan(root, user, app) {
     root.innerHTML =
       '<div class="page">' +
       UI.pageHeader('Pertandingan', 'Lihat, edit, dan koreksi hasil pertandingan atlet.',
+        '<button type="button" class="btn btn-secondary" data-kelola-kategori>Kelola Kategori</button>' +
         '<button type="button" class="btn" data-add-match>' + UI.icon('plus', 20) + ' Input Pertandingan</button>') +
       '<div class="card">' +
       '<div class="filter-bar">' +
@@ -1835,9 +2024,14 @@ var PagesCoach = (function () {
       '<select class="input" id="pg-hasil" style="max-width:180px"><option value="">Semua hasil</option><option>Menang</option><option>Kalah</option></select>' +
       '<select class="input" id="pg-kategori" style="max-width:200px" aria-label="Filter kategori pertandingan">' +
       '<option value="">Semua kategori</option>' +
-      '<option value="Tournament">Tournament</option>' +
-      '<option value="Friendly Match">Friendly Match</option>' +
+      MatchKategori.opsiFilter().map(function (k) {
+        return '<option value="' + Utils.esc(k) + '">' + Utils.esc(k) + '</option>';
+      }).join('') +
       '<option value="__belum">Belum dikategorikan</option>' +
+      '</select>' +
+      '<select class="input" id="pg-kelas" style="max-width:150px" aria-label="Filter kelas">' +
+      '<option value="">Semua kelas</option>' +
+      '<option value="SD">SD</option><option value="SMP">SMP</option><option value="SMA">SMA</option>' +
       '</select>' +
       '</div>' +
       '<div id="pg-list"></div>' +
@@ -1850,8 +2044,10 @@ var PagesCoach = (function () {
       var idAtlet = page.querySelector('#pg-atlet').value;
       var hasil = page.querySelector('#pg-hasil').value;
       var kategori = page.querySelector('#pg-kategori').value;
+      var kelas = page.querySelector('#pg-kelas').value;
       var rows = Shared.matchesFor(idAtlet || null).filter(function (m) {
         if (hasil && m.hasil !== hasil) return false;
+        if (kelas && (m.kelas || '') !== kelas) return false;
         if (kategori === '__belum') {
           if (m.kategori) return false;
         } else if (kategori && m.kategori !== kategori) return false;
@@ -1862,7 +2058,7 @@ var PagesCoach = (function () {
         return;
       }
       list.innerHTML = '<div class="table-wrap"><table class="table"><thead><tr>' +
-        '<th>Tanggal</th><th>Atlet</th><th>Kategori</th><th>Turnamen</th><th>Lawan</th><th>Skor</th><th>Hasil</th><th class="align-center">Aksi</th>' +
+        '<th>Tanggal</th><th>Atlet</th><th>Kategori</th><th>Kelas</th><th>Turnamen</th><th>Lawan</th><th>Skor</th><th>Hasil</th><th class="align-center">Aksi</th>' +
         '</tr></thead><tbody>' +
         rows.map(function (m) {
           return '<tr>' +
@@ -1870,6 +2066,7 @@ var PagesCoach = (function () {
             '<td><b>' + Utils.esc(Shared.labelAtletMatch(m)) + '</b>' +
             (m.nomor === 'Ganda' ? ' <span class="small muted">(Ganda)</span>' : '') + '</td>' +
             '<td>' + Shared.badgeKategori(m.kategori) + '</td>' +
+            '<td>' + (m.kelas ? UI.badge(m.kelas, 'primary') : '<span class="sel-kosong">-</span>') + '</td>' +
             '<td>' + Utils.esc(m.turnamen) + '</td>' +
             '<td>' + Utils.esc(m.lawan) + '</td>' +
             '<td><div class="score-pills">' + (m.skor_set || []).map(function (s) {
@@ -1886,10 +2083,15 @@ var PagesCoach = (function () {
     refresh();
 
     page.addEventListener('change', function (e) {
-      if (e.target.id === 'pg-atlet' || e.target.id === 'pg-hasil' || e.target.id === 'pg-kategori') refresh();
+      if (e.target.id === 'pg-atlet' || e.target.id === 'pg-hasil' ||
+        e.target.id === 'pg-kategori' || e.target.id === 'pg-kelas') refresh();
     });
 
     page.addEventListener('click', function (e) {
+      if (e.target.closest('[data-kelola-kategori]')) {
+        bukaKelolaKategori(refresh);
+        return;
+      }
       if (e.target.closest('[data-add-match]')) {
         openMatchForm(null, null, refresh);
         return;
@@ -1959,6 +2161,7 @@ var PagesCoach = (function () {
             '<td>' + UI.statusBadge(u.status) + '</td>' +
             '<td class="align-center"><div class="flex gap-1" style="justify-content:center">' +
             (u.id_atlet ? '<button type="button" class="btn btn-sm btn-ghost" data-detail-user="' + Utils.esc(u.id_atlet) + '">Dokumen</button>' : '') +
+            (u.role === 'asisten' ? '<button type="button" class="btn btn-sm btn-ghost" data-detail-asisten="' + Utils.esc(u.id) + '">Detail</button>' : '') +
             '<button type="button" class="btn btn-sm btn-secondary" data-edit-user="' + Utils.esc(u.id) + '">Edit</button>' +
             '<button type="button" class="btn btn-sm btn-ghost" data-reset-user="' + Utils.esc(u.id) + '">Reset Sandi</button>' +
             '<button type="button" class="btn btn-sm ' + (u.status === 'nonaktif' ? 'btn-secondary' : 'btn-danger') + '" data-toggle-user="' + Utils.esc(u.id) + '">' +
@@ -1984,6 +2187,11 @@ var PagesCoach = (function () {
       var detail = e.target.closest('[data-detail-user]');
       if (detail) {
         openAthleteDetail(detail.getAttribute('data-detail-user'));
+        return;
+      }
+      var detailAsisten = e.target.closest('[data-detail-asisten]');
+      if (detailAsisten) {
+        openAsistenDetail(detailAsisten.getAttribute('data-detail-asisten'));
         return;
       }
       var edit = e.target.closest('[data-edit-user]');
@@ -2029,6 +2237,82 @@ var PagesCoach = (function () {
       }
     });
 
+  // Tampilkan daftar berkas (dengan pratinjau Lihat/Unduh) untuk ref berupa
+  // dataURL lama maupun referensi fid di IndexedDB.
+  function renderBerkasChips(container, daftar, labelKosong) {
+    if (!container) return;
+    if (!daftar || !daftar.length) {
+      container.innerHTML = '<div class="small muted">' + Utils.esc(labelKosong || 'Belum ada berkas.') + '</div>';
+      return;
+    }
+    container.innerHTML = daftar.map(function (ref, i) {
+      return '<div class="file-chip" data-berkas-i="' + i + '">' +
+        '<div class="grow"><b>' + Utils.esc(ref && ref.nama ? ref.nama : 'berkas') + '</b>' +
+        '<div class="small muted">Memuat berkas...</div></div></div>';
+    }).join('');
+    daftar.forEach(function (ref, i) {
+      Docs.isiBerkas(ref).then(function (src) {
+        var el = container.querySelector('[data-berkas-i="' + i + '"]');
+        if (!el) return;
+        el.innerHTML = '<div class="grow"><b>' + Utils.esc(ref && ref.nama ? ref.nama : 'berkas') + '</b>' +
+          '<div class="small muted">' + Utils.esc(ref && ref.tipe ? ref.tipe : '') +
+          (ref && ref.ukuran ? ' / ' + Math.max(1, Math.round(ref.ukuran / 1024)) + ' KB' : '') + '</div></div>' +
+          (src
+            ? '<a class="btn btn-sm btn-secondary" href="' + Utils.esc(src) + '" target="_blank" rel="noopener">Lihat</a>' +
+              '<a class="btn btn-sm" href="' + Utils.esc(src) + '" download="' + Utils.esc(ref && ref.nama ? ref.nama : 'berkas') + '">Unduh</a>'
+            : '<span class="small muted">Berkas tidak tersedia</span>');
+      }).catch(function () {
+        var el = container.querySelector('[data-berkas-i="' + i + '"]');
+        if (el) el.innerHTML = '<div class="grow"><b>' + Utils.esc(ref && ref.nama ? ref.nama : 'berkas') + '</b>' +
+          '<div class="small muted">Berkas tidak tersedia</div></div>';
+      });
+    });
+  }
+
+  // Detail asisten pelatih dari menu Pengguna: biodata + berkas yang bisa
+  // dilihat/diunduh oleh Superadmin.
+  function openAsistenDetail(idUser) {
+    var u = Store.find('users', idUser);
+    if (!u) return;
+
+    function usiaTeks() {
+      return u.tgl_lahir ? String(Utils.age(u.tgl_lahir)) + ' tahun' : '';
+    }
+
+    var body =
+      '<div class="biodata-kepala">' + UI.avatar(u, 68) +
+      '<div><h3 class="mt-0 mb-0">' + Utils.esc(u.nama) + '</h3>' +
+      '<div class="flex items-center gap-1 mt-1">' +
+      UI.badge(CONFIG.ROLE_LABEL[u.role] || u.role, 'info') + UI.statusBadge(u.status) + '</div></div></div>' +
+      '<h4 class="mt-3 mb-1">Biodata</h4>' +
+      '<div class="biodata-excel">' +
+      UI.biodataRow('Nama Lengkap', Utils.esc(u.nama), false) +
+      UI.biodataRow('Username', Utils.esc(u.username), false) +
+      UI.biodataRow('Tanggal Lahir', Utils.fmtDate(u.tgl_lahir, true), !u.tgl_lahir) +
+      UI.biodataRow('Usia', Utils.esc(usiaTeks()), !usiaTeks()) +
+      UI.biodataRow('No. HP', Utils.esc(u.no_hp || ''), !u.no_hp) +
+      UI.biodataRow('Alamat', Utils.esc(u.alamat || ''), !u.alamat) +
+      UI.biodataRow('Status', UI.statusBadge(u.status), false) +
+      '</div>' +
+      '<h4 class="mt-3">Berkas Asisten</h4>' +
+      '<div class="label">Lisensi Pelatih</div><div id="berkas-lisensi"></div>' +
+      '<div class="label mt-2">Sertifikat Pelatihan</div><div id="berkas-sertifikat"></div>' +
+      '<div class="label mt-2">Ijazah Terakhir</div><div id="berkas-ijazah"></div>';
+
+    document.getElementById('modal-host').innerHTML =
+      UI.modalShell('m-detail-asisten', 'Detail Asisten Pelatih',
+        UI.backButton({ closeModal: 'm-detail-asisten' }) + body,
+        '<button type="button" class="btn" data-back-close="m-detail-asisten">Tutup</button>');
+    UI.openModal('m-detail-asisten');
+
+    renderBerkasChips(document.getElementById('berkas-lisensi'),
+      u.lisensi ? [u.lisensi] : [], 'Lisensi belum diunggah.');
+    renderBerkasChips(document.getElementById('berkas-sertifikat'),
+      u.sertifikat || [], 'Belum ada sertifikat pelatihan.');
+    renderBerkasChips(document.getElementById('berkas-ijazah'),
+      u.ijazah ? [u.ijazah] : [], 'Ijazah belum diunggah.');
+  }
+
     function openUserForm(u) {
       var isEdit = !!u;
       document.getElementById('modal-host').innerHTML = UI.modalShell('m-user', isEdit ? 'Edit Pengguna' : 'Tambah Pengguna',
@@ -2038,6 +2322,11 @@ var PagesCoach = (function () {
         UI.field({ name: 'username', label: 'Username', required: true, value: u ? u.username : '' }) +
         UI.field({ name: 'role', label: 'Peran', type: 'select', required: true, value: u ? u.role : 'asisten', options: Object.keys(CONFIG.ROLE_LABEL).map(function (r) { return { value: r, label: CONFIG.ROLE_LABEL[r] }; }) }) +
         UI.field({ name: 'no_hp', label: 'No. HP', value: u ? u.no_hp : '' }) +
+        '<div id="user-asisten-bagian"' + ((!u || u.role === 'asisten') ? '' : ' hidden') + '>' +
+        UI.field({ name: 'alamat', label: 'Alamat', type: 'textarea', rows: 2, required: true, value: (u && u.alamat) || '', placeholder: 'Nama jalan, nomor rumah, kelurahan, kecamatan, kota' }) +
+        '<div class="field"><label class="label">Sertifikat Pelatihan (maks 5 berkas)</label><div id="user-sertifikat-box"></div></div>' +
+        '<div class="field"><label class="label">Ijazah Terakhir</label><div id="user-ijazah-box"></div></div>' +
+        '</div>' +
         (isEdit ? '' : UI.field({ name: 'password', label: 'Kata Sandi', type: 'password', required: true, help: 'Minimal 6 karakter.' })) +
         '</form>',
         '<button type="button" class="btn btn-ghost" data-back-close="m-user">Batal</button>' +
@@ -2045,16 +2334,55 @@ var PagesCoach = (function () {
       UI.openModal('m-user');
 
       var userForm = document.getElementById('form-user');
+
+      // Komponen unggah khusus asisten (ditampilkan saat peran = Asisten).
+      var hostSert = document.getElementById('user-sertifikat-box');
+      var boxSertUser = null;
+      if (hostSert) {
+        hostSert.innerHTML = Docs.boxMultiHtml({ key: 'sertifikat-user', label: 'Sertifikat', required: true, maks: 5 });
+        boxSertUser = Docs.bindBoxMulti(hostSert, {
+          key: 'sertifikat-user', jenis: 'campuran', required: true, maks: 5,
+          labelRequired: 'Sertifikat pelatihan wajib diunggah (minimal 1 berkas).'
+        });
+        boxSertUser.set((u && u.sertifikat) || []);
+      }
+      var hostIjazah = document.getElementById('user-ijazah-box');
+      var boxIjazahUser = null;
+      if (hostIjazah) {
+        hostIjazah.innerHTML = Docs.boxHtml({ key: 'ijazah-user', label: 'Ijazah Terakhir', jenis: 'campuran', required: true });
+        boxIjazahUser = Docs.bindBox(hostIjazah, {
+          key: 'ijazah-user', jenis: 'campuran', required: true,
+          labelRequired: 'Ijazah terakhir wajib diunggah.'
+        });
+        if (u && u.ijazah) boxIjazahUser.set(u.ijazah);
+      }
+      var selRoleUser = userForm.querySelector('[name="role"]');
+      var bagianAsisten = document.getElementById('user-asisten-bagian');
+      if (selRoleUser && bagianAsisten) {
+        selRoleUser.addEventListener('change', function () {
+          bagianAsisten.hidden = selRoleUser.value !== 'asisten';
+        });
+      }
+
       UI.bindSubmit(userForm, function () {
         var d = Utils.formData(userForm);
         var errors = {};
         if (!d.nama) errors.nama = 'Nama wajib diisi.';
         if (!d.username) errors.username = 'Username wajib diisi.';
+        if (d.role === 'asisten' && !d.alamat) errors.alamat = 'Alamat wajib diisi.';
         if (!isEdit && (!d.password || d.password.length < 6)) errors.password = 'Kata sandi minimal 6 karakter.';
         if (Object.keys(errors).length) {
           Utils.showErrors(userForm, errors);
           Utils.toast('Periksa kembali isian yang ditandai.', 'danger');
           return;
+        }
+        if (d.role === 'asisten') {
+          if (boxSertUser && !boxSertUser.validate(true)) errors.sertifikat_file = 'Sertifikat pelatihan wajib diunggah.';
+          if (boxIjazahUser && !boxIjazahUser.validate(true)) errors.ijazah_file = 'Ijazah terakhir wajib diunggah.';
+          if (Object.keys(errors).length) {
+            Utils.toast('Lengkapi berkas asisten pelatih.', 'danger');
+            return;
+          }
         }
         if (isEdit) {
           var dup = Store.findOne('users', function (x) {
@@ -2064,12 +2392,18 @@ var PagesCoach = (function () {
             Utils.showErrors(userForm, { username: 'Username sudah dipakai.' });
             return;
           }
-          Store.update('users', u.id, {
+          var patch = {
             nama: d.nama,
             username: d.username.toLowerCase(),
             role: d.role,
             no_hp: d.no_hp
-          });
+          };
+          if (d.role === 'asisten') {
+            patch.alamat = d.alamat || '';
+            patch.sertifikat = boxSertUser ? boxSertUser.get() : (u.sertifikat || []);
+            patch.ijazah = boxIjazahUser ? boxIjazahUser.get() : (u.ijazah || null);
+          }
+          Store.update('users', u.id, patch);
           UI.closeModal('m-user');
           Utils.toast('Data pengguna berhasil diperbarui.', 'success');
           refresh();
@@ -2081,7 +2415,14 @@ var PagesCoach = (function () {
           password: d.password,
           role: d.role,
           no_hp: d.no_hp
-        }).then(function () {
+        }).then(function (userBaru) {
+          if (d.role === 'asisten') {
+            Store.update('users', userBaru.id, {
+              alamat: d.alamat || '',
+              sertifikat: boxSertUser ? boxSertUser.get() : [],
+              ijazah: boxIjazahUser ? boxIjazahUser.get() : null
+            });
+          }
           UI.closeModal('m-user');
           Utils.toast('Pengguna berhasil ditambahkan.', 'success');
           refresh();

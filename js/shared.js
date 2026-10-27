@@ -404,10 +404,10 @@ var Shared = (function () {
       (params.length
         ? '<div class="param-grid">' + params.map(function (p) {
           return '<div class="param-item">' +
-            '<label class="label">' + Utils.esc(p.nama) + ' <span class="small muted">(' + Utils.esc(p.satuan) + ')</span></label>' +
-            '<input class="input" type="number" name="p_' + Utils.esc(p.id) + '" min="1" max="10" step="1" placeholder="1 - 10"' +
-            ' value="' + Utils.esc(nilai[p.id] === undefined || nilai[p.id] === null ? '' : nilai[p.id]) + '">' +
-            '<div class="field-error" data-error-for="p_' + Utils.esc(p.id) + '"></div></div>';
+            UI.skalaField({
+              name: 'p_' + p.id, label: p.nama, required: false, help: p.satuan,
+              value: nilai[p.id] === undefined || nilai[p.id] === null ? '' : nilai[p.id]
+            }) + '</div>';
         }).join('') + '</div>'
         : UI.emptyState('Tidak ada parameter ' + konteks.kategori + ' yang terdaftar.', 'settings')) +
       UI.field({
@@ -426,6 +426,7 @@ var Shared = (function () {
     UI.openModal('m-log-edit');
 
     var form = document.getElementById('form-log-edit');
+    UI.bindSkala(form);
     UI.bindSubmit(form, function () {
       var d = Utils.formData(form);
       var nilaiBaru = {};

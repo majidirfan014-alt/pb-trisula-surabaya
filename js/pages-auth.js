@@ -3,6 +3,8 @@ var PagesAuth = (function () {
   var boxFotoAtlet = null;
   var boxLisensi = null;
   var boxFotoAsisten = null;
+  var boxSertifikat = null;
+  var boxIjazah = null;
 
   /* ---------- validasi isian bersama ---------- */
   // Tanggal lahir: wajib, tidak boleh hari ini maupun masa depan.
@@ -267,6 +269,7 @@ var PagesAuth = (function () {
         if (!data.nama) errors.nama = 'Nama atlet wajib diisi.';
         var pesanLahir = validasiTglLahir(data.tgl_lahir);
         if (pesanLahir) errors.tgl_lahir = pesanLahir;
+        if (!data.orang_tua) errors.orang_tua = 'Nama orang tua / wali wajib diisi.';
         var pesanBergabung = validasiTglBergabung(data.tgl_bergabung);
         if (pesanBergabung) errors.tgl_bergabung = pesanBergabung;
         var pesanJenis = validasiJenisLatihan(data.jenis_latihan);
@@ -314,6 +317,8 @@ var PagesAuth = (function () {
           tgl_bergabung: data.tgl_bergabung,
           jenis_latihan: data.jenis_latihan,
           tgl_lahir: data.tgl_lahir,
+          tempat_lahir: data.tempat_lahir,
+          orang_tua: data.orang_tua,
           jk: data.jk,
           tinggi: data.tinggi,
           berat: data.berat,
@@ -341,7 +346,9 @@ var PagesAuth = (function () {
     if (formAsisten) {
       function kunciFormAsisten() {
         var sibuk = (boxLisensi ? boxLisensi.busy() : 0) +
-          (boxFotoAsisten ? boxFotoAsisten.busy() : 0);
+          (boxFotoAsisten ? boxFotoAsisten.busy() : 0) +
+          (boxSertifikat ? boxSertifikat.busy() : 0) +
+          (boxIjazah ? boxIjazah.busy() : 0);
         kunciTombol(formAsisten, sibuk > 0);
       }
 
@@ -384,6 +391,35 @@ var PagesAuth = (function () {
         onBusy: kunciFormAsisten
       });
 
+      // Sertifikat Pelatihan: multi-berkas (1-5). Ijazah Terakhir: satu berkas.
+      var hostSertifikat = document.getElementById('sertifikat-box');
+      if (hostSertifikat) {
+        hostSertifikat.innerHTML = Docs.boxMultiHtml({
+          key: 'sertifikat',
+          label: 'Sertifikat Pelatihan',
+          required: true,
+          maks: 5
+        });
+        boxSertifikat = Docs.bindBoxMulti(hostSertifikat, {
+          key: 'sertifikat',
+          jenis: 'campuran',
+          required: true,
+          maks: 5,
+          labelRequired: 'Sertifikat pelatihan wajib diunggah (minimal 1 berkas).',
+          onBusy: kunciFormAsisten
+        });
+      }
+
+      boxIjazah = siapkanBox('ijazah-box', {
+        key: 'ijazah',
+        label: 'Ijazah Terakhir',
+        jenis: 'campuran',
+        required: true,
+        labelRequired: 'Ijazah terakhir wajib diunggah.',
+        onChange: function () {},
+        onBusy: kunciFormAsisten
+      });
+
       UI.bindSubmit(formAsisten, function () {
         Utils.clearErrors(formAsisten);
         var data = Utils.formData(formAsisten);
@@ -392,6 +428,7 @@ var PagesAuth = (function () {
         if (!data.nama) errors.nama = 'Nama lengkap wajib diisi.';
         var pesanLahirAsisten = validasiTglLahir(data.tgl_lahir);
         if (pesanLahirAsisten) errors.tgl_lahir = pesanLahirAsisten;
+        if (!data.alamat) errors.alamat = 'Alamat wajib diisi.';
         var pesanHpAsisten = validasiNoHp(data.no_hp);
         if (pesanHpAsisten) errors.no_hp = pesanHpAsisten;
         if (!data.username) errors.username = 'ID login wajib diisi.';
@@ -399,11 +436,14 @@ var PagesAuth = (function () {
         if (!data.password || data.password.length < 6) errors.password = 'Kata sandi minimal 6 karakter.';
         if (data.password !== data.password2) errors.password2 = 'Konfirmasi kata sandi tidak sama.';
 
-        if ((boxLisensi && boxLisensi.busy() > 0) || (boxFotoAsisten && boxFotoAsisten.busy() > 0)) {
+        if ((boxLisensi && boxLisensi.busy() > 0) || (boxFotoAsisten && boxFotoAsisten.busy() > 0) ||
+          (boxSertifikat && boxSertifikat.busy() > 0) || (boxIjazah && boxIjazah.busy() > 0)) {
           Utils.toast('Tunggu proses unggahan selesai terlebih dahulu.', 'danger');
           return;
         }
         if (!boxLisensi || !boxLisensi.validate(true)) errors.lisensi_file = 'Lisensi pelatih wajib diunggah.';
+        if (!boxSertifikat || !boxSertifikat.validate(true)) errors.sertifikat_file = 'Sertifikat pelatihan wajib diunggah (minimal 1 berkas).';
+        if (!boxIjazah || !boxIjazah.validate(true)) errors.ijazah_file = 'Ijazah terakhir wajib diunggah.';
         if (!boxFotoAsisten || !boxFotoAsisten.validate(true)) errors.foto_file = 'Foto profil wajib diunggah.';
 
         if (Object.keys(errors).length) {
@@ -421,8 +461,11 @@ var PagesAuth = (function () {
         return Auth.registerAsisten({
           nama: data.nama,
           tgl_lahir: data.tgl_lahir,
+          alamat: data.alamat,
           no_hp: data.no_hp,
           lisensi: lisensiHasil,
+          sertifikat: boxSertifikat ? boxSertifikat.get() : [],
+          ijazah: boxIjazah ? boxIjazah.get() : null,
           foto: fotoHasilAsisten ? (fotoHasilAsisten.thumb || '') : '',
           username: data.username,
           password: data.password

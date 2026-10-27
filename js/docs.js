@@ -1,10 +1,10 @@
 var Docs = (function () {
+  // Hanya dua dokumen wajib yang ditampilkan di antarmuka. Berkas lama
+  // (Surat Kebenaran Usia, Surat Keterangan Lahir, Ijazah/Raport) yang
+  // sudah pernah diunggah tetap tersimpan — cukup tidak ditampilkan lagi.
   var TYPES = [
-    { key: 'akte_kelahiran', label: 'Akte Kelahiran', required: true },
     { key: 'kartu_keluarga', label: 'Kartu Keluarga (KK)', required: true },
-    { key: 'surat_kebenaran_usia', label: 'Surat Kebenaran Usia', required: true },
-    { key: 'surat_keterangan_lahir', label: 'Surat Keterangan Lahir', required: true },
-    { key: 'ijazah_raport', label: 'Ijazah Terakhir / Raport', required: true }
+    { key: 'akte_kelahiran', label: 'Akte Kelahiran', required: true }
   ];
 
   function maxBytes() {
@@ -122,8 +122,6 @@ var Docs = (function () {
   function sectionHtml() {
     return '<section class="docs-card" id="docs-card" aria-label="Dokumen Pendaftaran">' +
       '<h3 class="docs-title">Dokumen Pendaftaran (Wajib)</h3>' +
-      '<a class="btn-template" href="' + Utils.esc(CONFIG.DOKUMEN_TEMPLATE) + '" download>' +
-      icon('download', 20) + '<span>Unduh Template Surat Kebenaran Usia</span></a>' +
       '<div class="docs-list">' +
       TYPES.map(function (t) {
         return uploadBoxHtml(t.key);
@@ -548,6 +546,161 @@ var Docs = (function () {
     };
   }
 
+  /* ---------- Komponen unggah multi-berkas (contoh: Sertifikat) ----------
+     Bisa menampung beberapa berkas (default maks 5) dalam satu kolom,
+     dengan pratinjau daftar berkas dan tombol Hapus per berkas. Proses
+     dan batasan ukuran sama dengan komponen unggah tunggal. */
+  function boxMultiHtml(opts) {
+    opts = opts || {};
+    var key = opts.key || 'files';
+    var label = opts.label || 'Berkas';
+    var maks = opts.maks || 5;
+    var accept = opts.jenis === 'foto'
+      ? 'image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp'
+      : acceptAttr();
+    return '<div class="doc-field" data-up-field="' + Utils.esc(key) + '">' +
+      '<div class="doc-label">' + Utils.esc(label) + (opts.required ? ' <span class="req">*</span>' : '') +
+      ' <span class="small muted">(maksimal ' + maks + ' berkas)</span></div>' +
+      '<button type="button" class="upload-box" data-up-pick="' + Utils.esc(key) + '" aria-label="Pilih file ' + Utils.esc(label) + '">' +
+      '<span class="upload-icon">' + icon('download', 22) + '</span>' +
+      '<span class="upload-text">Pilih file (bisa lebih dari satu)</span>' +
+      '</button>' +
+      '<input type="file" class="doc-input" data-up-input="' + Utils.esc(key) + '" accept="' + accept + '" multiple hidden>' +
+      '<div class="upload-actions" data-up-actions="' + Utils.esc(key) + '" hidden>' +
+      '<button type="button" class="btn btn-sm btn-secondary" data-up-change="' + Utils.esc(key) + '">Tambah / Ganti</button>' +
+      '</div>' +
+      '<div class="doc-multi-list" data-up-list="' + Utils.esc(key) + '"></div>' +
+      '<div class="field-error" data-up-error="' + Utils.esc(key) + '"></div>' +
+      '</div>';
+  }
+
+  function bindBoxMulti(root, options) {
+    options = options || {};
+    var key = options.key || 'files';
+    var jenis = options.jenis || 'campuran';
+    var maks = options.maks || 5;
+    var items = [];
+    var proses = 0;
+
+    function fieldRoot() { return root.querySelector('[data-up-field="' + key + '"]'); }
+    function sel(s) {
+      var fr = fieldRoot();
+      return fr ? fr.querySelector(s) : null;
+    }
+    function setErr(pesan) {
+      var slot = sel('[data-up-error]');
+      if (slot) slot.textContent = pesan || '';
+      var fr = fieldRoot();
+      if (fr) fr.classList.toggle('has-error', !!pesan);
+    }
+    function kabar() {
+      if (options.onBusy) options.onBusy();
+    }
+    function ukuranTeks(n) {
+      return n >= 1048576 ? (n / 1048576).toFixed(1) + ' MB' : Math.max(1, Math.round(n / 1024)) + ' KB';
+    }
+    function render() {
+      var list = sel('[data-up-list]');
+      if (!list) return;
+      list.innerHTML = items.map(function (it, i) {
+        return '<div class="file-chip">' +
+          '<div class="grow"><b>' + Utils.esc(it.nama || 'berkas') + '</b>' +
+          '<div class="small muted">' + Utils.esc(it.tipe || '') + ' / ' + Utils.esc(ukuranTeks(it.ukuran || 0)) + '</div></div>' +
+          '<button type="button" class="btn btn-sm btn-danger" data-up-hapus-multi="' + i + '">Hapus</button>' +
+          '</div>';
+      }).join('');
+      var act = sel('[data-up-actions]');
+      if (act) act.hidden = items.length === 0;
+      setErr('');
+    }
+    function onFiles(fileList) {
+      var daftar = Array.prototype.slice.call(fileList || []);
+      if (!daftar.length) return;
+      if (items.length + daftar.length > maks) {
+        setErr('Maksimal ' + maks + ' berkas. Berkas berlebih tidak ditambahkan.');
+        daftar = daftar.slice(0, Math.max(0, maks - items.length));
+      }
+      daftar.forEach(function (file) {
+        if (!isAccepted(file, jenis)) {
+          setErr(pesanTolak(file, jenis));
+          return;
+        }
+        var pesanBesar = pesanUkuran(file, jenis);
+        if (pesanBesar) {
+          setErr(pesanBesar);
+          return;
+        }
+        proses++;
+        kabar();
+        prosesBerkas(file, { jenis: jenis, maksPx: options.maksPx }).then(function (doc) {
+          items.push(doc);
+          render();
+        }).catch(function (err) {
+          setErr(err && err.message ? err.message : 'Gagal memproses berkas.');
+        }).then(function () {
+          proses--;
+          kabar();
+        });
+      });
+    }
+
+    root.addEventListener('click', function (e) {
+      var pick = e.target.closest ? e.target.closest('[data-up-pick="' + key + '"]') : null;
+      if (pick) {
+        var input = sel('[data-up-input]');
+        if (input) input.click();
+        return;
+      }
+      var change = e.target.closest ? e.target.closest('[data-up-change="' + key + '"]') : null;
+      if (change) {
+        var inp2 = sel('[data-up-input]');
+        if (inp2) inp2.click();
+        return;
+      }
+      var hapus = e.target.closest ? e.target.closest('[data-up-hapus-multi]') : null;
+      if (hapus) {
+        var idx = parseInt(hapus.getAttribute('data-up-hapus-multi'), 10);
+        if (!isNaN(idx)) {
+          items.splice(idx, 1);
+          render();
+          if (options.onChange) options.onChange(get());
+        }
+      }
+    });
+    root.addEventListener('change', function (e) {
+      var input = e.target.closest ? e.target.closest('[data-up-input="' + key + '"]') : null;
+      if (input) {
+        onFiles(input.files);
+        input.value = '';
+      }
+    });
+
+    function get() {
+      return items.slice();
+    }
+
+    render();
+    return {
+      get: get,
+      validate: function (tampilkanError) {
+        if (options.required && !items.length) {
+          if (tampilkanError) setErr(options.labelRequired || 'Minimal satu berkas wajib diunggah.');
+          return false;
+        }
+        return true;
+      },
+      busy: function () { return proses; },
+      set: function (docs) {
+        items = Array.isArray(docs) ? docs.slice() : (docs ? [docs] : []);
+        render();
+      },
+      reset: function () {
+        items = [];
+        render();
+      }
+    };
+  }
+
   function downloadDoc(doc) {
     if (!doc) return;
     isiBerkas(doc).then(function (src) {
@@ -832,6 +985,8 @@ var Docs = (function () {
     bind: bind,
     boxHtml: boxHtml,
     bindBox: bindBox,
+    boxMultiHtml: boxMultiHtml,
+    bindBoxMulti: bindBoxMulti,
     proses: prosesBerkas,
     isiBerkas: isiBerkas,
     labelGambar: labelGambar,
