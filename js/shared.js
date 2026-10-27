@@ -1,8 +1,34 @@
 var Shared = (function () {
   function activeAthletes() {
+    // Hanya atlet berstatus 'aktif' (data lama tanpa status dianggap aktif)
+    // yang muncul di pilihan atlet untuk input baru dan hitungan dashboard.
     return Utils.sortBy(Store.all('athletes').filter(function (a) {
-      return a.status !== 'nonaktif';
+      return (a.status || 'aktif') === 'aktif';
     }), 'nama', 'asc');
+  }
+
+  // Ubah status keanggotaan atlet: perbarui record, catat riwayat perubahan,
+  // dan sinkronkan blokir/membukanya login akun terkait (users.status).
+  // 'aktif' & 'cuti' → akun bisa masuk; 'nonaktif' & 'berhenti' → diblokir.
+  function catatPerubahanStatus(atlet, baru, oleh) {
+    if (!atlet) return false;
+    var lama = atlet.status || 'aktif';
+    var target = baru || 'aktif';
+    if (lama === target) return false;
+    var riwayat = (atlet.riwayat_status || []).slice();
+    riwayat.unshift({
+      dari: lama,
+      ke: target,
+      pada: Utils.nowISO(),
+      oleh: oleh || '-'
+    });
+    Store.update('athletes', atlet.id, { status: target, riwayat_status: riwayat });
+    if (atlet.user_id) {
+      Store.update('users', atlet.user_id, {
+        status: (target === 'aktif' || target === 'cuti') ? 'aktif' : 'nonaktif'
+      });
+    }
+    return true;
   }
 
   function latestStamp(row) {
@@ -449,6 +475,7 @@ var Shared = (function () {
 
   return {
     activeAthletes: activeAthletes,
+    catatPerubahanStatus: catatPerubahanStatus,
     attendanceFor: attendanceFor,
     attendanceOn: attendanceOn,
     pickLatest: pickLatest,

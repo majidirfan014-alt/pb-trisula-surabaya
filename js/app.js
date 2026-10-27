@@ -18,6 +18,7 @@ var App = (function () {
       { id: 'monitoring', label: 'Monitoring', short: 'Monitoring', icon: 'chart', bottom: true },
       { id: 'pertandingan', label: 'Pertandingan', short: 'Pertandingan', icon: 'trophy', bottom: true },
       { id: 'pengguna', label: 'Pengguna', short: 'Pengguna', icon: 'settings' },
+      { id: 'keuangan', label: 'Keuangan & Iuran', short: 'Keuangan', icon: 'save' },
       { id: 'landing-page', label: 'Landing Page', short: 'Landing', icon: 'eye' },
       { id: 'setting', label: 'Setting', short: 'Setting', icon: 'settings' }
     ],
@@ -35,6 +36,9 @@ var App = (function () {
       { id: 'tes-saya', label: 'Hasil Tes Kondisi Fisik', short: 'Tes Fisik', icon: 'activity', bottom: true },
       { id: 'hasil-pertandingan', label: 'Hasil Pertandingan', short: 'Pertandingan', icon: 'trophy', bottom: true },
       { id: 'riwayat-pembayaran', label: 'Riwayat Pembayaran', short: 'Bayar', icon: 'save', bottom: true },
+      { id: 'iuran-saya', label: 'Iuran Saya', short: 'Iuran', icon: 'save', bottom: true, badge: function () {
+        return (typeof Keuangan !== 'undefined' && Keuangan) ? Keuangan.badgeIuran() : 0;
+      } },
       { id: 'profil', label: 'Profil Atlet', short: 'Profil', icon: 'user', bottom: true }
     ]
   };
@@ -171,8 +175,10 @@ var App = (function () {
 
     html += '<nav class="side-nav" aria-label="Menu utama">';
     menus().forEach(function (m) {
+      var badge = (typeof m.badge === 'function') ? m.badge() : (m.badge || 0);
       html += '<a class="side-link' + (m.id === currentId ? ' active' : '') + '" href="#/' + m.id + '" data-nav="' + m.id + '">' +
-        UI.icon(m.icon, 21) + '<span>' + Utils.esc(m.label) + '</span></a>';
+        UI.icon(m.icon, 21) + '<span>' + Utils.esc(m.label) + '</span>' +
+        (badge > 0 ? '<span class="nav-badge">' + (badge > 9 ? '9+' : badge) + '</span>' : '') + '</a>';
     });
     html += '</nav>';
 
@@ -194,8 +200,10 @@ var App = (function () {
     var hasMore = bottom.length < list.length;
     var html = '';
     bottom.forEach(function (m) {
+      var badge = (typeof m.badge === 'function') ? m.badge() : (m.badge || 0);
       html += '<a class="bottom-link' + (m.id === currentId ? ' active' : '') + '" href="#/' + m.id + '" data-nav="' + m.id + '">' +
-        UI.icon(m.icon, 22) + '<span>' + Utils.esc(m.short || m.label) + '</span></a>';
+        UI.icon(m.icon, 22) + '<span>' + Utils.esc(m.short || m.label) + '</span>' +
+        (badge > 0 ? '<span class="nav-badge">' + (badge > 9 ? '9+' : badge) + '</span>' : '') + '</a>';
     });
     if (hasMore) {
       html += '<button type="button" class="bottom-link" data-open-more>' + UI.icon('menu', 22) + '<span>Lainnya</span></button>';
@@ -212,9 +220,11 @@ var App = (function () {
     });
     var body = '<div class="list-rows">';
     rest.forEach(function (m) {
+      var badge = (typeof m.badge === 'function') ? m.badge() : (m.badge || 0);
       body += '<a class="list-row" href="#/' + m.id + '" data-nav="' + m.id + '" data-modal-close="more-menu">' +
         UI.icon(m.icon, 22) +
         '<div class="grow"><b>' + Utils.esc(m.label) + '</b></div>' +
+        (badge > 0 ? '<span class="nav-badge">' + (badge > 9 ? '9+' : badge) + '</span>' : '') +
         UI.icon('arrowLeft', 18) + '</a>';
     });
     body += '<button type="button" class="list-row" data-logout style="width:100%;text-align:left;cursor:pointer;background:#fff">' +
@@ -375,10 +385,11 @@ var App = (function () {
       } catch (e) {}
     }
 
-    PagesCoach.register();
-    PagesAssistant.register();
-    PagesAthlete.register();
-    if (typeof PagesLanding !== 'undefined' && PagesLanding && PagesLanding.register) PagesLanding.register();
+  PagesCoach.register();
+  PagesAssistant.register();
+  PagesAthlete.register();
+  if (typeof Keuangan !== 'undefined' && Keuangan && Keuangan.register) Keuangan.register();
+  if (typeof PagesLanding !== 'undefined' && PagesLanding && PagesLanding.register) PagesLanding.register();
     if (typeof PagesMonitoring !== 'undefined' && PagesMonitoring && PagesMonitoring.register) PagesMonitoring.register();
 
     // Simpan foto ke penyimpanan cloud & sinkronkan data antar perangkat.

@@ -73,6 +73,8 @@ var KartuAtlet = (function () {
       '<div class="kartu-grid">' +
       '<div><span>Tanggal Lahir</span><b>' + Utils.esc(a.tgl_lahir ? Utils.fmtDate(a.tgl_lahir, true) : '-') + '</b></div>' +
       '<div><span>Usia</span><b>' + Utils.esc(a.tgl_lahir ? String(Utils.age(a.tgl_lahir)) + ' tahun' : '-') + '</b></div>' +
+      '<div><span>Tanggal Bergabung</span><b>' + Utils.esc(a.tgl_bergabung ? Utils.fmtDate(a.tgl_bergabung, true) : '-') + '</b></div>' +
+      '<div><span>Jenis Latihan</span><b>' + Utils.esc(UI.labelJenisLatihan(a.jenis_latihan)) + '</b></div>' +
       '<div><span>Asal PB</span><b>' + Utils.esc(nilai(a.asal_pb)) + '</b></div>' +
       '<div><span>Asal Sekolah</span><b>' + Utils.esc(nilai(a.sekolah)) + '</b></div>' +
       '</div></div>' +

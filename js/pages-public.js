@@ -326,10 +326,14 @@ var PagesPublic = (function () {
       ? LandingStore.ambilRingkasan() : null;
     var users = Store.all('users');
     var atletDariUsers = users.filter(function (u) {
-      return u.role === 'atlet' && u.status !== 'nonaktif';
+      if (u.role !== 'atlet' || u.status === 'nonaktif') return false;
+      var rec = Store.findOne('athletes', function (a) {
+        return a.user_id === u.id || a.id_atlet === u.id_atlet;
+      });
+      return !rec || (rec.status || 'aktif') === 'aktif';
     }).length;
     var atletDariData = Store.count('athletes', function (a) {
-      return a.status !== 'nonaktif';
+      return (a.status || 'aktif') === 'aktif';
     });
     var totalAtlet = (ringkasan && ringkasan.jumlahAtlet !== undefined)
       ? Number(ringkasan.jumlahAtlet) || 0
@@ -723,7 +727,7 @@ var PagesPublic = (function () {
     var host = document.getElementById('public-gallery');
     if (!host) return;
     var athletes = Utils.sortBy(Store.all('athletes'), 'nama', 'asc').filter(function (a) {
-      return a.status !== 'nonaktif';
+      return (a.status || 'aktif') === 'aktif';
     });
 
     if (!athletes.length) {

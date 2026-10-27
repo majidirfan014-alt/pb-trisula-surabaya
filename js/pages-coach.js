@@ -7,7 +7,17 @@ var PagesCoach = (function () {
       '<div class="form-grid cols-2">' +
       UI.field({ name: 'nama', label: 'Nama Atlet', required: true, value: a.nama, placeholder: 'Nama lengkap' }) +
       UI.field({ name: 'tgl_lahir', label: 'Tanggal Lahir', type: 'date', required: true, value: a.tgl_lahir }) +
-      UI.field({ name: 'nisn', label: 'NISN', required: true, value: a.nisn, placeholder: '10 digit angka', help: 'Tepat 10 digit angka, tidak boleh sama dengan atlet lain.', attrs: ' inputmode="numeric" pattern="[0-9]*" autocomplete="off"' }) +
+      UI.field({
+        name: 'tgl_bergabung', label: 'Tanggal Bergabung', type: 'date', required: true,
+        value: a.tgl_bergabung || (a.dibuat_pada ? String(a.dibuat_pada).slice(0, 10) : ''),
+        help: 'Tanggal pertama bergabung dengan PB Trisula.'
+      }) +
+      UI.field({
+        name: 'jenis_latihan', label: 'Jenis Latihan', type: 'select', required: true,
+        value: a.jenis_latihan || '',
+        options: [{ value: '', label: '-- Pilih --' }].concat(CONFIG.JENIS_LATIHAN),
+        help: 'Club: latihan bersama tim. Private: latihan privat.'
+      }) +
       UI.field({ name: 'jk', label: 'Jenis Kelamin', type: 'select', required: true, value: a.jk, options: [{ value: '', label: '-- Pilih --' }].concat(CONFIG.GENDER) }) +
       UI.field({ name: 'sekolah', label: 'Asal Sekolah', required: true, value: a.sekolah, placeholder: 'Nama sekolah' }) +
       UI.field({ name: 'tinggi', label: 'Tinggi Badan (cm)', type: 'number', required: true, value: a.tinggi, min: 80, max: 230, step: '0.5' }) +
@@ -27,7 +37,11 @@ var PagesCoach = (function () {
       '<div class="photo-upload"><div id="form-photo-preview">' + (a.foto ? UI.avatar({ nama: a.nama, foto: a.foto }, 56) : '') + '</div>' +
       '<input class="input" type="file" name="foto_file" accept="image/*"></div>' +
       '</div>' +
-      (isEdit ? UI.field({ name: 'status', label: 'Status', type: 'select', value: a.status || 'aktif', options: [{ value: 'aktif', label: 'Aktif' }, { value: 'nonaktif', label: 'Nonaktif' }] }) : '') +
+      (isEdit ? UI.field({
+        name: 'status', label: 'Status Keanggotaan', type: 'select', value: a.status || 'aktif',
+        options: CONFIG.STATUS_ATLET,
+        help: 'Cuti: akun masih bisa masuk. Non-Aktif / Berhenti: akun diblokir login dan tidak muncul di pilihan atlet.'
+      }) : '') +
       Docs.sectionHtml() +
       '</form>';
 
@@ -62,27 +76,6 @@ var PagesCoach = (function () {
 
     var form = document.getElementById('form-atlet');
     bindBmiPreview(form);
-
-    function pesanNisn(value) {
-      var format = Utils.validasiNisn(value);
-      if (format) return format;
-      var v = String(value).trim();
-      var sama = Store.findOne('athletes', function (row) {
-        return String(row.nisn || '').trim() === v && (!athlete || row.id !== athlete.id);
-      });
-      if (sama) return 'NISN sudah terdaftar';
-      return '';
-    }
-
-    var nisnInput = form.querySelector('[name="nisn"]');
-    if (nisnInput) {
-      nisnInput.addEventListener('input', function () {
-        var slot = form.querySelector('[data-error-for="nisn"]');
-        var pesan = nisnInput.value.trim() ? pesanNisn(nisnInput.value) : '';
-        if (slot) slot.textContent = pesan;
-        nisnInput.classList.toggle('input-error', !!pesan);
-      });
-    }
 
     var docsApi = null;
     var docsHost = form.querySelector('.docs-card');
@@ -126,8 +119,18 @@ var PagesCoach = (function () {
       var errors = {};
       if (!data.nama) errors.nama = 'Nama wajib diisi.';
       if (!data.tgl_lahir) errors.tgl_lahir = 'Tanggal lahir wajib diisi.';
-      var pesanNisnSubmit = pesanNisn(data.nisn);
-      if (pesanNisnSubmit) errors.nisn = pesanNisnSubmit;
+      if (!data.tgl_bergabung) errors.tgl_bergabung = 'Tanggal bergabung wajib diisi.';
+      else {
+        var tglBergabung = Utils.parseISO(data.tgl_bergabung);
+        var hariIniBergabung = Utils.parseISO(Utils.todayISO());
+        hariIniBergabung.setHours(0, 0, 0, 0);
+        if (!tglBergabung || isNaN(tglBergabung.getTime())) errors.tgl_bergabung = 'Tanggal bergabung tidak valid.';
+        else if (tglBergabung.getTime() > hariIniBergabung.getTime()) errors.tgl_bergabung = 'Tanggal bergabung tidak boleh di masa depan.';
+      }
+      var daftarJenis = (CONFIG.JENIS_LATIHAN || []).map(function (o) { return o.value; });
+      if (!data.jenis_latihan || daftarJenis.indexOf(data.jenis_latihan) === -1) {
+        errors.jenis_latihan = 'Jenis latihan wajib dipilih.';
+      }
       if (!data.jk) errors.jk = 'Jenis kelamin wajib dipilih.';
       if (!data.sekolah) errors.sekolah = 'Asal sekolah wajib diisi.';
       if (!data.tinggi || Number(data.tinggi) < 80) errors.tinggi = 'Tinggi badan tidak valid.';
@@ -156,7 +159,8 @@ var PagesCoach = (function () {
         var bmi = Utils.bmi(data.tinggi, data.berat);
         Store.update('athletes', athlete.id, {
           nama: data.nama,
-          nisn: String(data.nisn || '').trim(),
+          tgl_bergabung: data.tgl_bergabung,
+          jenis_latihan: data.jenis_latihan,
           tgl_lahir: data.tgl_lahir,
           jk: data.jk,
           tinggi: Number(data.tinggi),
@@ -166,7 +170,6 @@ var PagesCoach = (function () {
           sekolah: data.sekolah,
           asal_pb: data.asal_pb,
           no_hp: data.no_hp,
-          status: data.status || 'aktif',
           foto: photoData,
           dokumen: dokumen
         });
@@ -175,6 +178,12 @@ var PagesCoach = (function () {
           no_hp: data.no_hp,
           foto: photoData
         });
+        // Status ditulis lewat helper agar riwayat tercatat dan login ikut
+        // dibuka/ditutup (nilai lama diambil dari record sebelum edit).
+        var olehStatus = Auth.current() ? Auth.current().nama : '-';
+        if (Shared.catatPerubahanStatus(athlete, data.status || 'aktif', olehStatus)) {
+          UI.toast('Status keanggotaan diubah menjadi ' + UI.labelStatusAtlet(data.status || 'aktif') + '.', 'success');
+        }
         if (data.password) {
           Auth.resetPassword(athlete.user_id, data.password);
         }
@@ -199,7 +208,8 @@ var PagesCoach = (function () {
           id_atlet: idAtlet,
           user_id: newUser.id,
           nama: data.nama,
-          nisn: String(data.nisn || '').trim(),
+          tgl_bergabung: data.tgl_bergabung,
+          jenis_latihan: data.jenis_latihan,
           tgl_lahir: data.tgl_lahir,
           jk: data.jk,
           tinggi: Number(data.tinggi),
@@ -222,6 +232,19 @@ var PagesCoach = (function () {
     });
   }
 
+  // Riwayat perubahan status keanggotaan atlet (terbaru di atas).
+  function riwayatStatusHtml(a) {
+    var rows = (a && a.riwayat_status) || [];
+    if (!rows.length) return UI.emptyState('Belum ada perubahan status.', 'info');
+    return '<div class="list-rows">' + rows.map(function (r) {
+      var tanggal = r.pada ? String(r.pada).slice(0, 10) : '';
+      return '<div class="list-row"><div class="grow">' +
+        '<b>' + Utils.esc(UI.labelStatusAtlet(r.dari)) + ' → ' + Utils.esc(UI.labelStatusAtlet(r.ke)) + '</b>' +
+        '<span>' + (tanggal ? Utils.fmtDate(tanggal, true) : '-') + ' · oleh ' + Utils.esc(r.oleh || '-') + '</span>' +
+        '</div>' + UI.statusBadge(r.ke) + '</div>';
+    }).join('') + '</div>';
+  }
+
   function openAthleteDetail(idAtlet) {
     var a = UI.athleteById(idAtlet);
     if (!a) return;
@@ -237,16 +260,21 @@ var PagesCoach = (function () {
       '<div class="flex items-center gap-1 mt-1">' + UI.badge(a.id_atlet, 'primary') + UI.statusBadge(a.status) + '</div></div></div>' +
       '<div class="detail-grid">' +
       '<div class="detail-item"><div class="k">Tanggal Lahir</div><div class="v">' + Utils.fmtDate(a.tgl_lahir, true) + ' (' + Utils.age(a.tgl_lahir) + ' th)</div></div>' +
+      '<div class="detail-item"><div class="k">Tanggal Bergabung</div><div class="v">' + Utils.fmtDate(a.tgl_bergabung, true) + '</div></div>' +
+      '<div class="detail-item"><div class="k">Jenis Latihan</div><div class="v">' + Utils.esc(UI.labelJenisLatihan(a.jenis_latihan)) + '</div></div>' +
       '<div class="detail-item"><div class="k">Jenis Kelamin</div><div class="v">' + Utils.esc(a.jk) + '</div></div>' +
       '<div class="detail-item"><div class="k">Tinggi / Berat</div><div class="v">' + Utils.esc(a.tinggi) + ' cm / ' + Utils.esc(a.berat) + ' kg</div></div>' +
       '<div class="detail-item"><div class="k">BMI</div><div class="v">' + Utils.esc(a.bmi) + ' (' + Utils.esc(a.kategori_bmi) + ')</div></div>' +
       '<div class="detail-item"><div class="k">Asal Sekolah</div><div class="v">' + Utils.esc(a.sekolah) + '</div></div>' +
       '<div class="detail-item"><div class="k">Asal PB</div><div class="v">' + Utils.esc(a.asal_pb || '-') + '</div></div>' +
       '<div class="detail-item"><div class="k">No. HP</div><div class="v">' + Utils.esc(a.no_hp) + '</div></div>' +
+      '<div class="detail-item"><div class="k">Status Keanggotaan</div><div class="v">' + UI.statusBadge(a.status) + '</div></div>' +
       '<div class="detail-item"><div class="k">ID Login</div><div class="v">' + Utils.esc(user ? user.username : '-') + '</div></div>' +
       '<div class="detail-item"><div class="k">Kehadiran 30 Hari</div><div class="v">' + (rate === null ? '-' : rate + '%') + '</div></div>' +
       '<div class="detail-item"><div class="k">Tren Latihan</div><div class="v">' + (t ? UI.badge(t.label, t.tone) : '-') + '</div></div>' +
       '</div>';
+
+    body += '<h4 class="mt-3">Riwayat Status</h4>' + riwayatStatusHtml(a);
 
     body += '<h4 class="mt-3">Tes Fisik Terakhir</h4>';
     if (tests.length) {
@@ -449,8 +477,9 @@ var PagesCoach = (function () {
       '<select class="input" id="filter-sekolah" style="max-width:220px"><option value="">Semua sekolah</option></select>' +
       '<select class="input" id="filter-status" style="max-width:180px" aria-label="Filter status">' +
       '<option value="">Semua status</option>' +
-      '<option value="aktif">Aktif</option>' +
-      '<option value="nonaktif">Non-Aktif</option>' +
+      CONFIG.STATUS_ATLET.map(function (o) {
+        return '<option value="' + Utils.esc(o.value) + '">' + Utils.esc(o.label) + '</option>';
+      }).join('') +
       '</select>' +
       '</div>' +
       '<div id="daftar-atlet-list"></div>' +
@@ -489,7 +518,7 @@ var PagesCoach = (function () {
       if (!rows.length) return UI.emptyState('Tidak ada atlet yang cocok.', 'users');
 
       return '<div class="table-wrap"><table class="table"><thead><tr>' +
-        '<th>Atlet</th><th>ID</th><th>Usia</th><th>BMI</th><th>Sekolah</th><th>Kehadiran</th><th>Status</th><th class="align-center">Aksi</th>' +
+        '<th>Atlet</th><th>ID</th><th>Usia</th><th>Bergabung</th><th>BMI</th><th>Sekolah</th><th>Kehadiran</th><th>Status</th><th class="align-center">Aksi</th>' +
         '</tr></thead><tbody>' +
         rows.map(function (a) {
           var rate = Shared.attendanceRate(a.id_atlet, 30);
@@ -498,15 +527,18 @@ var PagesCoach = (function () {
             '<div class="small muted">' + Utils.esc(a.jk) + '</div></div></div></td>' +
             '<td>' + UI.badge(a.id_atlet, 'primary') + '</td>' +
             '<td>' + Utils.age(a.tgl_lahir) + ' th</td>' +
+            '<td>' + Utils.fmtDate(a.tgl_bergabung, true) +
+            '<div class="small muted">' + Utils.esc(UI.labelJenisLatihan(a.jenis_latihan)) + '</div></td>' +
             '<td>' + Utils.esc(a.bmi) + '<div class="small muted">' + Utils.esc(a.kategori_bmi) + '</div></td>' +
             '<td>' + Utils.esc(a.sekolah) + '</td>' +
             '<td>' + (rate === null ? '-' : rate + '%') + '</td>' +
-            '<td><div class="flex items-center gap-1">' +
-            '<button type="button" class="switch' + ((a.status || 'aktif') === 'aktif' ? ' on' : '') + '"' +
-            ' role="switch" aria-checked="' + ((a.status || 'aktif') === 'aktif') + '"' +
-            ' data-toggle-status="' + Utils.esc(a.id_atlet) + '"' +
-            ' aria-label="Status atlet ' + Utils.esc(a.nama) + '"><span class="switch-knob"></span></button>' +
-            UI.statusBadge(a.status || 'aktif') + '</div></td>' +
+            '<td><select class="input" style="max-width:132px" data-status-atlet="' + Utils.esc(a.id_atlet) + '"' +
+            ' aria-label="Status atlet ' + Utils.esc(a.nama) + '">' +
+            CONFIG.STATUS_ATLET.map(function (o) {
+              var dipilih = ((a.status || 'aktif') === o.value) ? ' selected' : '';
+              return '<option value="' + Utils.esc(o.value) + '"' + dipilih + '>' + Utils.esc(o.label) + '</option>';
+            }).join('') +
+            '</select></td>' +
             '<td class="align-center"><div class="flex gap-1" style="justify-content:center">' +
             '<button type="button" class="btn btn-sm btn-ghost" data-detail-atlet="' + Utils.esc(a.id_atlet) + '">Detail</button>' +
             '<button type="button" class="btn btn-sm btn-secondary" data-edit-atlet="' + Utils.esc(a.id_atlet) + '">Edit</button>' +
@@ -528,6 +560,18 @@ var PagesCoach = (function () {
       if (e.target.id === 'filter-cari') refresh();
     }, 180));
     page.addEventListener('change', function (e) {
+      var selStatus = e.target.closest && e.target.closest('[data-status-atlet]');
+      if (selStatus) {
+        var idStatus = selStatus.getAttribute('data-status-atlet');
+        var atletStatus = UI.athleteById(idStatus);
+        if (!atletStatus) return;
+        var olehStatus = Auth.current() ? Auth.current().nama : '-';
+        if (Shared.catatPerubahanStatus(atletStatus, selStatus.value, olehStatus)) {
+          UI.toast('Status ' + atletStatus.nama + ' diubah menjadi ' + UI.labelStatusAtlet(selStatus.value) + '.', 'success');
+        }
+        refresh();
+        return;
+      }
       if (e.target.id === 'filter-cari' || e.target.id === 'filter-jk' ||
         e.target.id === 'filter-sekolah' || e.target.id === 'filter-status') refresh();
     });
@@ -535,17 +579,6 @@ var PagesCoach = (function () {
     page.addEventListener('click', function (e) {
       if (e.target.closest('[data-add-atlet]')) {
         openAthleteForm(null);
-        return;
-      }
-      var toggle = e.target.closest('[data-toggle-status]');
-      if (toggle) {
-        var idToggle = toggle.getAttribute('data-toggle-status');
-        var atletToggle = UI.athleteById(idToggle);
-        if (!atletToggle) return;
-        var baru = (atletToggle.status || 'aktif') === 'aktif' ? 'nonaktif' : 'aktif';
-        Store.update('athletes', atletToggle.id, { status: baru });
-        UI.toast('Status atlet diubah menjadi ' + baru + '.', 'success');
-        refresh();
         return;
       }
       var bayar = e.target.closest('[data-bayar-atlet]');
@@ -1975,6 +2008,21 @@ var PagesCoach = (function () {
         UI.confirmDialog('Ubah status akun ' + u.nama + ' menjadi ' + next + '?', 'Ubah Status').then(function (ok) {
           if (!ok) return;
           Store.update('users', u.id, { status: next });
+          // Bila akun adalah atlet, samakan status keanggotaannya agar
+          // riwayat status ikut tercatat dan tidak ada dua sumber kebenaran.
+          if (u.role === 'atlet') {
+            var atletUser = Store.findOne('athletes', function (r) {
+              return r.user_id === u.id || r.id_atlet === u.id_atlet;
+            });
+            if (atletUser) {
+              var sAtlet = atletUser.status || 'aktif';
+              if (next === 'nonaktif' && sAtlet !== 'nonaktif' && sAtlet !== 'berhenti') {
+                Shared.catatPerubahanStatus(atletUser, 'nonaktif', user.nama);
+              } else if (next === 'aktif' && (sAtlet === 'nonaktif' || sAtlet === 'berhenti')) {
+                Shared.catatPerubahanStatus(atletUser, 'aktif', user.nama);
+              }
+            }
+          }
           UI.toast('Status akun diperbarui.', 'success');
           refresh();
         });

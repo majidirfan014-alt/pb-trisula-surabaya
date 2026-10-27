@@ -8,6 +8,15 @@ var CONFIG = {
   // Tidak ada lagi data contoh (akun/atlet/demo) yang dibuat otomatis.
   SEED_AWAL: true,
   DOKUMEN_MAX_MB: 2,
+  /* Batas unggahan berkas (seragam untuk semua form pendaftaran):
+     - gambar: file asli maks 10 MB, lalu dikompres otomatis di browser
+       hingga hasilnya di bawah 2 MB (lebar sisi terpanjang maks 1600 px)
+     - PDF: maks 5 MB, disimpan apa adanya tanpa kompresi */
+  UPLOAD_GAMBAR_MAKS_MB: 10,
+  UPLOAD_GAMBAR_HASIL_MB: 2,
+  UPLOAD_PDF_MAKS_MB: 5,
+  UPLOAD_MAX_PX: 1600,
+  UPLOAD_TIMEOUT_DTK: 15,
   DOKUMEN_TEMPLATE: 'assets/template-surat-kebenaran-usia.pdf',
   GALERI_FOLDER: 'assets/galeri',
   LANDING_KATEGORI: ['Pelatih', 'Atlet', 'Latihan', 'Pertandingan'],
@@ -76,6 +85,20 @@ var CONFIG = {
     { value: 'lunas', label: 'Lunas' },
     { value: 'belum', label: 'Belum Lunas' }
   ],
+  // Status keanggotaan atlet. 'aktif' = muncul di pilihan atlet untuk input
+  // baru; 'cuti' = izin sementara (akun masih bisa masuk); 'nonaktif' dan
+  // 'berhenti' = akun diblokir login. Data lama tanpa field dianggap 'aktif'.
+  STATUS_ATLET: [
+    { value: 'aktif', label: 'Aktif' },
+    { value: 'nonaktif', label: 'Non-Aktif' },
+    { value: 'cuti', label: 'Cuti' },
+    { value: 'berhenti', label: 'Berhenti' }
+  ],
+  // Jenis latihan atlet (pengganti NISN pada form pendaftaran/admin).
+  JENIS_LATIHAN: [
+    { value: 'club', label: 'Club' },
+    { value: 'private', label: 'Private' }
+  ],
   // Daftar ikon yang bisa dipilih untuk menu admin
   ICON_MENU: ['home', 'users', 'calendar', 'activity', 'clipboard', 'trophy', 'chart',
     'target', 'settings', 'user', 'star', 'eye', 'info', 'alert', 'save', 'refresh',
@@ -92,8 +115,9 @@ var CONFIG = {
     { id: 'monitoring', label: 'Monitoring', short: 'Monitoring', icon: 'chart', bottom: true, urutan: 6, aktif: true },
     { id: 'pertandingan', label: 'Pertandingan', short: 'Pertandingan', icon: 'trophy', bottom: true, urutan: 7, aktif: true },
     { id: 'pengguna', label: 'Pengguna', short: 'Pengguna', icon: 'settings', bottom: false, urutan: 8, aktif: true },
-    { id: 'landing-page', label: 'Landing Page', short: 'Landing', icon: 'eye', bottom: false, urutan: 9, aktif: true },
-    { id: 'setting', label: 'Setting', short: 'Setting', icon: 'settings', bottom: false, urutan: 10, aktif: true, kunci: true }
+    { id: 'keuangan', label: 'Keuangan & Iuran', short: 'Keuangan', icon: 'save', bottom: false, urutan: 9, aktif: true },
+    { id: 'landing-page', label: 'Landing Page', short: 'Landing', icon: 'eye', bottom: false, urutan: 10, aktif: true },
+    { id: 'setting', label: 'Setting', short: 'Setting', icon: 'settings', bottom: false, urutan: 11, aktif: true, kunci: true }
   ],
   ROLE_LABEL: {
     pelatih_kepala: 'Pelatih Kepala',

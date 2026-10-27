@@ -230,6 +230,8 @@ var Auth = (function () {
         user_id: user.id,
         nama: payload.nama,
         nisn: String(payload.nisn || '').trim(),
+        tgl_bergabung: payload.tgl_bergabung || new Date().toISOString().slice(0, 10),
+        jenis_latihan: payload.jenis_latihan || 'club',
         tgl_lahir: payload.tgl_lahir,
         jk: payload.jk,
         tinggi: Number(payload.tinggi),

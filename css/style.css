@@ -2699,6 +2699,164 @@ section[id],
   height: 340px;
 }
 
+.grid-4 {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: 1fr 1fr;
+}
+
+@media (min-width: 900px) {
+  .grid-4 {
+    grid-template-columns: repeat(4, 1fr);
+  }
+}
+
+/* Badge angka pada item menu (contoh: jumlah iuran belum lunas) */
+.nav-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
+  margin-left: auto;
+  border-radius: 10px;
+  background: #d21c2c;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.bottom-link .nav-badge {
+  position: absolute;
+  top: 4px;
+  right: 18px;
+  margin: 0;
+}
+
+.bottom-link {
+  position: relative;
+}
+
+/* Kuitansi pembayaran (modal + cetak) */
+.kuitansi {
+  background: #fff;
+  border: 1px solid #d7dfeb;
+  border-radius: 12px;
+  padding: 18px 20px;
+  text-align: left;
+}
+
+.kuitansi-kop {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+  border-bottom: 2px solid #0b3d91;
+  padding-bottom: 10px;
+  margin-bottom: 12px;
+}
+
+.kuitansi-judul b {
+  display: block;
+  font-size: 17px;
+  color: #0b3d91;
+  letter-spacing: 0.4px;
+}
+
+.kuitansi-judul span {
+  font-size: 12px;
+  color: #64748b;
+}
+
+.kuitansi-nomor {
+  font-size: 12px;
+  font-weight: 700;
+  color: #d21c2c;
+  white-space: nowrap;
+}
+
+.kuitansi-row {
+  display: flex;
+  gap: 10px;
+  padding: 3px 0;
+  font-size: 13px;
+}
+
+.kuitansi-row span {
+  min-width: 130px;
+  color: #64748b;
+}
+
+.kuitansi-jumlah {
+  display: flex;
+  gap: 10px;
+  align-items: baseline;
+  margin-top: 10px;
+  padding-top: 8px;
+  border-top: 1px dashed #d7dfeb;
+  font-size: 15px;
+}
+
+.kuitansi-jumlah span {
+  min-width: 130px;
+  color: #64748b;
+}
+
+.kuitansi-jumlah b {
+  color: #0b3d91;
+  font-size: 18px;
+}
+
+.kuitansi-terbilang {
+  padding-left: 140px;
+  font-size: 12px;
+  color: #334155;
+  margin-bottom: 12px;
+}
+
+.kuitansi-ttd {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  margin-top: 18px;
+  font-size: 12px;
+  text-align: center;
+}
+
+.kuitansi-ttd > div {
+  flex: 1;
+}
+
+.kuitansi-foot {
+  margin-top: 14px;
+  font-size: 10px;
+  color: #94a3b8;
+  text-align: center;
+}
+
+@media print {
+  body * {
+    visibility: hidden;
+  }
+
+  #kuitansi-cetak,
+  #kuitansi-cetak * {
+    visibility: visible;
+  }
+
+  #kuitansi-cetak {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    border: none;
+    border-radius: 0;
+    padding: 0;
+  }
+}
+
 .chart-fallback {
   display: flex;
   align-items: center;
@@ -3341,6 +3499,39 @@ section[id],
 
 .upload-actions[hidden] {
   display: none;
+}
+
+/* Status "Memproses..." di dalam kotak unggahan */
+.upload-box.processing {
+  border-style: dashed;
+  border-color: var(--primary-500);
+  background: var(--primary-50);
+  color: var(--primary-700);
+  cursor: default;
+  pointer-events: none;
+}
+
+.upload-spin {
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+  border: 3px solid rgba(21, 101, 216, 0.25);
+  border-top-color: var(--primary-600);
+  border-radius: 50%;
+  animation: up-spin 0.7s linear infinite;
+}
+
+@keyframes up-spin {
+  to { transform: rotate(360deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .upload-spin { animation: none; border-top-color: var(--primary-600); }
+}
+
+/* Pratinjau foto profil (bulat) di dalam kotak unggahan */
+.upload-thumb.is-round {
+  border-radius: 50%;
 }
 
 .doc-field.has-error .upload-box {

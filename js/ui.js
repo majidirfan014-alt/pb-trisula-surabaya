@@ -38,13 +38,30 @@ var UI = (function () {
     return '<span class="badge badge-' + (tone || 'muted') + '">' + Utils.esc(text) + '</span>';
   }
 
+  function labelStatusAtlet(status) {
+    var list = (typeof CONFIG !== 'undefined' && CONFIG && CONFIG.STATUS_ATLET) || [];
+    for (var i = 0; i < list.length; i++) {
+      if (list[i].value === status) return list[i].label;
+    }
+    return status || '';
+  }
+
+  function labelJenisLatihan(value) {
+    var list = (typeof CONFIG !== 'undefined' && CONFIG && CONFIG.JENIS_LATIHAN) || [];
+    for (var i = 0; i < list.length; i++) {
+      if (list[i].value === value) return list[i].label;
+    }
+    return value || '-';
+  }
+
   function statusBadge(status) {
+    var s = status || 'aktif';
     var tone = 'muted';
-    if (status === 'Hadir' || status === 'Menang' || status === 'aktif') tone = 'ok';
-    if (status === 'Izin') tone = 'warn';
-    if (status === 'Sakit') tone = 'info';
-    if (status === 'Tidak Hadir' || status === 'Alpa' || status === 'Kalah' || status === 'nonaktif') tone = 'danger';
-    return badge(status, tone);
+    if (s === 'Hadir' || s === 'Menang' || s === 'aktif') tone = 'ok';
+    if (s === 'Izin' || s === 'cuti') tone = 'warn';
+    if (s === 'Sakit') tone = 'info';
+    if (s === 'Tidak Hadir' || s === 'Alpa' || s === 'Kalah' || s === 'nonaktif' || s === 'berhenti') tone = 'danger';
+    return badge(labelStatusAtlet(s), tone);
   }
 
   function avatar(entity, size) {
@@ -224,7 +241,7 @@ var UI = (function () {
   function selectAthlete(name, value, opts) {
     opts = opts || {};
     var athletes = Utils.sortBy(Store.all('athletes'), 'nama', 'asc').filter(function (a) {
-      return a.status !== 'nonaktif' || opts.includeInactive;
+      return (a.status || 'aktif') === 'aktif' || opts.includeInactive;
     });
     return field({
       name: name,
@@ -397,6 +414,8 @@ var UI = (function () {
     icon: icon,
     badge: badge,
     statusBadge: statusBadge,
+    labelStatusAtlet: labelStatusAtlet,
+    labelJenisLatihan: labelJenisLatihan,
     avatar: avatar,
     statCard: statCard,
     emptyState: emptyState,

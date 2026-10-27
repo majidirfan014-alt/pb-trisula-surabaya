@@ -676,6 +676,8 @@ var PagesAthlete = (function () {
       '<div class="detail-grid">' +
       '<div class="detail-item"><div class="k">Tanggal Lahir</div><div class="v">' + Utils.fmtDate(athlete.tgl_lahir, true) + '</div></div>' +
       '<div class="detail-item"><div class="k">Usia</div><div class="v">' + Utils.age(athlete.tgl_lahir) + ' tahun</div></div>' +
+      '<div class="detail-item"><div class="k">Tanggal Bergabung</div><div class="v">' + Utils.fmtDate(athlete.tgl_bergabung, true) + '</div></div>' +
+      '<div class="detail-item"><div class="k">Jenis Latihan</div><div class="v">' + Utils.esc(UI.labelJenisLatihan(athlete.jenis_latihan)) + '</div></div>' +
       '<div class="detail-item"><div class="k">Jenis Kelamin</div><div class="v">' + Utils.esc(athlete.jk) + '</div></div>' +
       '<div class="detail-item"><div class="k">Tinggi Badan</div><div class="v">' + Utils.esc(athlete.tinggi) + ' cm</div></div>' +
       '<div class="detail-item"><div class="k">Berat Badan</div><div class="v">' + Utils.esc(athlete.berat) + ' kg</div></div>' +

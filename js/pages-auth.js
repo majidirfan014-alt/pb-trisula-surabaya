@@ -1,10 +1,86 @@
 var PagesAuth = (function () {
   var docsApi = null;
+  var boxFotoAtlet = null;
+  var boxLisensi = null;
+  var boxFotoAsisten = null;
 
-  // Unggah hasil kompresi lokal ke Firebase Storage. Bila gagal, pesan
-  // penyebab aslinya ditampilkan (lihat Utils.keCloud) dan foto dipakai lokal.
-  function unggahKeCloud(dataUrl, folder, nama) {
-    return Utils.keCloud(dataUrl, folder, nama);
+  /* ---------- validasi isian bersama ---------- */
+  // Tanggal lahir: wajib, tidak boleh hari ini maupun masa depan.
+  function validasiTglLahir(value) {
+    if (!value) return 'Tanggal lahir wajib diisi.';
+    var tgl = Utils.parseISO(value);
+    if (!tgl || isNaN(tgl.getTime())) return 'Tanggal lahir tidak valid.';
+    var hariIni = Utils.parseISO(Utils.todayISO());
+    hariIni.setHours(0, 0, 0, 0);
+    if (tgl.getTime() >= hariIni.getTime()) {
+      return 'Tanggal lahir tidak boleh hari ini atau di masa depan.';
+    }
+    return '';
+  }
+
+  // Tanggal bergabung: wajib, tidak boleh di masa depan (boleh hari ini).
+  function validasiTglBergabung(value) {
+    if (!value) return 'Tanggal bergabung wajib diisi.';
+    var tgl = Utils.parseISO(value);
+    if (!tgl || isNaN(tgl.getTime())) return 'Tanggal bergabung tidak valid.';
+    var hariIni = Utils.parseISO(Utils.todayISO());
+    hariIni.setHours(0, 0, 0, 0);
+    if (tgl.getTime() > hariIni.getTime()) {
+      return 'Tanggal bergabung tidak boleh di masa depan.';
+    }
+    return '';
+  }
+
+  // Jenis latihan: wajib salah satu dari daftar CONFIG.JENIS_LATIHAN.
+  function validasiJenisLatihan(value) {
+    var daftar = (CONFIG.JENIS_LATIHAN || []).map(function (o) { return o.value; });
+    if (!value || daftar.indexOf(value) === -1) {
+      return 'Jenis latihan wajib dipilih.';
+    }
+    return '';
+  }
+
+  // No. HP: hanya angka dengan awalan + yang sah; format 08xx / +628xx,
+  // 10–15 digit setelah spasi/tanda hubung dibuang. Kosong = boleh
+  // (pemanggil menentukan apakah wajib).
+  function validasiNoHp(value) {
+    var v = String(value || '').trim();
+    if (!v) return '';
+    var bersih = v.replace(/[\s\-().]/g, '');
+    if (!/^\+?\d+$/.test(bersih)) {
+      return 'No. HP hanya boleh angka (boleh diawali +). Contoh: 081234567890.';
+    }
+    var lokal = bersih;
+    if (lokal.slice(0, 3) === '+62') lokal = '0' + lokal.slice(3);
+    else if (lokal.slice(0, 2) === '62' && lokal.length >= 11) lokal = '0' + lokal.slice(2);
+    if (!/^08\d+$/.test(lokal)) {
+      return 'Format No. HP tidak valid. Contoh: 081234567890 atau +6281234567890.';
+    }
+    if (lokal.length < 10 || lokal.length > 15) {
+      return 'No. HP harus 10–15 digit (contoh: 081234567890).';
+    }
+    return '';
+  }
+
+  // Siapkan satu kolom unggahan (kotak proses lokal, tanpa cloud).
+  function siapkanBox(idHost, opts) {
+    var host = document.getElementById(idHost);
+    if (!host) return null;
+    host.innerHTML = Docs.boxHtml(opts);
+    return Docs.bindBox(host, opts);
+  }
+
+  // Tombol kirim nonaktif selama masih ada unggahan yang diproses.
+  function kunciTombol(form, terkunci) {
+    var btn = UI.submitButton(form);
+    if (!btn) return;
+    if (terkunci) {
+      btn.disabled = true;
+      btn.setAttribute('data-upload-lock', '1');
+    } else if (btn.getAttribute('data-upload-lock')) {
+      btn.disabled = false;
+      btn.removeAttribute('data-upload-lock');
+    }
   }
 
   function statusCloud() {
@@ -124,50 +200,19 @@ var PagesAuth = (function () {
     }
     setMode('atlet');
 
-    /* ---------- pembaca file (PDF / gambar) + validasi ukuran ---------- */
-    function bacaBerkas(file, maksByte, hanyaGambar) {
-      return new Promise(function (resolve, reject) {
-        if (!file) {
-          reject(new Error('Pilih file terlebih dahulu.'));
-          return;
-        }
-        var nama = String(file.name || '');
-        var tipe = String(file.type || '');
-        if (hanyaGambar) {
-          if (!/^image\//.test(tipe) && !/\.(jpe?g|png)$/i.test(nama)) {
-            reject(new Error('File harus berupa gambar JPG atau PNG.'));
-            return;
-          }
-        } else if (!/^image\//.test(tipe) && !/pdf/i.test(tipe) && !/\.(pdf|jpe?g|png)$/i.test(nama)) {
-          reject(new Error('Format file harus PDF, JPG, atau PNG.'));
-          return;
-        }
-        if (file.size > maksByte) {
-          reject(new Error('Ukuran file maksimal ' + Math.round(maksByte / 1024 / 1024) + ' MB.'));
-          return;
-        }
-        var reader = new FileReader();
-        reader.onerror = function () {
-          reject(new Error('Gagal membaca file.'));
-        };
-        reader.onload = function () {
-          resolve({
-            nama: nama,
-            tipe: tipe || (/pdf$/i.test(nama) ? 'application/pdf' : 'image/jpeg'),
-            ukuran: file.size,
-            data: reader.result
-          });
-        };
-        reader.readAsDataURL(file);
-      });
-    }
-
     /* ================= FORM ATLET ================= */
     if (formAtlet) {
+      // Semua kolom unggahan mengunci tombol kirim selama masih diproses.
+      function kunciFormAtlet() {
+        var sibuk = (docsApi && docsApi.busy ? docsApi.busy() : 0) +
+          (boxFotoAtlet ? boxFotoAtlet.busy() : 0);
+        kunciTombol(formAtlet, sibuk > 0);
+      }
+
       var slot = document.getElementById('docs-slot');
       if (slot) {
         slot.innerHTML = Docs.sectionHtml();
-        docsApi = Docs.bind(slot, {});
+        docsApi = Docs.bind(slot, { onBusy: kunciFormAtlet });
       }
 
       var tinggi = formAtlet.querySelector('[name="tinggi"]');
@@ -191,60 +236,28 @@ var PagesAuth = (function () {
       if (berat) berat.addEventListener('input', updateBmi);
       updateBmi();
 
-      var nisnInput = formAtlet.querySelector('[name="nisn"]');
-      function pesanNisn(value) {
-        var format = Utils.validasiNisn(value);
-        if (format) return format;
-        var v = String(value).trim();
-        var sama = Store.findOne('athletes', function (a) {
-          return String(a.nisn || '').trim() === v;
-        });
-        if (sama) return 'NISN sudah terdaftar';
-        return '';
-      }
-      if (nisnInput) {
-        nisnInput.addEventListener('input', function () {
-          var el = formAtlet.querySelector('[data-error-for="nisn"]');
-          var pesan = nisnInput.value.trim() ? pesanNisn(nisnInput.value) : '';
-          if (el) el.textContent = pesan;
-          nisnInput.classList.toggle('input-error', !!pesan);
-        });
+      // Tanggal bergabung: default hari ini (boleh diubah).
+      var tglBergabungInput = formAtlet.querySelector('[name="tgl_bergabung"]');
+      if (tglBergabungInput && !tglBergabungInput.value) {
+        tglBergabungInput.value = Utils.todayISO();
       }
 
-      var photoInput = formAtlet.querySelector('[name="foto_file"]');
-      var photoPreview = document.getElementById('photo-preview');
-      var photoData = '';
+      // Pastikan tanggal lahir kosong (bukan terisi otomatis oleh autofill).
+      var tglLahirInput = formAtlet.querySelector('[name="tgl_lahir"]');
+      if (tglLahirInput && !tglLahirInput.dataset.persist) tglLahirInput.value = '';
 
-      if (photoInput) {
-        photoInput.addEventListener('change', function () {
-          var file = photoInput.files && photoInput.files[0];
-          photoData = '';
-          if (!file) {
-            if (photoPreview) photoPreview.innerHTML = '';
-            return;
-          }
-          var pesanSalah = (typeof Cloud !== 'undefined' && Cloud && Cloud.validasiGambar)
-            ? Cloud.validasiGambar(file, 5 * 1024 * 1024) : '';
-          if (pesanSalah) {
-            Utils.toast(pesanSalah, 'danger');
-            photoInput.value = '';
-            return;
-          }
-          if (photoPreview) photoPreview.innerHTML = '<div class="upload-loading">Mengunggah foto...</div>';
-          Utils.readImage(file, 256).then(function (dataUrl) {
-            return unggahKeCloud(dataUrl, 'foto/pendaftaran', file.name || 'foto-atlet.jpg');
-          }).then(function (hasil) {
-            photoData = hasil;
-            if (photoPreview) photoPreview.innerHTML = UI.avatar({ nama: 'Foto', foto: hasil }, 64);
-            Utils.toast(/^https?:/.test(hasil) ? 'Foto tersimpan di cloud.' : 'Foto dipakai lokal — belum terunggah ke cloud.', 'success');
-          }).catch(function (err) {
-            photoData = '';
-            if (photoPreview) photoPreview.innerHTML = '';
-            Utils.toast(err.message, 'danger');
-            photoInput.value = '';
-          });
-        });
-      }
+      // Foto profil: satu komponen unggah bersama, sepenuhnya lokal.
+      boxFotoAtlet = siapkanBox('atlet-foto-box', {
+        key: 'foto-atlet',
+        label: 'Foto Profil',
+        jenis: 'foto',
+        required: false,
+        preview: 'bulat',
+        maksPx: 800, // avatar cukup 800px → proses kilat
+        labelRequired: 'Foto profil wajib diunggah.',
+        onChange: function () {},
+        onBusy: function () { kunciFormAtlet(); }
+      });
 
       UI.bindSubmit(formAtlet, function () {
         Utils.clearErrors(formAtlet);
@@ -252,18 +265,32 @@ var PagesAuth = (function () {
         var errors = {};
 
         if (!data.nama) errors.nama = 'Nama atlet wajib diisi.';
-        if (!data.tgl_lahir) errors.tgl_lahir = 'Tanggal lahir wajib diisi.';
-        var pesanNisnSubmit = pesanNisn(data.nisn);
-        if (pesanNisnSubmit) errors.nisn = pesanNisnSubmit;
+        var pesanLahir = validasiTglLahir(data.tgl_lahir);
+        if (pesanLahir) errors.tgl_lahir = pesanLahir;
+        var pesanBergabung = validasiTglBergabung(data.tgl_bergabung);
+        if (pesanBergabung) errors.tgl_bergabung = pesanBergabung;
+        var pesanJenis = validasiJenisLatihan(data.jenis_latihan);
+        if (pesanJenis) errors.jenis_latihan = pesanJenis;
         if (!data.jk) errors.jk = 'Jenis kelamin wajib dipilih.';
         if (!data.tinggi || Number(data.tinggi) < 80) errors.tinggi = 'Tinggi badan tidak valid.';
         if (!data.berat || Number(data.berat) < 20) errors.berat = 'Berat badan tidak valid.';
         if (!data.sekolah) errors.sekolah = 'Asal sekolah wajib diisi.';
         if (!data.no_hp) errors.no_hp = 'Nomor HP wajib diisi.';
+        else {
+          var pesanHp = validasiNoHp(data.no_hp);
+          if (pesanHp) errors.no_hp = pesanHp;
+        }
         if (!data.username) errors.username = 'ID login wajib diisi.';
         if (String(data.username || '').length < 4) errors.username = 'ID login minimal 4 karakter.';
         if (!data.password || data.password.length < 6) errors.password = 'Kata sandi minimal 6 karakter.';
         if (data.password !== data.password2) errors.password2 = 'Konfirmasi kata sandi tidak sama.';
+
+        var docsSedang = docsApi && docsApi.busy && docsApi.busy() > 0;
+        var fotoSedang = boxFotoAtlet && boxFotoAtlet.busy() > 0;
+        if (docsSedang || fotoSedang) {
+          Utils.toast('Tunggu proses unggahan selesai terlebih dahulu.', 'danger');
+          return;
+        }
 
         if (Object.keys(errors).length) {
           Utils.showErrors(formAtlet, errors);
@@ -280,9 +307,12 @@ var PagesAuth = (function () {
         var btn = UI.submitButton(formAtlet);
         if (btn) btn.textContent = 'Mendaftarkan...';
 
+        var fotoHasil = boxFotoAtlet ? boxFotoAtlet.get() : null;
+
         return Auth.registerAthlete({
           nama: data.nama,
-          nisn: data.nisn,
+          tgl_bergabung: data.tgl_bergabung,
+          jenis_latihan: data.jenis_latihan,
           tgl_lahir: data.tgl_lahir,
           jk: data.jk,
           tinggi: data.tinggi,
@@ -294,7 +324,9 @@ var PagesAuth = (function () {
           no_hp: data.no_hp,
           username: data.username,
           password: data.password,
-          foto: photoData,
+          // foto disimpan sebagai thumbnail ringan agar kompatibel dengan
+          // tampilan avatar; berkas utuhnya tetap ada di IndexedDB (fid).
+          foto: fotoHasil ? (fotoHasil.thumb || '') : '',
           dokumen: docsApi ? docsApi.get() : {}
         }).then(function (athlete) {
           showConfirmation(athlete, data.username);
@@ -307,87 +339,50 @@ var PagesAuth = (function () {
 
     /* ================= FORM ASISTEN PELATIH ================= */
     if (formAsisten) {
+      function kunciFormAsisten() {
+        var sibuk = (boxLisensi ? boxLisensi.busy() : 0) +
+          (boxFotoAsisten ? boxFotoAsisten.busy() : 0);
+        kunciTombol(formAsisten, sibuk > 0);
+      }
+
       var tglAsisten = formAsisten.querySelector('[name="tgl_lahir"]');
       var usiaAsisten = formAsisten.querySelector('[name="usia"]');
 
       function updateUsia() {
         if (!usiaAsisten) return;
-        usiaAsisten.value = tglAsisten && tglAsisten.value ? String(Utils.age(tglAsisten.value)) + ' tahun' : '';
+        var ada = tglAsisten && tglAsisten.value;
+        usiaAsisten.value = ada ? String(Utils.age(tglAsisten.value)) + ' tahun' : '-';
       }
       if (tglAsisten) {
+        // kosong secara default (jangan terisi autofill peramban)
+        if (!tglAsisten.dataset.persist) tglAsisten.value = '';
         tglAsisten.addEventListener('change', updateUsia);
         tglAsisten.addEventListener('input', updateUsia);
       }
+      updateUsia();
 
-      var lisensiInput = formAsisten.querySelector('[name="lisensi_file"]');
-      var lisensiPreview = document.getElementById('lisensi-preview');
-      var lisensiData = null;
+      // Lisensi & Foto Profil: satu komponen unggah bersama (lokal, tanpa cloud).
+      boxLisensi = siapkanBox('lisensi-box', {
+        key: 'lisensi',
+        label: 'Lisensi Pelatih',
+        jenis: 'campuran',
+        required: true,
+        labelRequired: 'Lisensi pelatih wajib diunggah.',
+        onChange: function () {},
+        onBusy: kunciFormAsisten
+      });
 
-      if (lisensiInput) {
-        lisensiInput.addEventListener('change', function () {
-          var file = lisensiInput.files && lisensiInput.files[0];
-          lisensiData = null;
-          if (lisensiPreview) lisensiPreview.innerHTML = '';
-          if (!file) return;
-          if (lisensiPreview) lisensiPreview.innerHTML = '<div class="upload-loading">Mengunggah lisensi...</div>';
-          bacaBerkas(file, 2 * 1024 * 1024, false).then(function (hasil) {
-            return unggahKeCloud(hasil.data, 'foto/lisensi', hasil.nama).then(function (url) {
-              hasil.data = url;
-              return hasil;
-            });
-          }).then(function (hasil) {
-            lisensiData = hasil;
-            var gambar = /^image\//.test(hasil.tipe);
-            if (lisensiPreview) {
-              lisensiPreview.innerHTML =
-                '<div class="file-chip">' +
-                (gambar ? '<img src="' + Utils.esc(hasil.data) + '" alt="Pratinjau lisensi">' : '') +
-                '<div><b>' + Utils.esc(hasil.nama) + '</b>' +
-                '<div class="small muted">' + (gambar ? 'Gambar' : 'PDF') + ' / ' +
-                Math.round(hasil.ukuran / 1024) + ' KB</div></div></div>';
-            }
-            Utils.toast(/^https?:/.test(hasil.data) ? 'Lisensi tersimpan di cloud.' : 'Lisensi dipakai lokal — belum terunggah ke cloud.', 'success');
-          }).catch(function (err) {
-            lisensiData = null;
-            if (lisensiPreview) lisensiPreview.innerHTML = '';
-            Utils.toast(err.message, 'danger');
-            lisensiInput.value = '';
-          });
-        });
-      }
-
-      var fotoAsistenInput = formAsisten.querySelector('[name="foto_file"]');
-      var fotoAsistenPreview = document.getElementById('asisten-photo-preview');
-      var fotoAsistenData = '';
-
-      if (fotoAsistenInput) {
-        fotoAsistenInput.addEventListener('change', function () {
-          var file = fotoAsistenInput.files && fotoAsistenInput.files[0];
-          fotoAsistenData = '';
-          if (fotoAsistenPreview) fotoAsistenPreview.innerHTML = '';
-          if (!file) return;
-          var pesanSalah = (typeof Cloud !== 'undefined' && Cloud && Cloud.validasiGambar)
-            ? Cloud.validasiGambar(file, 5 * 1024 * 1024) : '';
-          if (pesanSalah) {
-            Utils.toast(pesanSalah, 'danger');
-            fotoAsistenInput.value = '';
-            return;
-          }
-          if (fotoAsistenPreview) fotoAsistenPreview.innerHTML = '<div class="upload-loading">Mengunggah foto...</div>';
-          Utils.readImage(file, 256).then(function (dataUrl) {
-            return unggahKeCloud(dataUrl, 'foto/pendaftaran', file.name || 'foto-asisten.jpg');
-          }).then(function (hasil) {
-            fotoAsistenData = hasil;
-            if (fotoAsistenPreview) fotoAsistenPreview.innerHTML = UI.avatar({ nama: 'Foto', foto: hasil }, 64);
-            Utils.toast(/^https?:/.test(hasil) ? 'Foto tersimpan di cloud.' : 'Foto dipakai lokal — belum terunggah ke cloud.', 'success');
-          }).catch(function (err) {
-            fotoAsistenData = '';
-            if (fotoAsistenPreview) fotoAsistenPreview.innerHTML = '';
-            Utils.toast(err.message, 'danger');
-            fotoAsistenInput.value = '';
-          });
-        });
-      }
+      boxFotoAsisten = siapkanBox('asisten-foto-box', {
+        key: 'foto-asisten',
+        label: 'Foto Profil',
+        jenis: 'foto',
+        required: true,
+        preview: 'bulat',
+        maksPx: 800,
+        labelRequired: 'Foto profil wajib diunggah.',
+        onChange: function () {},
+        onBusy: kunciFormAsisten
+      });
 
       UI.bindSubmit(formAsisten, function () {
         Utils.clearErrors(formAsisten);
@@ -395,13 +390,21 @@ var PagesAuth = (function () {
         var errors = {};
 
         if (!data.nama) errors.nama = 'Nama lengkap wajib diisi.';
-        if (!data.tgl_lahir) errors.tgl_lahir = 'Tanggal lahir wajib diisi.';
+        var pesanLahirAsisten = validasiTglLahir(data.tgl_lahir);
+        if (pesanLahirAsisten) errors.tgl_lahir = pesanLahirAsisten;
+        var pesanHpAsisten = validasiNoHp(data.no_hp);
+        if (pesanHpAsisten) errors.no_hp = pesanHpAsisten;
         if (!data.username) errors.username = 'ID login wajib diisi.';
         if (String(data.username || '').length < 4) errors.username = 'ID login minimal 4 karakter.';
         if (!data.password || data.password.length < 6) errors.password = 'Kata sandi minimal 6 karakter.';
         if (data.password !== data.password2) errors.password2 = 'Konfirmasi kata sandi tidak sama.';
-        if (!lisensiData) errors.lisensi_file = 'Lisensi pelatih wajib diunggah.';
-        if (!fotoAsistenData) errors.foto_file = 'Foto profil wajib diunggah.';
+
+        if ((boxLisensi && boxLisensi.busy() > 0) || (boxFotoAsisten && boxFotoAsisten.busy() > 0)) {
+          Utils.toast('Tunggu proses unggahan selesai terlebih dahulu.', 'danger');
+          return;
+        }
+        if (!boxLisensi || !boxLisensi.validate(true)) errors.lisensi_file = 'Lisensi pelatih wajib diunggah.';
+        if (!boxFotoAsisten || !boxFotoAsisten.validate(true)) errors.foto_file = 'Foto profil wajib diunggah.';
 
         if (Object.keys(errors).length) {
           Utils.showErrors(formAsisten, errors);
@@ -412,12 +415,15 @@ var PagesAuth = (function () {
         var btn = UI.submitButton(formAsisten);
         if (btn) btn.textContent = 'Mendaftarkan...';
 
+        var lisensiHasil = boxLisensi ? boxLisensi.get() : null;
+        var fotoHasilAsisten = boxFotoAsisten ? boxFotoAsisten.get() : null;
+
         return Auth.registerAsisten({
           nama: data.nama,
           tgl_lahir: data.tgl_lahir,
           no_hp: data.no_hp,
-          lisensi: lisensiData,
-          foto: fotoAsistenData,
+          lisensi: lisensiHasil,
+          foto: fotoHasilAsisten ? (fotoHasilAsisten.thumb || '') : '',
           username: data.username,
           password: data.password
         }).then(function (user) {
@@ -445,9 +451,13 @@ var PagesAuth = (function () {
       '<div class="id-badge">' + Utils.esc(athlete.id_atlet) + '</div>' +
       '<div class="detail-grid mt-2" style="text-align:left">' +
       '<div class="detail-item"><div class="k">Nama</div><div class="v">' + Utils.esc(athlete.nama) + '</div></div>' +
-      '<div class="detail-item"><div class="k">NISN</div><div class="v">' + Utils.esc(athlete.nisn || '-') + '</div></div>' +
+      '<div class="detail-item"><div class="k">Tanggal Bergabung</div><div class="v">' +
+      Utils.fmtDate(athlete.tgl_bergabung, true) + '</div></div>' +
+      '<div class="detail-item"><div class="k">Jenis Latihan</div><div class="v">' +
+      Utils.esc(UI.labelJenisLatihan(athlete.jenis_latihan)) + '</div></div>' +
       '<div class="detail-item"><div class="k">ID Login</div><div class="v">' + Utils.esc(username) + '</div></div>' +
-      '<div class="detail-item"><div class="k">Usia</div><div class="v">' + Utils.age(athlete.tgl_lahir) + ' tahun</div></div>' +
+      '<div class="detail-item"><div class="k">Usia</div><div class="v">' +
+      (athlete.tgl_lahir ? Utils.age(athlete.tgl_lahir) + ' tahun' : '-') + '</div></div>' +
       '<div class="detail-item"><div class="k">BMI</div><div class="v">' + Utils.esc(athlete.bmi) + ' (' + Utils.esc(athlete.kategori_bmi) + ')</div></div>' +
       '</div>' +
       '<div class="mt-3" style="text-align:left">' +

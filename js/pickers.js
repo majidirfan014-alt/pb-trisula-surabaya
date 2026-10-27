@@ -1,6 +1,10 @@
 var Picker = (function () {
   var KOLEKSI_LOKASI = 'lokasi_latihan';
-  var DEFAULT_LOKASI = ['Lapangan Utama', 'Lapangan 2', 'GOR Surabaya'];
+  // Lokasi latihan aktif (terbaru). Lokasi lama TIDAK dihapus — cukup
+  // dinonaktifkan agar tidak muncul di form isian baru, sementara riwayat
+  // data lama tetap menampilkan nama lokasinya sendiri.
+  var DEFAULT_LOKASI = ['Sport Center Puncak Permai', 'Kintono Hall', 'Lap. Atletik Unesa'];
+  var LOKASI_LAMA = ['Lapangan Utama', 'Lapangan 2', 'GOR Surabaya'];
   var KOLEKSI_PENGGUNA_LOKASI = ['absensi_asisten', 'logbook_entries'];
 
   /* ==================== MASTER LOKASI LATIHAN ==================== */
@@ -62,6 +66,28 @@ var Picker = (function () {
           });
         });
       }
+    } catch (e) {}
+  }
+
+  // Penyelarasan master untuk instalasi yang sudah berjalan: pastikan lokasi
+  // baru tersedia (aktif) dan nonaktifkan lokasi lama tanpa menghapusnya.
+  // Idempoten — dicek lewat nama, bukan id (id lama dipakai di riwayat data).
+  function migrasiMasterLokasi() {
+    try {
+      DEFAULT_LOKASI.forEach(function (nama) {
+        if (masterCariNama(nama)) return;
+        Store.insert(KOLEKSI_LOKASI, {
+          id: 'lok_baru_' + Date.now().toString(36) + Math.floor(Math.random() * 1000),
+          nama: nama,
+          aktif: true
+        });
+      });
+      LOKASI_LAMA.forEach(function (nama) {
+        var lama = masterCariNama(nama);
+        if (lama && lama.aktif !== false) {
+          Store.update(KOLEKSI_LOKASI, lama.id, { aktif: false });
+        }
+      });
     } catch (e) {}
   }
 
@@ -160,6 +186,7 @@ var Picker = (function () {
 
   function init() {
     initMaster();
+    migrasiMasterLokasi();
     migrasiLokasi();
   }
 

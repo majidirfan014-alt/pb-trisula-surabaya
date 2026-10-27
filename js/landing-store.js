@@ -1055,8 +1055,14 @@ var LandingStore = (function () {
     var asisten = 0;
     users.forEach(function (u) {
       if (!u || u.status === 'nonaktif') return;
-      if (u.role === 'atlet') atlet++;
-      else if (u.role === 'asisten') asisten++;
+      if (u.role === 'atlet') {
+        // Hanya atlet berstatus aktif yang dihitung untuk angka publik;
+        // atlet cuti/nonaktif/berhenti tidak muncul di landing.
+        var rec = Store.findOne('athletes', function (a) {
+          return a.user_id === u.id || a.id_atlet === u.id_atlet;
+        });
+        if (!rec || (rec.status || 'aktif') === 'aktif') atlet++;
+      } else if (u.role === 'asisten') asisten++;
     });
     return simpanRingkasan({ jumlahAtlet: atlet, jumlahAsisten: asisten });
   }

@@ -48,16 +48,27 @@
 
               <div class="field">
                 <label class="label" for="f-tgl_lahir">Tanggal Lahir <span class="req">*</span></label>
-                <input class="input" type="date" id="f-tgl_lahir" name="tgl_lahir" required>
+                <input class="input" type="date" id="f-tgl_lahir" name="tgl_lahir" autocomplete="off" required>
+                <div class="help">Tidak boleh tanggal hari ini atau di masa depan.</div>
                 <div class="field-error" data-error-for="tgl_lahir"></div>
               </div>
 
               <div class="field">
-                <label class="label" for="f-nisn">NISN <span class="req">*</span></label>
-                <input class="input" type="text" inputmode="numeric" pattern="[0-9]*"
-                  id="f-nisn" name="nisn" placeholder="10 digit angka" autocomplete="off" required>
-                <div class="help">Tepat 10 digit angka, tidak boleh sama dengan atlet lain.</div>
-                <div class="field-error" data-error-for="nisn"></div>
+                <label class="label" for="f-tgl_bergabung">Tanggal Bergabung <span class="req">*</span></label>
+                <input class="input" type="date" id="f-tgl_bergabung" name="tgl_bergabung" autocomplete="off" required>
+                <div class="help">Tanggal pertama bergabung dengan PB Trisula.</div>
+                <div class="field-error" data-error-for="tgl_bergabung"></div>
+              </div>
+
+              <div class="field">
+                <label class="label" for="f-jenis_latihan">Jenis Latihan <span class="req">*</span></label>
+                <select class="input" id="f-jenis_latihan" name="jenis_latihan" required>
+                  <option value="">-- Pilih --</option>
+                  <option value="club">Club</option>
+                  <option value="private">Private</option>
+                </select>
+                <div class="help">Club: latihan bersama tim. Private: latihan privat.</div>
+                <div class="field-error" data-error-for="jenis_latihan"></div>
               </div>
 
               <div class="field">
@@ -104,7 +115,9 @@
 
               <div class="field">
                 <label class="label" for="f-no_hp">No. HP Orang Tua / Atlet <span class="req">*</span></label>
-                <input class="input" type="tel" id="f-no_hp" name="no_hp" placeholder="contoh: 081234567890" required>
+                <input class="input" type="tel" id="f-no_hp" name="no_hp" inputmode="tel" autocomplete="tel"
+                  placeholder="contoh: 081234567890" required>
+                <div class="help">Angka saja, contoh 081234567890 atau +6281234567890 (10–15 digit).</div>
                 <div class="field-error" data-error-for="no_hp"></div>
               </div>
 
@@ -131,11 +144,7 @@
 
               <div class="field">
                 <label class="label">Foto Profil (opsional)</label>
-                <div class="photo-upload">
-                  <div id="photo-preview"></div>
-                  <input class="input" type="file" name="foto_file" accept="image/*">
-                </div>
-                <div class="help">Format JPG/PNG, maksimal 5 MB. Foto otomatis diperkecil.</div>
+                <div id="atlet-foto-box"></div>
               </div>
             </div>
           </div>
@@ -189,40 +198,35 @@
 
               <div class="field">
                 <label class="label" for="a-tgl_lahir">Tanggal Lahir <span class="req">*</span></label>
-                <input class="input" type="date" id="a-tgl_lahir" name="tgl_lahir" required>
+                <input class="input" type="date" id="a-tgl_lahir" name="tgl_lahir" autocomplete="off" required>
+                <div class="help">Tidak boleh tanggal hari ini atau di masa depan.</div>
                 <div class="field-error" data-error-for="tgl_lahir"></div>
               </div>
 
               <div class="field">
                 <label class="label" for="a-usia">Usia</label>
-                <input class="input" type="text" id="a-usia" name="usia" placeholder="Terisi otomatis" readonly>
+                <input class="input" type="text" id="a-usia" name="usia" value="-" readonly>
                 <div class="help">Terisi otomatis dari tanggal lahir.</div>
               </div>
 
               <div class="field">
                 <label class="label" for="a-no_hp">No. HP</label>
-                <input class="input" type="tel" id="a-no_hp" name="no_hp" placeholder="contoh: 081234567890">
+                <input class="input" type="tel" id="a-no_hp" name="no_hp" inputmode="tel" autocomplete="tel"
+                  placeholder="contoh: 081234567890">
+                <div class="help">Angka saja, contoh 081234567890 atau +6281234567890 (10–15 digit).</div>
                 <div class="field-error" data-error-for="no_hp"></div>
               </div>
             </div>
 
             <div>
               <div class="field">
-                <label class="label" for="a-lisensi_file">Lisensi Pelatih <span class="req">*</span></label>
-                <input class="input" type="file" id="a-lisensi_file" name="lisensi_file" accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png" required>
-                <div class="file-preview" id="lisensi-preview"></div>
-                <div class="help">Format PDF/JPG/PNG, maksimal 2 MB.</div>
-                <div class="field-error" data-error-for="lisensi_file"></div>
+                <label class="label">Lisensi Pelatih <span class="req">*</span></label>
+                <div id="lisensi-box"></div>
               </div>
 
               <div class="field">
-                <label class="label" for="a-foto_file">Foto Profil <span class="req">*</span></label>
-                <div class="photo-upload">
-                  <div id="asisten-photo-preview"></div>
-                  <input class="input" type="file" id="a-foto_file" name="foto_file" accept="image/jpeg,image/png,image/jpg" required>
-                </div>
-                <div class="help">Format JPG/PNG, maksimal 5 MB.</div>
-                <div class="field-error" data-error-for="foto_file"></div>
+                <label class="label">Foto Profil <span class="req">*</span></label>
+                <div id="asisten-foto-box"></div>
               </div>
             </div>
           </div>
@@ -267,14 +271,15 @@
     </main>
   </div>
 
-  <script src="js/config.js?v=8"></script>
-  <script src="js/utils.js?v=8"></script>
-  <script src="js/store.js?v=8"></script>
-  <script src="js/auth.js?v=8"></script>
-  <script src="js/ui.js?v=8"></script>
-  <script src="js/docs.js?v=8"></script>
-  <script src="js/cloud.js?v=8"></script>
-  <script src="js/pages-auth.js?v=8"></script>
+  <script src="js/config.js?v=9"></script>
+  <script src="js/utils.js?v=9"></script>
+  <script src="js/store.js?v=9"></script>
+  <script src="js/filestore.js?v=9"></script>
+  <script src="js/auth.js?v=9"></script>
+  <script src="js/ui.js?v=9"></script>
+  <script src="js/docs.js?v=9"></script>
+  <script src="js/cloud.js?v=9"></script>
+  <script src="js/pages-auth.js?v=9"></script>
   <script>
     (function () {
       var jalan = false;
