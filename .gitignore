@@ -24,3 +24,6 @@ tools/uji-lokal/hasil-*
 tools/uji-lokal/galat-*
 tools/uji-lokal/min.html
 tools/uji-lokal/server.err
+
+.vercel
+.env*
