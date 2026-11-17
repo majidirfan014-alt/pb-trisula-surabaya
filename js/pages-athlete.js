@@ -692,6 +692,9 @@ var PagesAthlete = (function () {
       '<h4 class="mt-3 mb-1">Data Tambahan</h4>' +
       '<div class="biodata-excel">' +
       UI.biodataRow('Jenis Latihan', Utils.esc(UI.labelJenisLatihan(athlete.jenis_latihan)), !athlete.jenis_latihan) +
+      UI.biodataRow('Jadwal Latihan',
+        (typeof Jadwal !== 'undefined' && Jadwal) ? Jadwal.chipsHtml(athlete, { panjang: true, kosongHtml: '<span class="muted">Belum dijadwalkan</span>' }) : '',
+        !(athlete.jadwal_sesi && athlete.jadwal_sesi.length)) +
       UI.biodataRow('Asal PB', Utils.esc(athlete.asal_pb || ''), !athlete.asal_pb) +
       UI.biodataRow('No. HP', Utils.esc(athlete.no_hp || ''), !athlete.no_hp) +
       UI.biodataRow('Tinggi / Berat', Utils.esc(athlete.tinggi) + ' cm / ' + Utils.esc(athlete.berat) + ' kg', false) +

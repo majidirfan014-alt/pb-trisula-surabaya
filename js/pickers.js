@@ -1,11 +1,30 @@
 var Picker = (function () {
   var KOLEKSI_LOKASI = 'lokasi_latihan';
-  // Lokasi latihan aktif (terbaru). Lokasi lama TIDAK dihapus — cukup
-  // dinonaktifkan agar tidak muncul di form isian baru, sementara riwayat
-  // data lama tetap menampilkan nama lokasinya sendiri.
-  var DEFAULT_LOKASI = ['Sport Center Puncak Permai', 'Kintono Hall', 'Lap. Atletik Unesa'];
+  // Lokasi utama dengan ID TETAP. Seeding hanya membuat lokasi bila ID belum
+  // ada, sehingga tidak pernah menumpuk walau dimuat berulang / banyak tab.
+  var DEFAULT_LOKASI = [
+    { id: 'loc_scpp', nama: 'Sport Center Puncak Permai' },
+    { id: 'loc_kintono', nama: 'Kintono Badminton Hall' },
+    { id: 'loc_unesa', nama: 'Lap. Atletik Unesa' }
+  ];
+  // Nama lama yang diganti namanya (ID tetap, agar data lama tidak putus).
+  var RENAME_LOKASI = [{ dari: 'Kintono Hall', ke: 'Kintono Badminton Hall' }];
   var LOKASI_LAMA = ['Lapangan Utama', 'Lapangan 2', 'GOR Surabaya'];
   var KOLEKSI_PENGGUNA_LOKASI = ['absensi_asisten', 'logbook_entries'];
+  // Penanda migrasi deduplikasi (sekali jalan, tetapi aman diulang).
+  var KUNCI_MIGRASI = 'lokasi_migrasi_v2';
+
+  // Normalisasi nama untuk perbandingan & deduplikasi: huruf kecil, titik dan
+  // tanda baca diabaikan, spasi ganda jadi satu - "lap. atletik unesa" dan
+  // "lap atletik unesa" dianggap nama yang sama.
+  function normalNama(nama) {
+    return String(nama || '')
+      .toLowerCase()
+      .replace(/[.,()\-_/]/g, ' ')
+      .replace(/[^a-z0-9\s]/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+  }
 
   /* ==================== MASTER LOKASI LATIHAN ==================== */
 
@@ -26,11 +45,36 @@ var Picker = (function () {
   }
 
   function masterCariNama(nama) {
-    var n = String(nama || '').trim().toLowerCase();
+    var n = normalNama(nama);
     if (!n) return null;
     return Store.findOne(KOLEKSI_LOKASI, function (l) {
-      return String(l.nama || '').trim().toLowerCase() === n;
+      return normalNama(l.nama) === n;
     });
+  }
+
+  function defaultByNama(nama) {
+    var n = normalNama(nama);
+    for (var i = 0; i < DEFAULT_LOKASI.length; i++) {
+      if (normalNama(DEFAULT_LOKASI[i].nama) === n) return DEFAULT_LOKASI[i];
+    }
+    return null;
+  }
+
+  // Kembalikan ID lokasi untuk sebuah nama: cari di master (id apa pun),
+  // kalau belum ada buat dengan ID tetap (untuk lokasi utama) - tidak pernah
+  // membuat duplikat untuk nama yang sama.
+  function pastikanLokasi(nama) {
+    var ada = masterCariNama(nama);
+    if (ada) return ada.id;
+    var def = defaultByNama(nama);
+    var id = def ? def.id : ('lok_' + normalNama(nama).replace(/\s+/g, '_').slice(0, 24) + '_' + Store.all(KOLEKSI_LOKASI).length);
+    if (masterById(id)) return id;
+    Store.insert(KOLEKSI_LOKASI, {
+      id: id,
+      nama: def ? def.nama : String(nama || '').trim(),
+      aktif: true
+    });
+    return id;
   }
 
   function masterSimpan(payload, id) {
@@ -54,40 +98,238 @@ var Picker = (function () {
     return Store.remove(KOLEKSI_LOKASI, id);
   }
 
-  // Isi lokasi default sekali saja saat aplikasi pertama dijalankan.
+  // Seeding idempotent: setiap lokasi utama dibuat HANYA bila ID tetapnya
+  // belum ada. Bila record dengan nama sama sudah ada (ID lama), tidak dibuat
+  // tambahan - deduplikasi yang akan menyatukannya ke ID tetap.
   function initMaster() {
     try {
-      if (localStorage.getItem(CONFIG.PREFIX + KOLEKSI_LOKASI) === null) {
-        DEFAULT_LOKASI.forEach(function (nama, i) {
-          Store.insert(KOLEKSI_LOKASI, {
-            id: 'lok_default_' + (i + 1),
-            nama: nama,
-            aktif: true
+      DEFAULT_LOKASI.forEach(function (d) {
+        if (Store.find(KOLEKSI_LOKASI, d.id)) return;
+        if (masterCariNama(d.nama)) return;
+        Store.insert(KOLEKSI_LOKASI, {
+          id: d.id,
+          nama: d.nama,
+          aktif: true
+        });
+      });
+    } catch (e) {}
+  }
+
+  // Ganti nama lokasi lama (mis. "Kintono Hall" -> "Kintono Badminton Hall")
+  // pada SEMUA record yang cocok (bukan hanya yang pertama), lalu rapikan
+  // juga teks/lokasi_nama pada record lama. Tidak ada data yang dihapus.
+  function migrasiRenameLokasi() {
+    try {
+      RENAME_LOKASI.forEach(function (r) {
+        var nDari = normalNama(r.dari);
+        Store.all(KOLEKSI_LOKASI).forEach(function (l) {
+          if (l && normalNama(l.nama) === nDari) {
+            Store.update(KOLEKSI_LOKASI, l.id, { nama: r.ke });
+          }
+        });
+        var koleksiData = ['absensi_asisten', 'logbook_entries', 'attendance'];
+        koleksiData.forEach(function (koleksi) {
+          Store.all(koleksi).forEach(function (rec) {
+            if (!rec) return;
+            var patch = {};
+            if (Array.isArray(rec.lokasi_nama) && rec.lokasi_nama.indexOf(r.dari) !== -1) {
+              patch.lokasi_nama = rec.lokasi_nama.map(function (n) {
+                return n === r.dari ? r.ke : n;
+              });
+            }
+            if (rec.lokasi && String(rec.lokasi).indexOf(r.dari) !== -1) {
+              patch.lokasi = String(rec.lokasi).split(r.dari).join(r.ke);
+            }
+            if (rec.lokasi_lainnya && String(rec.lokasi_lainnya).indexOf(r.dari) !== -1) {
+              patch.lokasi_lainnya = String(rec.lokasi_lainnya).split(r.dari).join(r.ke);
+            }
+            if (Object.keys(patch).length) Store.update(koleksi, rec.id, patch);
           });
         });
-      }
+      });
     } catch (e) {}
   }
 
   // Penyelarasan master untuk instalasi yang sudah berjalan: pastikan lokasi
-  // baru tersedia (aktif) dan nonaktifkan lokasi lama tanpa menghapusnya.
-  // Idempoten — dicek lewat nama, bukan id (id lama dipakai di riwayat data).
+  // utama tersedia (ID tetap, idempotent) dan nonaktifkan lokasi lama tanpa
+  // menghapusnya.
   function migrasiMasterLokasi() {
     try {
-      DEFAULT_LOKASI.forEach(function (nama) {
-        if (masterCariNama(nama)) return;
-        Store.insert(KOLEKSI_LOKASI, {
-          id: 'lok_baru_' + Date.now().toString(36) + Math.floor(Math.random() * 1000),
-          nama: nama,
-          aktif: true
-        });
-      });
+      migrasiRenameLokasi();
+      initMaster();
       LOKASI_LAMA.forEach(function (nama) {
         var lama = masterCariNama(nama);
         if (lama && lama.aktif !== false) {
           Store.update(KOLEKSI_LOKASI, lama.id, { aktif: false });
         }
       });
+    } catch (e) {}
+  }
+
+  /* ==================== DEDUPLIKASI (MIGRASI v2) ==================== */
+
+  // Satu kali jalan (aman diulang): gabungkan lokasi duplikat - nama yang
+  // sama setelah dinormalisasi ("lap. atletik unesa" == "lap atletik unesa")
+  // dijadikan satu entri kanonik (ID tetap loc_* bila lokasi utama), semua
+  // referensi (kehadiran, logbook, jadwal, dsb) dialihkan ke ID kanonik,
+  // lalu record duplikatnya dihapus. Tidak ada data kehadiran yang hilang.
+  function dedupLokasi() {
+    try {
+      var semua = Store.all(KOLEKSI_LOKASI);
+      var grup = {};
+      var urut = [];
+      semua.forEach(function (l) {
+        if (!l) return;
+        var k = normalNama(l.nama);
+        if (!k) return;
+        if (!grup[k]) {
+          grup[k] = [];
+          urut.push(k);
+        }
+        grup[k].push(l);
+      });
+
+      var petaId = {};     // id duplikat -> id kanonik
+      var petaNama = {};   // nama ternormalisasi -> nama kanonik
+      var varianNama = {}; // nama kanonik -> [varian ejaan lama]
+      var hapusId = {};
+
+      urut.forEach(function (k) {
+        var anggota = grup[k];
+        var namaAsli = anggota.map(function (l) {
+          return String(l.nama || '');
+        });
+        var def = defaultByNama(k);
+        // Target ID: ID tetap untuk lokasi utama, selain itu ID pemenang.
+        var target = def ? def.id : null;
+        if (target && masterById(target) && anggota.filter(function (l) {
+          return l.id === target;
+        }).length === 0) {
+          // ID tetap sudah dipakai record lain (nama lain) - jangan rebut.
+          target = null;
+        }
+        var pemenang = null;
+        if (target) {
+          anggota.forEach(function (l) {
+            if (l.id === target) pemenang = l;
+          });
+        }
+        if (!pemenang) {
+          // Pemenang: yang paling awal dibuat (stabil), sisanya duplikat.
+          pemenang = anggota[0];
+          anggota.forEach(function (l) {
+            if (String(l.dibuat_pada || '') < String(pemenang.dibuat_pada || '')) pemenang = l;
+          });
+        }
+        var namaKanonik = def ? def.nama : pemenang.nama;
+
+        if (target && pemenang.id !== target) {
+          // Adopsi ID tetap: salin record pemenang ke ID tetap, referensi ikut.
+          Store.insert(KOLEKSI_LOKASI, Object.assign({}, pemenang, { id: target, nama: namaKanonik }));
+          petaId[pemenang.id] = target;
+          hapusId[pemenang.id] = true;
+          pemenang = { id: target };
+        } else if (pemenang.nama !== namaKanonik) {
+          Store.update(KOLEKSI_LOKASI, pemenang.id, { nama: namaKanonik });
+        }
+
+        petaNama[k] = namaKanonik;
+        namaAsli.forEach(function (n) {
+          if (n && n.trim() !== namaKanonik) {
+            if (!varianNama[namaKanonik]) varianNama[namaKanonik] = [];
+            if (varianNama[namaKanonik].indexOf(n) === -1) {
+              varianNama[namaKanonik].push(n);
+            }
+          }
+        });
+        anggota.forEach(function (l) {
+          if (l.id === pemenang.id) return;
+          petaId[l.id] = pemenang.id;
+          hapusId[l.id] = true;
+        });
+      });
+
+      benahiReferensiLokasi(petaId, petaNama, varianNama);
+
+      Object.keys(hapusId).forEach(function (id) {
+        if (petaId[id] !== id) Store.remove(KOLEKSI_LOKASI, id);
+      });
+      return {
+        digabung: Object.keys(hapusId).length,
+        grup: urut.length
+      };
+    } catch (e) {
+      return { digabung: 0, grup: 0 };
+    }
+  }
+
+  // Perbaiki seluruh referensi lokasi pada SEMUA koleksi data (kehadiran,
+  // logbook, jadwal, dsb) agar menunjuk ke ID/nama kanonik. Field teks lama
+  // selain nama lokasi (mis. "Lainnya" isian sendiri) tidak diubah.
+  function benahiReferensiLokasi(petaId, petaNama, varianNama) {
+    var prefix = CONFIG.PREFIX;
+    var kunciLewati = {};
+    kunciLewati[KOLEKSI_LOKASI] = true;
+    kunciLewati['seq'] = true;
+    for (var i = 0; i < localStorage.length; i++) {
+      var key = localStorage.key(i);
+      if (!key || key.indexOf(prefix) !== 0) continue;
+      var koleksi = key.slice(prefix.length);
+      if (kunciLewati[koleksi]) continue;
+      var rows = Store.all(koleksi);
+      if (!Array.isArray(rows) || !rows.length) continue;
+      rows.forEach(function (rec) {
+        if (!rec || typeof rec !== 'object' || rec.id === undefined) return;
+        var patch = {};
+        if (Array.isArray(rec.lokasi_ids)) {
+          var ids = [];
+          rec.lokasi_ids.forEach(function (id) {
+            var tujuan = petaId[id] || id;
+            if (ids.indexOf(tujuan) === -1) ids.push(tujuan);
+          });
+          if (ids.join(',') !== rec.lokasi_ids.join(',')) patch.lokasi_ids = ids;
+        }
+        if (rec.lokasi_id && petaId[rec.lokasi_id]) patch.lokasi_id = petaId[rec.lokasi_id];
+        if (Array.isArray(rec.lokasi_nama)) {
+          var nama = [];
+          rec.lokasi_nama.forEach(function (n) {
+            var t = petaNama[normalNama(n)];
+            var nilai = t !== undefined ? t : n;
+            if (nama.indexOf(nilai) === -1) nama.push(nilai);
+          });
+          if (nama.join(' | ') !== rec.lokasi_nama.join(' | ')) patch.lokasi_nama = nama;
+        } else if (typeof rec.lokasi_nama === 'string' && rec.lokasi_nama) {
+          var tSkalar = petaNama[normalNama(rec.lokasi_nama)];
+          if (tSkalar !== undefined && tSkalar !== rec.lokasi_nama) patch.lokasi_nama = tSkalar;
+        }
+        if (typeof rec.lokasi === 'string' && rec.lokasi) {
+          var teks = rec.lokasi;
+          Object.keys(varianNama).forEach(function (kanonik) {
+            varianNama[kanonik].forEach(function (varian) {
+              if (!varian || varian === kanonik) return;
+              teks = teks.split(varian).join(kanonik);
+            });
+          });
+          if (teks !== rec.lokasi) patch.lokasi = teks;
+        }
+        if (Object.keys(patch).length) Store.update(koleksi, rec.id, patch);
+      });
+    }
+  }
+
+  // Jalankan migrasi deduplikasi satu kali (ditandai di localStorage).
+  function migrasiDedup() {
+    try {
+      if (localStorage.getItem(CONFIG.PREFIX + KUNCI_MIGRASI)) return;
+      var hasil = dedupLokasi();
+      localStorage.setItem(CONFIG.PREFIX + KUNCI_MIGRASI, JSON.stringify({
+        digabung: hasil.digabung,
+        grup: hasil.grup,
+        pada: new Date().toISOString()
+      }));
+      if (hasil.digabung > 0 && typeof Utils !== 'undefined' && Utils.toast) {
+        Utils.toast('Perapian data lokasi: ' + hasil.digabung + ' duplikat digabung.', 'success');
+      }
     } catch (e) {}
   }
 
@@ -188,6 +430,7 @@ var Picker = (function () {
     initMaster();
     migrasiMasterLokasi();
     migrasiLokasi();
+    migrasiDedup();
   }
 
   /* ==================== KOMPONEN: PILIH LOKASI ==================== */
@@ -211,14 +454,15 @@ var Picker = (function () {
       '<label class="label">' + Utils.esc(opts.label || 'Lokasi Latihan') +
       (opts.required ? ' <span class="req">*</span>' : '') + '</label>' +
       '<div class="lokasi-toolbar">' +
-      '<button type="button" class="btn btn-sm btn-ghost" data-lokasi-semua>' + UI.icon('check', 16) + ' Pilih semua</button>' +
+      (opts.single ? '' : '<button type="button" class="btn btn-sm btn-ghost" data-lokasi-semua>' + UI.icon('check', 16) + ' Pilih semua</button>') +
       '<button type="button" class="btn btn-sm btn-ghost" data-lokasi-reset>' + UI.icon('x', 16) + ' Hapus pilihan</button>' +
       '<span class="picker-counter" data-lokasi-counter></span>' +
       '</div>' +
       '<div class="lokasi-grid" data-lokasi-grid></div>' +
-      '<div class="lokasi-lainnya-box" data-lokasi-lainnya-box hidden>' +
-      '<input class="input" type="text" name="lokasi_lainnya" data-lokasi-lainnya placeholder="Tulis lokasi lain..." value="' + Utils.esc(teksLainnya) + '">' +
-      '</div>' +
+      (opts.tanpaLainnya ? '' :
+        '<div class="lokasi-lainnya-box" data-lokasi-lainnya-box hidden>' +
+        '<input class="input" type="text" name="lokasi_lainnya" data-lokasi-lainnya placeholder="Tulis lokasi lain..." value="' + Utils.esc(teksLainnya) + '">' +
+        '</div>') +
       (opts.help ? '<div class="help">' + Utils.esc(opts.help) + '</div>' : '') +
       '<div class="field-error" data-error-for="lokasi"></div>' +
       '<input type="hidden" name="' + Utils.esc(name) + '" value="">' +
@@ -230,11 +474,21 @@ var Picker = (function () {
     var counter = host.querySelector('[data-lokasi-counter]');
 
     function daftarTampil() {
+      if (opts.hanyaUtama) {
+        // Sumber data tunggal: lokasi utama dari master (ID tetap), urutan tetap.
+        var out = [];
+        DEFAULT_LOKASI.forEach(function (d) {
+          var l = masterById(d.id) || masterCariNama(d.nama);
+          if (l) out.push(l);
+        });
+        return out;
+      }
       return masterAktif();
     }
 
     function renderGrid() {
       var daftar = daftarTampil();
+      grid.className = 'lokasi-grid' + (opts.hanyaUtama ? ' lokasi-grid-tiga' : '');
       if (!daftar.length) {
         grid.innerHTML = UI.emptyState('Belum ada lokasi latihan. Tambahkan lewat menu Kelola Lokasi Latihan.', 'settings');
       } else {
@@ -247,12 +501,14 @@ var Picker = (function () {
             '</label>';
         }).join('');
       }
-      var kartuLainnya = '<label class="lokasi-card lokasi-card-lainnya' + (lainnyaAktif ? ' active' : '') + '" data-lokasi-lainnya-kartu>' +
-        '<input type="checkbox" data-lokasi-lainnya-toggle' + (lainnyaAktif ? ' checked' : '') + '>' +
-        '<span class="lokasi-check">' + UI.icon('plus', 16) + '</span>' +
-        '<span class="lokasi-nama">Lainnya</span></label>';
-      grid.insertAdjacentHTML('beforeend', kartuLainnya);
-      boxLainnya.hidden = !lainnyaAktif;
+      if (!opts.tanpaLainnya) {
+        var kartuLainnya = '<label class="lokasi-card lokasi-card-lainnya' + (lainnyaAktif ? ' active' : '') + '" data-lokasi-lainnya-kartu>' +
+          '<input type="checkbox" data-lokasi-lainnya-toggle' + (lainnyaAktif ? ' checked' : '') + '>' +
+          '<span class="lokasi-check">' + UI.icon('plus', 16) + '</span>' +
+          '<span class="lokasi-nama">Lainnya</span></label>';
+        grid.insertAdjacentHTML('beforeend', kartuLainnya);
+      }
+      if (boxLainnya) boxLainnya.hidden = !lainnyaAktif;
       perbaruiCounter();
     }
 
@@ -280,11 +536,12 @@ var Picker = (function () {
         var l = masterById(id);
         return l ? l.nama : id;
       });
+      var teksLain = lainnyaAktif ? String((inputLainnya ? inputLainnya.value : teksLainnya) || '').trim() : '';
       return {
         ids: ids,
         nama: nama,
-        lainnya: lainnyaAktif ? String(inputLainnya.value || '').trim() : '',
-        teks: payloadLokasi({ ids: ids, nama: nama, lainnya: lainnyaAktif ? String(inputLainnya.value || '').trim() : '' }).lokasi
+        lainnya: teksLain,
+        teks: payloadLokasi({ ids: ids, nama: nama, lainnya: teksLain }).lokasi
       };
     }
 
@@ -303,24 +560,39 @@ var Picker = (function () {
       var t = e.target;
       if (t && t.hasAttribute && t.hasAttribute('data-lokasi-lainnya-toggle')) {
         lainnyaAktif = t.checked;
+        if (opts.single && lainnyaAktif) {
+          dipilih = {};
+          renderGrid();
+        }
         var kartuLain = host.querySelector('[data-lokasi-lainnya-kartu]');
         if (kartuLain) kartuLain.classList.toggle('active', lainnyaAktif);
-        boxLainnya.hidden = !lainnyaAktif;
+        if (boxLainnya) boxLainnya.hidden = !lainnyaAktif;
         if (!lainnyaAktif) {
-          inputLainnya.value = '';
+          if (inputLainnya) inputLainnya.value = '';
         } else {
           setTimeout(function () {
-            inputLainnya.focus();
+            if (inputLainnya) inputLainnya.focus();
           }, 30);
         }
         beriSinyal();
         return;
       }
       if (t && t.type === 'checkbox' && t.value && t.closest && t.closest('[data-lokasi-card]')) {
+        if (opts.single) {
+          dipilih = {};
+          if (t.checked) {
+            dipilih[t.value] = true;
+            lainnyaAktif = false;
+            if (inputLainnya) inputLainnya.value = '';
+          }
+          renderGrid();
+          beriSinyal();
+          return;
+        }
         if (t.checked) dipilih[t.value] = true;
         else delete dipilih[t.value];
         var kartu = t.closest('[data-lokasi-card]');
-        if (kartu) kartu.classList.toggle('active', t.checked);
+        kartu.classList.toggle('active', t.checked);
         beriSinyal();
       }
     });
@@ -344,7 +616,7 @@ var Picker = (function () {
       if (e.target.closest('[data-lokasi-reset]')) {
         dipilih = {};
         lainnyaAktif = false;
-        inputLainnya.value = '';
+        if (inputLainnya) inputLainnya.value = '';
         renderGrid();
         beriSinyal();
       }
@@ -374,7 +646,7 @@ var Picker = (function () {
 
   function bukaPanel(api) {
     tutupPanel();
-    var daftar = Shared.activeAthletes();
+    var daftar = (api.sumber ? api.sumber() : Shared.activeAthletes()) || [];
     var dipilih = {};
     api.getValue().forEach(function (id) {
       dipilih[id] = true;
@@ -579,11 +851,8 @@ var Picker = (function () {
         perbaruiBaris();
         return;
       }
-      var row = e.target.closest('[data-row-atlet]');
-      if (row && e.target.tagName !== 'INPUT') {
-        var id = row.getAttribute('data-row-atlet');
-        toggle(id, mode === 'single' ? true : !dipilih[id]);
-      }
+      // Klik baris = klik label; centang diurus oleh event 'change' (satu
+      // sumber kebenaran) supaya tidak dobel-toggle oleh aktivasi label.
     });
 
     overlay.addEventListener('change', function (e) {
@@ -699,6 +968,7 @@ var Picker = (function () {
       getValue: getValue,
       setValue: setValue,
       mode: mode,
+      sumber: opts.sumber || null,
       trigger: trigger,
       el: host
     };
@@ -781,7 +1051,7 @@ var Picker = (function () {
         var errors = {};
         if (!d.nama || !String(d.nama).trim()) errors.nama = 'Nama lokasi wajib diisi.';
         var kembar = masterCariNama(d.nama);
-        if (kembar && (!lok || kembar.id !== lok.id)) errors.nama = 'Nama lokasi sudah dipakai.';
+        if (kembar && (!lok || kembar.id !== lok.id)) errors.nama = 'Lokasi sudah ada.';
         if (Object.keys(errors).length) {
           Utils.showErrors(form, errors);
           Utils.toast('Periksa kembali isian yang ditandai.', 'danger');
@@ -838,9 +1108,13 @@ var Picker = (function () {
     masterSemua: masterSemua,
     masterAktif: masterAktif,
     masterById: masterById,
+    masterCariNama: masterCariNama,
     masterSimpan: masterSimpan,
     masterToggle: masterToggle,
     masterHapus: masterHapus,
+    normalNama: normalNama,
+    pastikanLokasi: pastikanLokasi,
+    dedupLokasi: dedupLokasi,
     nilaiLokasi: nilaiLokasi,
     labelLokasi: labelLokasi,
     chipLokasi: chipLokasi,

@@ -49,6 +49,7 @@ var PagesCoach = (function () {
         options: CONFIG.STATUS_ATLET,
         help: 'Cuti: akun masih bisa masuk. Non-Aktif / Berhenti: akun diblokir login dan tidak muncul di pilihan atlet.'
       }) : '') +
+      '<div id="form-jadwal"></div>' +
       Docs.sectionHtml() +
       '</form>';
 
@@ -88,6 +89,16 @@ var PagesCoach = (function () {
     var docsHost = form.querySelector('.docs-card');
     if (docsHost) {
       docsApi = Docs.bind(docsHost.parentElement, { dokumen: athlete && athlete.dokumen ? athlete.dokumen : {} });
+    }
+
+    var jadwalApi = null;
+    var jadwalHost = form.querySelector('#form-jadwal');
+    if (jadwalHost && typeof Jadwal !== 'undefined' && Jadwal && Jadwal.pickerJadwal) {
+      jadwalApi = Jadwal.pickerJadwal(jadwalHost, {
+        label: 'Jadwal Latihan',
+        value: (athlete && athlete.jadwal_sesi) || [],
+        atlet: athlete || null
+      });
     }
 
     var photoInput = form.querySelector('[name="foto_file"]');
@@ -187,7 +198,8 @@ var PagesCoach = (function () {
           asal_pb: data.asal_pb,
           no_hp: data.no_hp,
           foto: photoData,
-          dokumen: dokumenEdit
+          dokumen: dokumenEdit,
+          jadwal_sesi: jadwalApi ? jadwalApi.getValue() : (athlete.jadwal_sesi || [])
         });
         Store.update('users', athlete.user_id, {
           nama: data.nama,
@@ -199,6 +211,14 @@ var PagesCoach = (function () {
         var olehStatus = Auth.current() ? Auth.current().nama : '-';
         if (Shared.catatPerubahanStatus(athlete, data.status || 'aktif', olehStatus)) {
           UI.toast('Status keanggotaan diubah menjadi ' + UI.labelStatusAtlet(data.status || 'aktif') + '.', 'success');
+          if (typeof Jadwal !== 'undefined' && Jadwal && Jadwal.peringatanPenuh) {
+            var penuhKembali = Jadwal.peringatanPenuh(UI.athleteById(athlete.id_atlet));
+            if (penuhKembali.length) {
+              Utils.toast('Perhatian: sesi ' + penuhKembali.map(function (s) {
+                return Jadwal.labelPendek(s);
+              }).join(', ') + ' sudah penuh. Naikkan kuota lewat Kelola Jadwal & Kuota bila perlu.', 'danger');
+            }
+          }
         }
         if (data.password) {
           Auth.resetPassword(athlete.user_id, data.password);
@@ -241,6 +261,7 @@ var PagesCoach = (function () {
           no_hp: data.no_hp,
           foto: photoData,
           dokumen: dokumen,
+          jadwal_sesi: jadwalApi ? jadwalApi.getValue() : [],
           status: 'aktif'
         });
         Store.update('users', newUser.id, { athlete_id: created.id });
@@ -299,6 +320,9 @@ var PagesCoach = (function () {
       '<h4 class="mt-3 mb-1">Data Tambahan</h4>' +
       '<div class="biodata-excel">' +
       UI.biodataRow('Jenis Latihan', Utils.esc(UI.labelJenisLatihan(a.jenis_latihan)), !a.jenis_latihan) +
+      UI.biodataRow('Jadwal Latihan',
+        (typeof Jadwal !== 'undefined' && Jadwal) ? Jadwal.chipsHtml(a, { panjang: true, kosongHtml: '<span class="muted">Belum dijadwalkan</span>' }) : '',
+        !(a.jadwal_sesi && a.jadwal_sesi.length)) +
       (function () { var t = v(a.asal_pb); return UI.biodataRow('Asal PB', t.html, t.kosong); })() +
       (function () { var t = v(a.no_hp); return UI.biodataRow('No. HP', t.html, t.kosong); })() +
       UI.biodataRow('Tinggi / Berat', Utils.esc(a.tinggi) + ' cm / ' + Utils.esc(a.berat) + ' kg', false) +
@@ -480,8 +504,14 @@ var PagesCoach = (function () {
     }
     return Ekspor.muatXlsx().then(function (XLSX) {
       var kolom = ['No', 'Tanggal Bergabung', 'Nama Atlet', 'L/P', 'Tempat Lahir',
-        'Tanggal Lahir', 'Usia', 'Agama', 'Asal Sekolah', 'Alamat', 'Nama Orang Tua', 'Status'];
+        'Tanggal Lahir', 'Usia', 'Agama', 'Asal Sekolah', 'Alamat', 'Nama Orang Tua', 'Jadwal Latihan', 'Status'];
       var rows = Store.all('athletes').map(function (a, i) {
+        var jadwalTeks = '';
+        if (typeof Jadwal !== 'undefined' && Jadwal) {
+          jadwalTeks = Jadwal.sesiAtlet(a).map(function (s) {
+            return Jadwal.labelPanjang(s);
+          }).join('; ');
+        }
         return [
           i + 1,
           fmtTgl(a.tgl_bergabung),
@@ -494,12 +524,13 @@ var PagesCoach = (function () {
           a.sekolah || '',
           a.alamat || '',
           a.orang_tua || '',
+          jadwalTeks,
           UI.labelStatusAtlet(a.status || 'aktif')
         ];
       });
       var ws = XLSX.utils.aoa_to_sheet([['DAFTAR ATLET PB TRISULA SURABAYA'], [], kolom].concat(rows));
       ws['!cols'] = [{ wch: 5 }, { wch: 17 }, { wch: 30 }, { wch: 5 }, { wch: 16 },
-        { wch: 13 }, { wch: 6 }, { wch: 12 }, { wch: 22 }, { wch: 30 }, { wch: 24 }, { wch: 12 }];
+        { wch: 13 }, { wch: 6 }, { wch: 12 }, { wch: 22 }, { wch: 30 }, { wch: 24 }, { wch: 42 }, { wch: 12 }];
       try {
         ws['!merges'] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: kolom.length - 1 } }];
         var gayaHeader = {
@@ -529,6 +560,7 @@ var PagesCoach = (function () {
     root.innerHTML =
       '<div class="page">' +
       UI.pageHeader('Daftar Atlet', 'Cari, lihat detail, dan kelola data atlet.',
+        '<button type="button" class="btn btn-sm btn-ghost" data-kelola-jadwal>' + UI.icon('calendar', 18) + ' Kelola Jadwal &amp; Kuota</button>' +
         '<button type="button" class="btn btn-secondary" data-ekspor-atlet>' + UI.icon('save', 20) + ' Ekspor Excel</button>' +
         '<button type="button" class="btn" data-add-atlet>' + UI.icon('plus', 20) + ' Tambah Atlet</button>') +
       '<div class="card">' +
@@ -554,6 +586,9 @@ var PagesCoach = (function () {
       '<option value="">Semua data</option>' +
       '<option value="lengkap">Data lengkap</option>' +
       '<option value="belum">Data belum lengkap</option>' +
+      '</select>' +
+      '<select class="input" id="filter-jadwal" style="max-width:230px" aria-label="Filter jadwal latihan">' +
+      '<option value="">Semua jadwal</option>' +
       '</select>' +
       '</div>' +
       '<div id="daftar-atlet-list"></div>' +
@@ -591,6 +626,25 @@ var PagesCoach = (function () {
       select.value = current;
     }
 
+    function fillJadwalFilter() {
+      var select = page.querySelector('#filter-jadwal');
+      if (!select) return;
+      var current = select.value;
+      var html = '<option value="">Semua jadwal</option>';
+      if (typeof Jadwal !== 'undefined' && Jadwal) {
+        Jadwal.grupLokasi().forEach(function (g) {
+          html += '<optgroup label="' + Utils.esc(g.nama) + '">' +
+            g.sesi.map(function (s) {
+              return '<option value="ses:' + Utils.esc(s.id) + '">' + Utils.esc(Jadwal.labelSesi(s)) +
+                (s.aktif === false ? ' (nonaktif)' : '') + '</option>';
+            }).join('') + '</optgroup>';
+        });
+      }
+      html += '<option value="belum">Belum dijadwalkan</option>';
+      select.innerHTML = html;
+      select.value = current;
+    }
+
     function buildRows() {
       var q = page.querySelector('#filter-cari').value.trim().toLowerCase();
       var jk = page.querySelector('#filter-jk').value;
@@ -598,6 +652,7 @@ var PagesCoach = (function () {
       var status = page.querySelector('#filter-status').value;
       var jenis = page.querySelector('#filter-jenis').value;
       var lengkap = page.querySelector('#filter-lengkap').value;
+      var jadwal = page.querySelector('#filter-jadwal').value;
       var rows = Store.all('athletes').filter(function (a) {
         if (jk && a.jk !== jk) return false;
         if (sekolah && a.sekolah !== sekolah) return false;
@@ -605,6 +660,13 @@ var PagesCoach = (function () {
         if (jenis && (a.jenis_latihan || '') !== jenis) return false;
         if (lengkap === 'belum' && !belumLengkap(a)) return false;
         if (lengkap === 'lengkap' && belumLengkap(a)) return false;
+        if (jadwal === 'belum') {
+          if (typeof Jadwal !== 'undefined' && Jadwal && Jadwal.sesiAtlet(a).length) return false;
+          if (!(typeof Jadwal !== 'undefined' && Jadwal) && a.jadwal_sesi && a.jadwal_sesi.length) return false;
+        } else if (jadwal && jadwal.indexOf('ses:') === 0) {
+          var idSesi = jadwal.slice(4);
+          if (!a.jadwal_sesi || a.jadwal_sesi.indexOf(idSesi) === -1) return false;
+        }
         if (q && (a.nama || '').toLowerCase().indexOf(q) === -1 && (a.id_atlet || '').toLowerCase().indexOf(q) === -1) return false;
         return true;
       });
@@ -616,7 +678,7 @@ var PagesCoach = (function () {
         '<th class="kol-sticky kol-bergabung">Tanggal Bergabung</th>' +
         '<th class="kol-sticky kol-nama">Nama Atlet</th>' +
         '<th>L/P</th><th>Tempat Lahir</th><th>Tanggal Lahir</th><th>Usia</th><th>Agama</th>' +
-        '<th>Asal Sekolah</th><th>Alamat</th><th>Nama Orang Tua</th><th>Status</th>' +
+        '<th>Asal Sekolah</th><th>Alamat</th><th>Nama Orang Tua</th><th>Jadwal Latihan</th><th>Status</th>' +
         '<th class="align-center">Aksi</th>' +
         '</tr></thead><tbody>' +
         rows.map(function (a, i) {
@@ -634,6 +696,10 @@ var PagesCoach = (function () {
             '<td data-label="Asal Sekolah">' + sel(a.sekolah) + '</td>' +
             '<td data-label="Alamat">' + sel(a.alamat) + '</td>' +
             '<td data-label="Nama Orang Tua">' + sel(a.orang_tua) + '</td>' +
+            '<td data-label="Jadwal Latihan">' +
+            ((typeof Jadwal !== 'undefined' && Jadwal)
+              ? Jadwal.chipsHtml(a, { kosongHtml: '<span class="muted small">Belum dijadwalkan</span>' })
+              : '-') + '</td>' +
             '<td data-label="Status"><select class="input" style="max-width:132px" data-status-atlet="' + Utils.esc(a.id_atlet) + '"' +
             ' aria-label="Status atlet ' + Utils.esc(a.nama) + '">' +
             CONFIG.STATUS_ATLET.map(function (o) {
@@ -653,6 +719,7 @@ var PagesCoach = (function () {
 
     function refresh() {
       fillSchools();
+      fillJadwalFilter();
       listBox.innerHTML = buildRows();
     }
 
@@ -670,16 +737,31 @@ var PagesCoach = (function () {
         var olehStatus = Auth.current() ? Auth.current().nama : '-';
         if (Shared.catatPerubahanStatus(atletStatus, selStatus.value, olehStatus)) {
           UI.toast('Status ' + atletStatus.nama + ' diubah menjadi ' + UI.labelStatusAtlet(selStatus.value) + '.', 'success');
+          if (selStatus.value === 'aktif' && typeof Jadwal !== 'undefined' && Jadwal && Jadwal.peringatanPenuh) {
+            var penuhKembali = Jadwal.peringatanPenuh(UI.athleteById(idStatus));
+            if (penuhKembali.length) {
+              Utils.toast('Perhatian: sesi ' + penuhKembali.map(function (s) {
+                return Jadwal.labelPendek(s);
+              }).join(', ') + ' sudah penuh. Naikkan kuota lewat Kelola Jadwal & Kuota bila perlu.', 'danger');
+            }
+          }
         }
         refresh();
         return;
       }
       if (e.target.id === 'filter-cari' || e.target.id === 'filter-jk' ||
         e.target.id === 'filter-sekolah' || e.target.id === 'filter-status' ||
-        e.target.id === 'filter-jenis' || e.target.id === 'filter-lengkap') refresh();
+        e.target.id === 'filter-jenis' || e.target.id === 'filter-lengkap' ||
+        e.target.id === 'filter-jadwal') refresh();
     });
 
     page.addEventListener('click', function (e) {
+      if (e.target.closest('[data-kelola-jadwal]')) {
+        if (typeof Jadwal !== 'undefined' && Jadwal && Jadwal.bukaKelola) {
+          Jadwal.bukaKelola(refresh);
+        }
+        return;
+      }
       if (e.target.closest('[data-ekspor-atlet]')) {
         eksporDaftarAtlet().then(function () {
           UI.toast('Berkas Excel daftar atlet berhasil dibuat.', 'success');
@@ -729,10 +811,55 @@ var PagesCoach = (function () {
 
     app.subscribe('athletes', refresh);
     app.subscribe('attendance', refresh);
+    app.subscribe('jadwal_sesi', refresh);
   }
 
   /* ---------- Ekspor kehadiran (khusus Pelatih Kepala) ---------- */
-  function kumpulkanKehadiran(periode, mulai, akhir, jenis) {
+
+  // Opsi filter lokasi: master lokasi + lokasi yang tercatat pada data lama.
+  // Nama yang sama (beda ejaan) dipadatkan ke nama kanonik master agar tidak
+  // muncul ganda; teks bebas "Lainnya" tetap memakai nama aslinya.
+  function kanonikanNamaLokasi(teks) {
+    if (typeof Picker !== 'undefined' && Picker && Picker.masterCariNama) {
+      var l = Picker.masterCariNama(teks);
+      if (l && l.nama) return l.nama;
+    }
+    return teks;
+  }
+
+  function daftarLokasiKehadiran() {
+    var nama = {};
+    if (typeof Picker !== 'undefined' && Picker && Picker.masterSemua) {
+      Picker.masterSemua().forEach(function (l) {
+        if (l.nama) nama[l.nama] = true;
+      });
+    }
+    ['attendance', 'absensi_asisten'].forEach(function (koleksi) {
+      Store.all(koleksi).forEach(function (r) {
+        var n = Picker.nilaiLokasi(r);
+        n.nama.forEach(function (t) {
+          nama[kanonikanNamaLokasi(t)] = true;
+        });
+        if (n.lainnya) nama[n.lainnya] = true;
+        if (!n.nama.length && !n.lainnya && r.lokasi) nama[kanonikanNamaLokasi(String(r.lokasi))] = true;
+      });
+    });
+    return Object.keys(nama).sort();
+  }
+
+  // Apakah record kehadiran cocok dengan nama lokasi filter (kosong = semua).
+  function cocokLokasiNama(rec, filterLokasi) {
+    if (!filterLokasi) return true;
+    var n = Picker.nilaiLokasi(rec);
+    var cocok = false;
+    n.nama.forEach(function (t) {
+      if (t === filterLokasi) cocok = true;
+    });
+    if (n.lainnya && n.lainnya === filterLokasi) cocok = true;
+    if (!n.nama.length && !n.lainnya && rec.lokasi && String(rec.lokasi) === filterLokasi) cocok = true;
+    return cocok;
+  }
+  function kumpulkanKehadiran(periode, mulai, akhir, jenis, filterLokasi) {
     function dalamRentang(tgl) {
       if (!tgl) return false;
       if (mulai && tgl < mulai) return false;
@@ -753,10 +880,23 @@ var PagesCoach = (function () {
       });
       return hasil.join('; ');
     }
+    // Filter lokasi untuk catatan atlet: pakai lokasi record, atau lokasi
+    // jurnal asisten pada tanggal yang sama bila record tidak punya lokasi.
+    function cocokLokasiAtlet(r) {
+      if (!filterLokasi) return true;
+      if (cocokLokasiNama(r, filterLokasi)) return true;
+      var hasil = false;
+      Store.all('absensi_asisten').forEach(function (j) {
+        if (!j || j.tanggal !== r.tanggal) return;
+        if ((j.atlet || []).indexOf(r.id_atlet) === -1) return;
+        if (cocokLokasiNama(j, filterLokasi)) hasil = true;
+      });
+      return hasil;
+    }
     var hasil = [];
     if (jenis !== 'asisten') {
       Store.where('attendance', function (r) {
-        return r.tipe === 'atlet' && dalamRentang(r.tanggal);
+        return r.tipe === 'atlet' && dalamRentang(r.tanggal) && cocokLokasiAtlet(r);
       }).forEach(function (r) {
         var a = UI.athleteById(r.id_atlet);
         hasil.push({
@@ -781,6 +921,7 @@ var PagesCoach = (function () {
       });
       Store.all('absensi_asisten').forEach(function (r) {
         if (!dalamRentang(r.tanggal)) return;
+        if (!cocokLokasiNama(r, filterLokasi)) return;
         var u = Store.find('users', r.id_asisten);
         var legacy = statusAsisten[r.id_asisten + '|' + r.tanggal];
         var atlet = (r.atlet || []).map(function (id) {
@@ -858,6 +999,14 @@ var PagesCoach = (function () {
           ]
         }) +
         UI.field({
+          name: 'lokasi', label: 'Lokasi', type: 'select',
+          value: (filterAwal && filterAwal.lokasi) || '',
+          options: [{ value: '', label: 'Semua lokasi' }].concat(daftarLokasiKehadiran().map(function (l) {
+            return { value: l, label: l };
+          })),
+          help: 'Filter dan kolom Lokasi Latihan ikut disertakan dalam ekspor dan ringkasan persentase.'
+        }) +
+        UI.field({
           name: 'format', label: 'Format', type: 'select', required: true, value: 'xlsx',
           options: [{ value: 'xlsx', label: 'Unduh Excel (.xlsx)' }, { value: 'csv', label: 'Unduh CSV (.csv)' }]
         }) +
@@ -916,7 +1065,7 @@ var PagesCoach = (function () {
         akhir = d.akhir;
       }
 
-      var rows = kumpulkanKehadiran(d.periode, mulai, akhir, d.jenis);
+      var rows = kumpulkanKehadiran(d.periode, mulai, akhir, d.jenis, d.lokasi || '');
       if (!rows.length) {
         terkunci = false;
         Utils.toast('Tidak ada data untuk diekspor.', 'danger');
@@ -980,13 +1129,25 @@ var PagesCoach = (function () {
     var isi = page.querySelector('#kh-jurnal-isi');
     var jurnal = 'atlet';
     var modeAtlet = 'hari';
+    var filterLokasi = '';
 
     /* ---------- JURNAL KEHADIRAN ATLET (fitur lama) ---------- */
+
+    function cocokLokasiFilter(rec) {
+      return cocokLokasiNama(rec, filterLokasi);
+    }
+
     function renderAtlet() {
       return '<div class="filter-bar">' +
         UI.tabs([{ id: 'hari', label: 'Hari Ini' }, { id: 'bulan', label: 'Rekap Bulanan' }], modeAtlet) +
         '<input class="input" type="date" id="kh-tanggal" style="max-width:220px"' + (modeAtlet === 'hari' ? '' : ' hidden') + '>' +
         '<select class="input" id="kh-bulan" style="max-width:220px"' + (modeAtlet === 'bulan' ? '' : ' hidden') + '></select>' +
+        '<select class="input" id="kh-lokasi" style="max-width:220px" aria-label="Filter lokasi">' +
+        '<option value="">Semua lokasi</option>' +
+        daftarLokasiKehadiran().map(function (l) {
+          return '<option value="' + Utils.esc(l) + '"' + (filterLokasi === l ? ' selected' : '') + '>' + Utils.esc(l) + '</option>';
+        }).join('') +
+        '</select>' +
         '</div>' +
         '<div id="kh-body"></div>';
     }
@@ -1007,6 +1168,7 @@ var PagesCoach = (function () {
       html += '<div class="attendance-grid mt-2">';
       athletes.forEach(function (a) {
         var rec = Shared.attendanceFor(tgl, a.id_atlet);
+        if (filterLokasi && (!rec || !cocokLokasiFilter(rec))) return;
         html += '<div class="attendance-item">' +
           '<div class="attendance-head">' + UI.avatar(a, 42) +
           '<div class="grow"><b>' + Utils.esc(a.nama) + '</b><span>' + Utils.esc(a.id_atlet) + ' / ' + Utils.esc(a.sekolah) + '</span></div>' +
@@ -1028,17 +1190,32 @@ var PagesCoach = (function () {
       var html = '<div class="table-wrap"><table class="table"><thead><tr>' +
         '<th>Atlet</th><th class="align-center">Hadir</th><th class="align-center">Izin</th><th class="align-center">Sakit</th>' +
         '<th class="align-center">Tidak Hadir</th><th class="align-center">Total</th><th class="align-center">Persen</th>' +
+        '<th>Lokasi</th>' +
         '</tr></thead><tbody>';
+      var adaBaris = false;
       athletes.forEach(function (a) {
         var rows = Store.where('attendance', function (r) {
           return r.id_atlet === a.id_atlet && r.tipe === 'atlet' && Utils.monthKey(r.tanggal) === key;
         });
+        if (filterLokasi) rows = rows.filter(cocokLokasiFilter);
+        if (filterLokasi && !rows.length) return;
         var c = { Hadir: 0, Izin: 0, Sakit: 0, 'Tidak Hadir': 0 };
         rows.forEach(function (r) {
           if (c[r.status] !== undefined) c[r.status]++;
         });
         var total = rows.length;
         var pct = Utils.pct(c.Hadir, total);
+        var lokasiUnik = [];
+        rows.forEach(function (r) {
+          var teks = Picker.labelLokasi(r);
+          if (teks && lokasiUnik.indexOf(teks) === -1) lokasiUnik.push(teks);
+        });
+        var selLokasi = lokasiUnik.length
+          ? '<div class="lokasi-chips">' + lokasiUnik.map(function (t) {
+            return '<span class="lokasi-chip">' + Utils.esc(t) + '</span>';
+          }).join('') + '</div>'
+          : '<span class="sel-kosong">-</span>';
+        adaBaris = true;
         html += '<tr>' +
           '<td><div class="flex items-center gap-1">' + UI.avatar(a, 34) + '<b>' + Utils.esc(a.nama) + '</b></div></td>' +
           '<td class="align-center text-ok fw-bold">' + c.Hadir + '</td>' +
@@ -1047,10 +1224,11 @@ var PagesCoach = (function () {
           '<td class="align-center text-danger">' + c['Tidak Hadir'] + '</td>' +
           '<td class="align-center">' + total + '</td>' +
           '<td class="align-center">' + (total ? (pct < 75 ? '<span class="text-danger fw-bold">' + pct + '%</span>' : '<span class="text-ok fw-bold">' + pct + '%</span>') : '-') + '</td>' +
+          '<td>' + selLokasi + '</td>' +
           '</tr>';
       });
       html += '</tbody></table></div>';
-      return html;
+      return adaBaris ? html : UI.emptyState('Tidak ada data kehadiran untuk filter ini.', 'users');
     }
 
     function fillMonths(selectEl) {
@@ -1179,7 +1357,7 @@ var PagesCoach = (function () {
 
     page.addEventListener('click', function (e) {
       if (e.target.closest('[data-ekspor-kehadiran]')) {
-        bukaEkspor(user, { jenis: jurnal === 'asisten' ? 'asisten' : 'atlet' });
+        bukaEkspor(user, { jenis: jurnal === 'asisten' ? 'asisten' : 'atlet', lokasi: filterLokasi });
         return;
       }
       var tombolJurnal = e.target.closest('[data-jurnal]');
@@ -1205,6 +1383,11 @@ var PagesCoach = (function () {
     page.addEventListener('change', function (e) {
       var id = e.target.id;
       if (id === 'kh-tanggal' || id === 'kh-bulan') {
+        refreshAtlet();
+        return;
+      }
+      if (id === 'kh-lokasi') {
+        filterLokasi = e.target.value;
         refreshAtlet();
         return;
       }
@@ -2295,6 +2478,10 @@ var PagesCoach = (function () {
       UI.biodataRow('Status', UI.statusBadge(u.status), false) +
       '</div>' +
       '<h4 class="mt-3">Berkas Asisten</h4>' +
+      (u.dok_kualifikasi_jenis
+        ? '<div class="small muted mb-1">Dokumen kualifikasi: <b>' +
+          Utils.esc(Docs.labelKualifikasi(u.dok_kualifikasi_jenis) || u.dok_kualifikasi_jenis) + '</b></div>'
+        : '') +
       '<div class="label">Lisensi Pelatih</div><div id="berkas-lisensi"></div>' +
       '<div class="label mt-2">Sertifikat Pelatihan</div><div id="berkas-sertifikat"></div>' +
       '<div class="label mt-2">Ijazah Terakhir</div><div id="berkas-ijazah"></div>';
@@ -2324,8 +2511,8 @@ var PagesCoach = (function () {
         UI.field({ name: 'no_hp', label: 'No. HP', value: u ? u.no_hp : '' }) +
         '<div id="user-asisten-bagian"' + ((!u || u.role === 'asisten') ? '' : ' hidden') + '>' +
         UI.field({ name: 'alamat', label: 'Alamat', type: 'textarea', rows: 2, required: true, value: (u && u.alamat) || '', placeholder: 'Nama jalan, nomor rumah, kelurahan, kecamatan, kota' }) +
-        '<div class="field"><label class="label">Sertifikat Pelatihan (maks 5 berkas)</label><div id="user-sertifikat-box"></div></div>' +
-        '<div class="field"><label class="label">Ijazah Terakhir</label><div id="user-ijazah-box"></div></div>' +
+        '<div id="user-kualifikasi-host">' + Docs.kualifikasiHtml({ key: 'user-kualifikasi', required: true, help: 'Pilih salah satu jenis dokumen kualifikasi, lalu unggah tepat satu berkas (PDF/JPG/PNG).' }) + '</div>' +
+        '<div id="user-berkas-lama"></div>' +
         '</div>' +
         (isEdit ? '' : UI.field({ name: 'password', label: 'Kata Sandi', type: 'password', required: true, help: 'Minimal 6 karakter.' })) +
         '</form>',
@@ -2335,26 +2522,26 @@ var PagesCoach = (function () {
 
       var userForm = document.getElementById('form-user');
 
-      // Komponen unggah khusus asisten (ditampilkan saat peran = Asisten).
-      var hostSert = document.getElementById('user-sertifikat-box');
-      var boxSertUser = null;
-      if (hostSert) {
-        hostSert.innerHTML = Docs.boxMultiHtml({ key: 'sertifikat-user', label: 'Sertifikat', required: true, maks: 5 });
-        boxSertUser = Docs.bindBoxMulti(hostSert, {
-          key: 'sertifikat-user', jenis: 'campuran', required: true, maks: 5,
-          labelRequired: 'Sertifikat pelatihan wajib diunggah (minimal 1 berkas).'
+      // Dokumen kualifikasi asisten: pilih salah satu jenis lalu unggah
+      // tepat satu berkas. Berkas lama tetap tersimpan dan ditampilkan.
+      var hostKual = document.getElementById('user-kualifikasi-host');
+      var boxKualUser = null;
+      if (hostKual) {
+        boxKualUser = Docs.bindKualifikasi(hostKual, {
+          key: 'user-kualifikasi',
+          required: true
         });
-        boxSertUser.set((u && u.sertifikat) || []);
       }
-      var hostIjazah = document.getElementById('user-ijazah-box');
-      var boxIjazahUser = null;
-      if (hostIjazah) {
-        hostIjazah.innerHTML = Docs.boxHtml({ key: 'ijazah-user', label: 'Ijazah Terakhir', jenis: 'campuran', required: true });
-        boxIjazahUser = Docs.bindBox(hostIjazah, {
-          key: 'ijazah-user', jenis: 'campuran', required: true,
-          labelRequired: 'Ijazah terakhir wajib diunggah.'
-        });
-        if (u && u.ijazah) boxIjazahUser.set(u.ijazah);
+      var hostLama = document.getElementById('user-berkas-lama');
+      if (hostLama && u && ((u.sertifikat && u.sertifikat.length) || u.ijazah || u.lisensi)) {
+        hostLama.innerHTML = '<h4 class="mt-3 mb-1">Berkas yang Sudah Ada</h4>' +
+          (u.sertifikat && u.sertifikat.length ? '<div class="label">Sertifikat Pelatihan</div><div id="user-berkas-sertifikat"></div>' : '') +
+          (u.ijazah ? '<div class="label mt-2">Ijazah Terakhir</div><div id="user-berkas-ijazah"></div>' : '') +
+          (u.lisensi ? '<div class="label mt-2">Lisensi Pelatih</div><div id="user-berkas-lisensi"></div>' : '') +
+          '<div class="help">Berkas lama tidak dihapus. Unggahan baru disimpan sesuai jenis dokumen yang dipilih.</div>';
+        renderBerkasChips(document.getElementById('user-berkas-sertifikat'), u.sertifikat || [], '');
+        renderBerkasChips(document.getElementById('user-berkas-ijazah'), u.ijazah ? [u.ijazah] : [], '');
+        renderBerkasChips(document.getElementById('user-berkas-lisensi'), u.lisensi ? [u.lisensi] : [], '');
       }
       var selRoleUser = userForm.querySelector('[name="role"]');
       var bagianAsisten = document.getElementById('user-asisten-bagian');
@@ -2376,59 +2563,99 @@ var PagesCoach = (function () {
           Utils.toast('Periksa kembali isian yang ditandai.', 'danger');
           return;
         }
+        var kualBaru = boxKualUser ? boxKualUser.get() : { jenis: '', ref: null };
         if (d.role === 'asisten') {
-          if (boxSertUser && !boxSertUser.validate(true)) errors.sertifikat_file = 'Sertifikat pelatihan wajib diunggah.';
-          if (boxIjazahUser && !boxIjazahUser.validate(true)) errors.ijazah_file = 'Ijazah terakhir wajib diunggah.';
-          if (Object.keys(errors).length) {
-            Utils.toast('Lengkapi berkas asisten pelatih.', 'danger');
+          var punyaLama = isEdit && u && ((u.sertifikat && u.sertifikat.length) || u.ijazah || u.lisensi);
+          if (boxKualUser && boxKualUser.busy() > 0) {
+            Utils.toast('Tunggu proses unggahan selesai terlebih dahulu.', 'danger');
+            return;
+          }
+          if (!punyaLama) {
+            if (!boxKualUser || !boxKualUser.validate(true)) {
+              Utils.toast('Pilih jenis dokumen kualifikasi dan unggah berkasnya.', 'danger');
+              return;
+            }
+          } else if (kualBaru.jenis && !kualBaru.ref) {
+            Utils.toast('Unggah berkas untuk jenis dokumen kualifikasi yang dipilih.', 'danger');
             return;
           }
         }
-        if (isEdit) {
-          var dup = Store.findOne('users', function (x) {
-            return x.username === d.username.toLowerCase() && x.id !== u.id;
-          });
-          if (dup) {
-            Utils.showErrors(userForm, { username: 'Username sudah dipakai.' });
+
+        function terapkan() {
+          if (isEdit) {
+            var dup = Store.findOne('users', function (x) {
+              return x.username === d.username.toLowerCase() && x.id !== u.id;
+            });
+            if (dup) {
+              Utils.showErrors(userForm, { username: 'Username sudah dipakai.' });
+              return;
+            }
+            var patch = {
+              nama: d.nama,
+              username: d.username.toLowerCase(),
+              role: d.role,
+              no_hp: d.no_hp
+            };
+            if (d.role === 'asisten') {
+              patch.alamat = d.alamat || '';
+              if (kualBaru.jenis && kualBaru.ref) {
+                patch.sertifikat = (u.sertifikat || []).slice();
+                patch.ijazah = u.ijazah || null;
+                patch.lisensi = u.lisensi || null;
+                if (kualBaru.jenis === 'sertifikat') {
+                  patch.sertifikat = patch.sertifikat.concat([kualBaru.ref]);
+                } else {
+                  patch[kualBaru.jenis] = kualBaru.ref;
+                }
+                patch.dok_kualifikasi_jenis = kualBaru.jenis;
+              }
+            }
+            Store.update('users', u.id, patch);
+            UI.closeModal('m-user');
+            Utils.toast('Data pengguna berhasil diperbarui.', 'success');
+            refresh();
             return;
           }
-          var patch = {
+          return Auth.createUser({
             nama: d.nama,
-            username: d.username.toLowerCase(),
+            username: d.username,
+            password: d.password,
             role: d.role,
             no_hp: d.no_hp
-          };
-          if (d.role === 'asisten') {
-            patch.alamat = d.alamat || '';
-            patch.sertifikat = boxSertUser ? boxSertUser.get() : (u.sertifikat || []);
-            patch.ijazah = boxIjazahUser ? boxIjazahUser.get() : (u.ijazah || null);
-          }
-          Store.update('users', u.id, patch);
-          UI.closeModal('m-user');
-          Utils.toast('Data pengguna berhasil diperbarui.', 'success');
-          refresh();
-          return;
+          }).then(function (userBaru) {
+            if (d.role === 'asisten') {
+              var fieldKual = {
+                alamat: d.alamat || '',
+                sertifikat: [],
+                ijazah: null,
+                lisensi: null,
+                dok_kualifikasi_jenis: kualBaru.jenis || ''
+              };
+              if (kualBaru.jenis && kualBaru.ref) {
+                if (kualBaru.jenis === 'sertifikat') fieldKual.sertifikat = [kualBaru.ref];
+                else fieldKual[kualBaru.jenis] = kualBaru.ref;
+              }
+              Store.update('users', userBaru.id, fieldKual);
+            }
+            UI.closeModal('m-user');
+            Utils.toast('Pengguna berhasil ditambahkan.', 'success');
+            refresh();
+          }).catch(function (err) {
+            Utils.showErrors(userForm, { username: err.message });
+          });
         }
-        return Auth.createUser({
-          nama: d.nama,
-          username: d.username,
-          password: d.password,
-          role: d.role,
-          no_hp: d.no_hp
-        }).then(function (userBaru) {
-          if (d.role === 'asisten') {
-            Store.update('users', userBaru.id, {
-              alamat: d.alamat || '',
-              sertifikat: boxSertUser ? boxSertUser.get() : [],
-              ijazah: boxIjazahUser ? boxIjazahUser.get() : null
+
+        // Unggahan baru ke slot berkas tunggal (ijazah/lisensi) yang sudah
+        // terisi perlu konfirmasi karena berkas lama akan diganti.
+        if (isEdit && d.role === 'asisten' && kualBaru.jenis && kualBaru.ref &&
+          (kualBaru.jenis === 'ijazah' || kualBaru.jenis === 'lisensi') && u[kualBaru.jenis]) {
+          return UI.confirmDialog('Berkas ' + Docs.labelKualifikasi(kualBaru.jenis) +
+            ' yang lama akan diganti dengan berkas baru. Lanjutkan?', 'Ganti Berkas').then(function (ok) {
+              if (!ok) return;
+              return terapkan();
             });
-          }
-          UI.closeModal('m-user');
-          Utils.toast('Pengguna berhasil ditambahkan.', 'success');
-          refresh();
-        }).catch(function (err) {
-          Utils.showErrors(userForm, { username: err.message });
-        });
+        }
+        return terapkan();
       });
     }
 
@@ -2464,8 +2691,17 @@ var PagesCoach = (function () {
   function home(root, user, app) {
     root.innerHTML =
       '<div class="page">' +
-      UI.pageHeader('Beranda Pelatih Kepala', 'Ringkasan kondisi atlet hari ini.') +
+      UI.pageHeader('Beranda Pelatih Kepala', 'Ringkasan kondisi atlet hari ini.',
+        (typeof Jadwal !== 'undefined' && Jadwal && Jadwal.bukaKelola
+          ? '<button type="button" class="btn btn-sm btn-ghost" data-kelola-jadwal>' + UI.icon('calendar', 18) + ' Kelola Jadwal &amp; Kuota</button>'
+          : '')) +
       '<div class="stat-grid" id="home-stats"></div>' +
+      '<div class="card mt-2" id="home-kuota">' +
+      '<div class="card-title">' + UI.icon('target', 20) + 'Kuota Atlet per Sesi Latihan</div>' +
+      '<div class="stat-grid" id="kuota-ringkas"></div>' +
+      '<div id="kuota-tabs"></div>' +
+      '<div id="kuota-isi"></div>' +
+      '</div>' +
       '<div class="grid-2 mt-2">' +
       '<div class="card"><div class="card-title">' + UI.icon('calendar', 20) + 'Kehadiran 7 Hari Terakhir</div>' +
       '<div class="chart-box"><canvas id="chart-home-kehadiran"></canvas></div></div>' +
@@ -2478,8 +2714,91 @@ var PagesCoach = (function () {
       '</div></div>';
 
     var page = root.querySelector('.page');
+    var lokasiKuotaAktif = '';
+
+    function tabelKuota(g) {
+      if (!g || !g.sesi.length) return UI.emptyState('Belum ada sesi pada lokasi ini.', 'calendar');
+      function barisSesi(s) {
+        var isi = Jadwal.terisi(s);
+        var kuota = Number(s.kuota || 0);
+        var sisaK = Math.max(0, kuota - isi);
+        var pct = kuota ? Math.min(100, Math.round(isi / kuota * 100)) : 0;
+        var tone = pct >= 100 ? 'kat-merah' : (pct >= 75 ? 'kat-kuning' : 'kat-hijau');
+        var badge = isi >= kuota ? ' <span class="ku-kat-badge kat-merah">Penuh</span>' : '';
+        return {
+          s: s, isi: isi, kuota: kuota, sisaK: sisaK, pct: pct, tone: tone, badge: badge
+        };
+      }
+      var data = g.sesi.map(barisSesi);
+      var tabel = '<div class="table-wrap kuota-desktop"><table class="table ku-tabel"><thead><tr>' +
+        '<th>Hari</th><th>Jam Latihan</th><th class="align-center">Lapangan</th><th class="align-center">Pelatih</th>' +
+        '<th class="align-center">Kuota</th><th class="align-center">Terisi</th><th class="align-center">Sisa</th><th>Progres</th>' +
+        '</tr></thead><tbody>' +
+        data.map(function (d) {
+          return '<tr class="kuota-baris" data-sesi-baris="' + Utils.esc(d.s.id) + '" style="cursor:pointer"' +
+            ' title="Klik untuk melihat atlet pada sesi ini">' +
+            '<td><b>' + Utils.esc(d.s.hari || '-') + '</b></td>' +
+            '<td>' + Utils.esc(d.s.jam || '-') + '</td>' +
+            '<td class="align-center">' + Utils.esc(d.s.lapangan || 0) + '</td>' +
+            '<td class="align-center">' + Utils.esc(d.s.pelatih || 0) + '</td>' +
+            '<td class="align-center">' + d.kuota + '</td>' +
+            '<td class="align-center fw-bold">' + d.isi + '</td>' +
+            '<td class="align-center">' + d.sisaK + '</td>' +
+            '<td><div class="flex items-center gap-1" style="flex-wrap:wrap">' +
+            '<div class="ku-track" style="width:110px"><div class="ku-isi ' + d.tone + '" style="width:' + d.pct + '%"></div></div>' +
+            '<span class="small muted">' + d.pct + '%</span>' + d.badge + '</div></td>' +
+            '</tr>';
+        }).join('') + '</tbody></table></div>';
+      var kartu = '<div class="kuota-mobile">' + data.map(function (d) {
+        return '<div class="kuota-kartu" data-sesi-baris="' + Utils.esc(d.s.id) + '" style="cursor:pointer"' +
+          ' title="Klik untuk melihat atlet pada sesi ini">' +
+          '<div class="flex items-center justify-between gap-1">' +
+          '<b>' + Utils.esc(d.s.hari || '-') + ' · ' + Utils.esc(d.s.jam || '-') + '</b>' + d.badge + '</div>' +
+          '<div class="small muted">' + Utils.esc(d.s.lapangan || 0) + ' lapangan · ' + Utils.esc(d.s.pelatih || 0) + ' pelatih</div>' +
+          '<div class="flex items-center gap-1 mt-1"><b>' + d.isi + ' / ' + d.kuota + '</b>' +
+          '<span class="small muted">Terisi · Sisa ' + d.sisaK + '</span></div>' +
+          '<div class="ku-track mt-1"><div class="ku-isi ' + d.tone + '" style="width:' + d.pct + '%"></div></div>' +
+          '</div>';
+      }).join('') + '</div>';
+      return tabel + kartu;
+    }
+
+    function renderKuota() {
+      if (typeof Jadwal === 'undefined' || !Jadwal) return;
+      var ringkas = page.querySelector('#kuota-ringkas');
+      var tabsHost = page.querySelector('#kuota-tabs');
+      var isiHost = page.querySelector('#kuota-isi');
+      if (!ringkas || !tabsHost || !isiHost) return;
+      var r = Jadwal.ringkasan();
+      ringkas.innerHTML =
+        UI.statCard('Total Kuota', r.kuota, 'seluruh sesi aktif', 'target', 'primary') +
+        UI.statCard('Atlet Terjadwal', r.terisi, 'kursi terisi', 'users', 'ok') +
+        UI.statCard('Sisa Kuota', r.sisa, 'kursi tersedia', 'check', 'blue') +
+        UI.statCard('Atlet Belum Dijadwalkan', r.belum, 'atlet aktif tanpa sesi', 'alert', r.belum ? 'warn' : 'primary');
+      var grup = Jadwal.grupLokasi();
+      if (!grup.length) {
+        tabsHost.innerHTML = '';
+        isiHost.innerHTML = UI.emptyState('Belum ada sesi jadwal latihan. Tambahkan lewat tombol Kelola Jadwal & Kuota.', 'calendar');
+        return;
+      }
+      var ada = false;
+      grup.forEach(function (g) {
+        if (g.nama === lokasiKuotaAktif) ada = true;
+      });
+      if (!ada) lokasiKuotaAktif = grup[0].nama;
+      tabsHost.innerHTML = '<div class="tabs" role="tablist">' + grup.map(function (g) {
+        return '<button type="button" class="tab' + (g.nama === lokasiKuotaAktif ? ' active' : '') +
+          '" data-kuota-tab="' + Utils.esc(g.nama) + '" role="tab">' + Utils.esc(g.nama) + '</button>';
+      }).join('') + '</div>';
+      var aktif = null;
+      grup.forEach(function (g) {
+        if (g.nama === lokasiKuotaAktif) aktif = g;
+      });
+      isiHost.innerHTML = tabelKuota(aktif);
+    }
 
     function refresh() {
+      renderKuota();
       var athletes = Shared.activeAthletes();
       var today = Shared.attendanceSummary(Utils.todayISO());
       var last = Shared.lastMatch();
@@ -2535,12 +2854,36 @@ var PagesCoach = (function () {
       }
     }
 
+    page.addEventListener('click', function (e) {
+      if (e.target.closest('[data-kelola-jadwal]')) {
+        if (typeof Jadwal !== 'undefined' && Jadwal && Jadwal.bukaKelola) {
+          Jadwal.bukaKelola(renderKuota);
+        }
+        return;
+      }
+      var tab = e.target.closest('[data-kuota-tab]');
+      if (tab) {
+        lokasiKuotaAktif = tab.getAttribute('data-kuota-tab');
+        renderKuota();
+        return;
+      }
+      var baris = e.target.closest('[data-sesi-baris]');
+      if (baris && typeof Jadwal !== 'undefined' && Jadwal && Jadwal.bukaPeserta) {
+        Jadwal.bukaPeserta(baris.getAttribute('data-sesi-baris'), {
+          onDetail: function (idAtlet) {
+            openAthleteDetail(idAtlet);
+          }
+        });
+      }
+    });
+
     refresh();
     app.subscribe('attendance', refresh);
     app.subscribe('matches', refresh);
     app.subscribe('athletes', refresh);
     app.subscribe('logbook_entries', refresh);
     app.subscribe('physical_tests', refresh);
+    app.subscribe('jadwal_sesi', refresh);
   }
 
   /* ---------- Setting: kelola menu dashboard admin ---------- */

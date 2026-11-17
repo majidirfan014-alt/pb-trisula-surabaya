@@ -83,12 +83,19 @@ var PagesAssistant = (function () {
       '<div class="page">' +
       UI.pageHeader('Absensi Kehadiran', 'Catat kehadiran Anda beserta program latihan yang dijalankan.') +
       '<div class="card">' +
-      '<div class="card-title">' + UI.icon('calendar', 20) + 'Form Absensi Saya</div>' +
+      '<div class="card-title">' + UI.icon('calendar', 20) + 'Form Absensi Atlet</div>' +
       '<form id="form-absen" novalidate>' +
       '<div class="form-grid cols-2">' +
       UI.field({ name: 'tanggal', label: 'Tanggal Latihan', type: 'date', required: true, value: Utils.todayISO() }) +
       '</div>' +
       '<div id="absen-lokasi"></div>' +
+      '<div class="field" id="absen-sesi-box">' +
+      '<label class="label">Sesi Jadwal Terdeteksi</label>' +
+      '<div id="absen-sesi"></div>' +
+      '</div>' +
+      '<label class="chip-pilih" id="absen-semua-box" style="margin-bottom:10px">' +
+      '<input type="checkbox" id="absen-semua" data-no-dirty>' +
+      '<span>Tampilkan semua atlet (absensi di luar jadwal)</span></label>' +
       '<div id="absen-atlet"></div>' +
       '<div class="field" id="absen-status-box">' +
       '<label class="label">Status Kehadiran Atlet Terpilih</label>' +
@@ -106,6 +113,23 @@ var PagesAssistant = (function () {
       '</form>' +
       '</div>' +
       '<div class="card mt-2">' +
+      '<div class="card-title">' + UI.icon('user', 20) + 'Absen Diri Sendiri</div>' +
+      '<p class="muted small">Menggunakan tanggal dan lokasi latihan yang dipilih pada form di atas.</p>' +
+      '<form id="form-absen-diri" novalidate>' +
+      '<div class="form-grid cols-2">' +
+      UI.field({
+        name: 'status_diri', label: 'Status Kehadiran', type: 'select', required: true, value: 'Hadir',
+        options: (CONFIG.STATUS_KEHADIRAN || []).map(function (s) { return { value: s, label: s }; })
+      }) +
+      UI.field({ name: 'jam_masuk', label: 'Jam Masuk', type: 'time', value: '' }) +
+      '</div>' +
+      '<div class="form-grid cols-2">' +
+      UI.field({ name: 'jam_pulang', label: 'Jam Pulang', type: 'time', value: '' }) +
+      '</div>' +
+      '<button class="btn" type="submit">' + UI.icon('save', 20) + ' Simpan Absen Saya</button>' +
+      '</form>' +
+      '</div>' +
+      '<div class="card mt-2">' +
       '<div class="card-title">' + UI.icon('clipboard', 20) + 'Riwayat Absensi Saya</div>' +
       '<div id="absen-riwayat"></div>' +
       '</div></div>';
@@ -115,11 +139,74 @@ var PagesAssistant = (function () {
     var statusHost = page.querySelector('#absen-status-list');
     var statusPerAtlet = {};
     var pickerApi = null;
+    var sesiDipilih = null;
+
+    // Hari (Senin..Minggu) dari tanggal ISO — dipakai untuk mencocokkan sesi.
+    function hariDariTanggal(tgl) {
+      var d = Utils.parseISO(tgl);
+      if (!d || isNaN(d.getTime())) return '';
+      var urut = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];
+      return urut[d.getDay()];
+    }
+
+    function tanggalForm() {
+      var input = form.querySelector('[name="tanggal"]');
+      return input ? input.value : '';
+    }
+
+    // Sesi jadwal yang cocok dengan lokasi + hari dari tanggal yang dipilih.
+    function sesiCocok() {
+      if (typeof Jadwal === 'undefined' || !Jadwal) return [];
+      var nilaiLokasi = lokasiApi.getValue();
+      var namaLok = nilaiLokasi.nama && nilaiLokasi.nama.length ? nilaiLokasi.nama[0] : '';
+      var hari = hariDariTanggal(tanggalForm());
+      if (!namaLok || !hari) return [];
+      return Jadwal.aktif().filter(function (s) {
+        return s.lokasi_nama === namaLok && s.hari === hari;
+      });
+    }
+
+    function tampilkanSemuaAtlet() {
+      var semuaBox = page.querySelector('#absen-semua');
+      return !!(semuaBox && semuaBox.checked);
+    }
+
+    function renderSesi() {
+      var host = page.querySelector('#absen-sesi');
+      if (!host) return;
+      var daftar = sesiCocok();
+      if (!daftar.length) {
+        sesiDipilih = null;
+        host.innerHTML = '<div class="notice warn">' + UI.icon('alert', 20) +
+          '<div>Tidak ada sesi jadwal untuk lokasi dan tanggal ini. ' +
+          'Pilih "Tampilkan semua atlet" untuk absensi di luar jadwal.</div></div>';
+        return;
+      }
+      var ada = false;
+      daftar.forEach(function (s) {
+        if (sesiDipilih === s.id) ada = true;
+      });
+      if (!ada) sesiDipilih = daftar[0].id;
+      host.innerHTML = '<div class="flex gap-1 flex-wrap">' + daftar.map(function (s) {
+        var on = sesiDipilih === s.id;
+        return '<button type="button" class="chip' + (on ? ' active' : '') + '" data-sesi-absen="' + Utils.esc(s.id) +
+          '" aria-pressed="' + (on ? 'true' : 'false') + '">' + Utils.esc(Jadwal.labelSesi(s)) + '</button>';
+      }).join('') + '</div>' +
+        '<div class="help">Sesi otomatis dicocokkan dari lokasi + tanggal (hari ' +
+        Utils.esc(hariDariTanggal(tanggalForm()) || '-') + '). ' +
+        'Daftar atlet default = atlet yang terjadwal pada sesi ini.</div>';
+    }
 
     var lokasiApi = Picker.lokasi(page.querySelector('#absen-lokasi'), {
       label: 'Lokasi Latihan',
       required: true,
-      help: 'Pilih satu atau beberapa lokasi yang dipakai hari ini.'
+      single: true,
+      hanyaUtama: true,
+      tanpaLainnya: true,
+      help: 'Pilih satu lokasi latihan yang dipakai hari ini (wajib sebelum menyimpan absensi).',
+      onChange: function () {
+        renderSesi();
+      }
     });
 
     pickerApi = Picker.atlet(page.querySelector('#absen-atlet'), {
@@ -128,6 +215,12 @@ var PagesAssistant = (function () {
       required: true,
       mode: 'multi',
       help: 'Cari lalu centang satu atau beberapa atlet.',
+      sumber: function () {
+        if (!tampilkanSemuaAtlet() && sesiDipilih && typeof Jadwal !== 'undefined' && Jadwal) {
+          return Jadwal.peserta(sesiDipilih);
+        }
+        return Shared.activeAthletes();
+      },
       onChange: function (ids) {
         var baru = {};
         ids.forEach(function (id) {
@@ -137,6 +230,8 @@ var PagesAssistant = (function () {
         renderStatus();
       }
     });
+
+    renderSesi();
 
     function renderStatus() {
       var ids = pickerApi.getValue();
@@ -190,6 +285,12 @@ var PagesAssistant = (function () {
     renderRiwayat();
 
     page.addEventListener('click', function (e) {
+      var sesiBtn = e.target.closest('[data-sesi-absen]');
+      if (sesiBtn) {
+        sesiDipilih = sesiBtn.getAttribute('data-sesi-absen');
+        renderSesi();
+        return;
+      }
       var semua = e.target.closest('[data-status-semua]');
       if (semua) {
         var nilai = semua.getAttribute('data-status-semua');
@@ -211,7 +312,13 @@ var PagesAssistant = (function () {
 
     page.addEventListener('change', function (e) {
       var s = e.target.closest ? e.target.closest('[data-status-atlet]') : null;
-      if (s) statusPerAtlet[s.getAttribute('data-status-atlet')] = s.value;
+      if (s) {
+        statusPerAtlet[s.getAttribute('data-status-atlet')] = s.value;
+        return;
+      }
+      if (e.target.name === 'tanggal' || e.target.id === 'absen-semua') {
+        renderSesi();
+      }
     });
 
     UI.bindSubmit(form, function () {
@@ -246,7 +353,8 @@ var PagesAssistant = (function () {
         tanggal: data.tanggal,
         atlet: dipilih,
         status_atlet: statusAkhir,
-        program: data.program
+        program: data.program,
+        sesi_id: sesiDipilih || ''
       }, lokasiPayload);
       if (sudah) {
         Store.update('absensi_asisten', sudah.id, payload);
@@ -271,7 +379,8 @@ var PagesAssistant = (function () {
           catatan: status === 'Hadir' ? '' : '',
           jam_masuk: '',
           jam_pulang: '',
-          input_oleh: user.id
+          input_oleh: user.id,
+          sesi_id: sesiDipilih || ''
         }, lokasiPayload);
         if (lama) Store.update('attendance', lama.id, baris);
         else Store.insert('attendance', baris);
@@ -283,11 +392,54 @@ var PagesAssistant = (function () {
       lokasiApi.setValue({ ids: [], lainnya: '' });
       pickerApi.setValue([]);
       statusPerAtlet = {};
+      sesiDipilih = null;
       renderStatus();
+      renderSesi();
       renderRiwayat();
     });
 
+    /* ---------- Absen diri sendiri (memakai tanggal + lokasi di atas) ---------- */
+    var formDiri = page.querySelector('#form-absen-diri');
+    if (formDiri) {
+      UI.bindSubmit(formDiri, function () {
+        Utils.clearErrors(formDiri);
+        var d = Utils.formData(formDiri);
+        var errors = {};
+        var tgl = tanggalForm();
+        var nilaiLokasiDiri = lokasiApi.getValue();
+        if (!tgl) errors.tanggal = 'Tanggal latihan wajib diisi pada form absensi atlet.';
+        if (!nilaiLokasiDiri.ids.length && !nilaiLokasiDiri.lainnya) {
+          errors.lokasi = 'Lokasi latihan wajib dipilih sebelum menyimpan absensi.';
+        }
+        if (!d.status_diri) errors.status_diri = 'Status kehadiran wajib dipilih.';
+        if (Object.keys(errors).length) {
+          Utils.showErrors(formDiri, errors);
+          Utils.toast('Lengkapi tanggal, lokasi, dan status absen diri Anda.', 'danger');
+          return;
+        }
+        var payloadDiri = Object.assign({
+          tanggal: tgl,
+          id_pengguna: user.id,
+          id_atlet: null,
+          tipe: 'asisten',
+          status: d.status_diri,
+          catatan: '',
+          jam_masuk: d.jam_masuk || '',
+          jam_pulang: d.jam_pulang || '',
+          input_oleh: user.id,
+          sesi_id: sesiDipilih || ''
+        }, Picker.payloadLokasi(nilaiLokasiDiri));
+        var lama = Store.findOne('attendance', function (r) {
+          return r.tipe === 'asisten' && r.id_pengguna === user.id && r.tanggal === tgl;
+        });
+        if (lama) Store.update('attendance', lama.id, payloadDiri);
+        else Store.insert('attendance', payloadDiri);
+        Utils.toast('Absen diri berhasil disimpan.', 'success');
+      });
+    }
+
     app.subscribe('absensi_asisten', renderRiwayat);
+    app.subscribe('attendance', renderRiwayat);
   }
 
   function profilAsisten(root, user, app) {

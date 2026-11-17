@@ -979,6 +979,187 @@ var Docs = (function () {
     };
   }
 
+  /* ---------- Dokumen Kualifikasi (pilih salah satu) ----------
+     Tiga chip jenis (Sertifikat Pelatihan / Ijazah Terakhir / Lisensi Pelatih),
+     setelah jenis dipilih tampil SATU kolom unggah berlabel sesuai jenis.
+     Pendaftaran wajib menyertakan tepat satu dokumen kualifikasi. */
+
+  var KUALIFIKASI_JENIS = [
+    { value: 'sertifikat', label: 'Sertifikat Pelatihan' },
+    { value: 'ijazah', label: 'Ijazah Terakhir' },
+    { value: 'lisensi', label: 'Lisensi Pelatih' }
+  ];
+
+  function labelKualifikasi(value) {
+    for (var i = 0; i < KUALIFIKASI_JENIS.length; i++) {
+      if (KUALIFIKASI_JENIS[i].value === value) return KUALIFIKASI_JENIS[i].label;
+    }
+    return '';
+  }
+
+  function kualifikasiHtml(opts) {
+    opts = opts || {};
+    var key = opts.key || 'kualifikasi';
+    var value = opts.value || '';
+    return '<div class="field kualifikasi-field" data-kual-field>' +
+      '<label class="label">Dokumen Kualifikasi (pilih salah satu)' +
+      (opts.required !== false ? ' <span class="req">*</span>' : '') + '</label>' +
+      '<input type="hidden" name="' + Utils.esc(key) + '_jenis" data-kual-jenis value="' + Utils.esc(value) + '">' +
+      '<div class="chip-row" data-kual-chips>' +
+      KUALIFIKASI_JENIS.map(function (j) {
+        return '<button type="button" class="chip' + (value === j.value ? ' active' : '') + '"' +
+          ' data-kual-val="' + Utils.esc(j.value) + '" aria-pressed="' + (value === j.value ? 'true' : 'false') + '">' +
+          Utils.esc(j.label) + '</button>';
+      }).join('') +
+      '</div>' +
+      '<div class="kualifikasi-box" data-kual-box hidden></div>' +
+      (opts.help ? '<div class="help">' + Utils.esc(opts.help) + '</div>' : '') +
+      '<div class="field-error" data-kual-error></div>' +
+      '</div>';
+  }
+
+  function bindKualifikasi(root, options) {
+    options = options || {};
+    var key = options.key || 'kualifikasi';
+    var wajib = options.required !== false;
+    var jenis = options.jenis || '';
+    var hostBox = root.querySelector('[data-kual-box]');
+    var hiddenJenis = root.querySelector('[data-kual-jenis]');
+    var errSlot = root.querySelector('[data-kual-error]');
+    var chipsRow = root.querySelector('[data-kual-chips]');
+    var box = null;
+
+    function setErr(pesan) {
+      if (errSlot) errSlot.textContent = pesan || '';
+    }
+
+    function labelKini() {
+      return labelKualifikasi(jenis) || 'Dokumen Kualifikasi';
+    }
+
+    function perbaruiLabelBox() {
+      if (!hostBox) return;
+      var lbl = hostBox.querySelector('.doc-label');
+      if (lbl) lbl.innerHTML = Utils.esc(labelKini()) + (wajib ? ' <span class="req">*</span>' : '');
+    }
+
+    function pasangBox() {
+      if (!hostBox) return;
+      hostBox.hidden = !jenis;
+      if (!jenis) {
+        box = null;
+        hostBox.innerHTML = '';
+        return;
+      }
+      hostBox.innerHTML = boxHtml({
+        key: key,
+        label: labelKini(),
+        jenis: 'campuran',
+        required: wajib,
+        help: options.help || labelDokumen()
+      });
+      box = bindBox(hostBox, {
+        key: key,
+        jenis: 'campuran',
+        required: wajib,
+        labelRequired: labelKini() + ' wajib diunggah.',
+        onChange: options.onChange,
+        onBusy: options.onBusy
+      });
+      if (options.ref) box.set(options.ref);
+    }
+
+    function setChips() {
+      if (!chipsRow) return;
+      var btns = chipsRow.querySelectorAll('[data-kual-val]');
+      for (var i = 0; i < btns.length; i++) {
+        var aktif = btns[i].getAttribute('data-kual-val') === jenis;
+        btns[i].classList.toggle('active', aktif);
+        btns[i].setAttribute('aria-pressed', aktif ? 'true' : 'false');
+      }
+      if (hiddenJenis) hiddenJenis.value = jenis;
+    }
+
+    function pilihJenis(nilai) {
+      if (nilai === jenis) return;
+      var adaBerkas = box && box.get && box.get();
+      if (adaBerkas) {
+        UI.confirmDialog('Jenis dokumen akan diganti ke "' + labelKualifikasi(nilai) +
+          '". Berkas yang sudah dipilih akan dikosongkan. Lanjutkan?', 'Ganti Jenis Dokumen').then(function (ok) {
+            if (!ok) {
+              setChips();
+              return;
+            }
+            if (box) box.reset();
+            options.ref = null;
+            jenis = nilai;
+            setChips();
+            pasangBox();
+            setErr('');
+          });
+        return;
+      }
+      jenis = nilai;
+      setChips();
+      pasangBox();
+      setErr('');
+    }
+
+    if (chipsRow) {
+      chipsRow.addEventListener('click', function (e) {
+        var btn = e.target.closest ? e.target.closest('[data-kual-val]') : null;
+        if (!btn || !chipsRow.contains(btn)) return;
+        pilihJenis(btn.getAttribute('data-kual-val'));
+      });
+    }
+
+    setChips();
+    pasangBox();
+
+    return {
+      getJenis: function () { return jenis; },
+      get: function () {
+        return {
+          jenis: jenis,
+          ref: box && box.get ? box.get() : null
+        };
+      },
+      set: function (nilaiJenis, ref) {
+        jenis = nilaiJenis || '';
+        options.jenisAwal = nilaiJenis || '';
+        options.ref = ref || null;
+        setChips();
+        pasangBox();
+      },
+      reset: function () {
+        if (box) box.reset();
+        jenis = '';
+        options.ref = null;
+        setChips();
+        pasangBox();
+        setErr('');
+      },
+      busy: function () {
+        return box && box.busy ? box.busy() : 0;
+      },
+      validate: function (tampilkanError) {
+        if (!tampilkanError) {
+          return !!jenis && (!box || !box.get || !!box.get());
+        }
+        if (!jenis) {
+          setErr('Pilih jenis dokumen kualifikasi terlebih dahulu.');
+          return false;
+        }
+        if (!box || !box.get || !box.get()) {
+          setErr(labelKini() + ' wajib diunggah.');
+          return false;
+        }
+        setErr('');
+        return true;
+      }
+    };
+  }
+
   return {
     TYPES: TYPES,
     sectionHtml: sectionHtml,
@@ -987,6 +1168,10 @@ var Docs = (function () {
     bindBox: bindBox,
     boxMultiHtml: boxMultiHtml,
     bindBoxMulti: bindBoxMulti,
+    kualifikasiHtml: kualifikasiHtml,
+    bindKualifikasi: bindKualifikasi,
+    KUALIFIKASI_JENIS: KUALIFIKASI_JENIS,
+    labelKualifikasi: labelKualifikasi,
     proses: prosesBerkas,
     isiBerkas: isiBerkas,
     labelGambar: labelGambar,

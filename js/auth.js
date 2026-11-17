@@ -275,7 +275,8 @@ var Auth = (function () {
         alamat: payload.alamat || '',
         lisensi: payload.lisensi || null,
         sertifikat: payload.sertifikat || [],
-        ijazah: payload.ijazah || null
+        ijazah: payload.ijazah || null,
+        dok_kualifikasi_jenis: payload.dok_kualifikasi_jenis || ''
       });
     });
   }

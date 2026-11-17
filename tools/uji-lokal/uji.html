@@ -1,0 +1,668 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <title>Uji Lokal PB Trisula</title>
+  <link rel="stylesheet" href="/css/style.css">
+  <style>
+    body { font-family: sans-serif; margin: 16px; }
+  </style>
+</head>
+<body>
+  <h1>Uji Lokal</h1>
+  <pre id="hasil">Menjalankan uji...</pre>
+  <pre id="galat"></pre>
+
+  <div class="app-shell" hidden>
+    <aside class="sidebar" id="sidebar"></aside>
+    <div class="app-main">
+      <header class="app-topbar">
+        <div class="flex items-center gap-1" style="min-width:0">
+          <button class="icon-btn menu-toggle" id="side-toggle" aria-label="Buka menu"></button>
+          <div style="min-width:0">
+            <div class="title" id="page-title">Beranda</div>
+            <div class="sub" id="page-sub">Uji</div>
+          </div>
+        </div>
+        <div class="topbar-right">
+          <button class="icon-btn" id="btn-refresh" aria-label="Muat ulang"></button>
+          <button class="btn btn-sm btn-ghost" id="btn-logout">Keluar</button>
+        </div>
+      </header>
+      <main class="app-content" id="page-content"></main>
+    </div>
+    <nav class="bottom-nav" id="bottom-nav"></nav>
+    <div class="drawer-backdrop" id="drawer-backdrop" hidden></div>
+    <div id="modal-host"></div>
+  </div>
+
+  <script src="/js/config.js"></script>
+  <script src="/js/utils.js"></script>
+  <script src="/js/store.js"></script>
+  <script src="/js/filestore.js"></script>
+  <script src="/js/auth.js"></script>
+  <script src="/js/ui.js"></script>
+  <script src="/js/charts.js"></script>
+  <script src="/js/shared.js"></script>
+  <script src="/js/pickers.js"></script>
+  <script src="/js/kategori.js"></script>
+  <script src="/js/jadwal.js"></script>
+  <script src="/js/docs.js"></script>
+  <script src="/js/pages-coach.js"></script>
+  <script src="/js/pages-assistant.js"></script>
+  <script src="/js/pages-athlete.js"></script>
+  <script src="/js/pages-landing.js"></script>
+  <script src="/js/pages-monitoring.js"></script>
+  <script src="/js/kemajuan.js"></script>
+  <script src="/js/ekspor.js"></script>
+  <script src="/js/kartu-atlet.js"></script>
+  <script src="/js/keuangan.js"></script>
+  <script src="/js/app.js"></script>
+  <script>
+  (function () {
+    var hasil = [];
+    var galat = [];
+    window.onerror = function (m, s, b) { galat.push('onerror: ' + m + ' @' + b); };
+    var errAsli = console.error.bind(console);
+    console.error = function () {
+      galat.push('console.error: ' + Array.prototype.slice.call(arguments).map(String).join(' '));
+      errAsli.apply(null, arguments);
+    };
+
+    function assert(nama, kondisi, detail) {
+      hasil.push({ nama: nama, ok: !!kondisi, detail: detail || '' });
+    }
+    function tunda(ms) {
+      return new Promise(function (r) { setTimeout(r, ms || 80); });
+    }
+    function param(nama) {
+      var m = new RegExp('[?&]' + nama + '=([^&]*)').exec(window.location.search);
+      return m ? decodeURIComponent(m[1]) : '';
+    }
+    function klik(el) {
+      if (!el) return false;
+      el.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+      return true;
+    }
+    function isiNilai(el, nilai) {
+      if (!el) return;
+      el.value = nilai;
+      el.dispatchEvent(new Event('change', { bubbles: true }));
+      el.dispatchEvent(new Event('input', { bubbles: true }));
+    }
+    function bukaHalaman(hash) {
+      App.setDirty(false);
+      if (window.location.hash !== hash) {
+        window.location.hash = hash;
+      } else {
+        App.render();
+      }
+      return tunda(150);
+    }
+
+    function buatAtlet(data) {
+      var lama = UI.athleteById(data.id_atlet);
+      if (lama) return lama;
+      var a = Store.insert('athletes', Object.assign({
+        jk: 'Laki-laki', tgl_lahir: '2012-01-01', tgl_bergabung: '2025-01-01',
+        orang_tua: 'Orang Tua', sekolah: 'SD Uji', status: 'aktif', jadwal_sesi: []
+      }, data));
+      var u = Store.insert('users', {
+        nama: a.nama, username: (a.id_atlet || a.nama).toLowerCase(), role: 'atlet',
+        id_atlet: a.id_atlet, password_hash: 'x', password_salt: 'y', status: 'aktif'
+      });
+      Store.update('athletes', a.id, { user_id: u.id });
+      return a;
+    }
+
+    // Meniru data yang sudah terlanjur terduplikasi (dari bug lama):
+    // lokasi dengan nama sama/near-same ber-ID acak, sesi jadwal ganda, dan
+    // referensi yang menunjuk ke ID duplikat.
+    function siapkanDataKotor() {
+      localStorage.setItem('pbts_lokasi_latihan', JSON.stringify([
+        { id: 'lok_default_1', nama: 'Sport Center Puncak Permai', aktif: true, dibuat_pada: '2026-01-01T00:00:00Z' },
+        { id: 'lok_baru_a1', nama: 'Sport Center Puncak Permai', aktif: true, dibuat_pada: '2026-02-01T00:00:00Z' },
+        { id: 'lok_baru_a2', nama: 'sport  center puncak permai', aktif: true, dibuat_pada: '2026-03-01T00:00:00Z' },
+        { id: 'lok_baru_a3', nama: 'Sport Center Puncak Permai.', aktif: true, dibuat_pada: '2026-04-01T00:00:00Z' },
+        { id: 'lok_baru_a4', nama: 'Sport  Center Puncak Permai', aktif: true, dibuat_pada: '2026-05-01T00:00:00Z' },
+        { id: 'lok_default_2', nama: 'Kintono Hall', aktif: true, dibuat_pada: '2026-01-01T00:00:00Z' },
+        { id: 'lok_baru_b1', nama: 'Kintono Badminton Hall', aktif: true, dibuat_pada: '2026-02-01T00:00:00Z' },
+        { id: 'lok_baru_b2', nama: 'Kintono Badminton Hall', aktif: true, dibuat_pada: '2026-03-01T00:00:00Z' },
+        { id: 'lok_default_3', nama: 'Lap. Atletik Unesa', aktif: true, dibuat_pada: '2026-01-01T00:00:00Z' },
+        { id: 'lok_baru_c1', nama: 'lap atletik unesa', aktif: true, dibuat_pada: '2026-02-01T00:00:00Z' },
+        { id: 'lok_lama_1', nama: 'GOR Surabaya', aktif: true, dibuat_pada: '2025-01-01T00:00:00Z' }
+      ]));
+      function sesi(id, lokId, hari, jam, lap, pel, kuota) {
+        return {
+          id: id, lokasi_id: lokId, lokasi_nama: '', hari: hari, jam: jam,
+          lapangan: lap, pelatih: pel, kuota: kuota, aktif: true, dibuat_pada: '2026-01-01T00:00:00Z'
+        };
+      }
+      localStorage.setItem('pbts_jadwal_sesi', JSON.stringify([
+        sesi('ses_sc_sen', 'lok_default_1', 'Senin', '16.00-18.00', 6, 7, 48),
+        sesi('ses_sc_sel', 'lok_default_1', 'Selasa', '16.00-18.00', 5, 6, 40),
+        sesi('ses_sc_rab', 'lok_default_1', 'Rabu', '16.00-18.00', 7, 8, 56),
+        sesi('ses_sc_kam', 'lok_default_1', 'Kamis', '16.00-18.00', 6, 7, 48),
+        sesi('ses_sc_jum', 'lok_default_1', 'Jumat', '16.00-18.00', 6, 7, 48),
+        sesi('ses_sc_sab', 'lok_default_1', 'Sabtu', '08.00-10.00', 4, 5, 32),
+        sesi('ses_sc_min', 'lok_default_1', 'Minggu', '08.00-10.00', 4, 5, 32),
+        sesi('ses_kb_sen', 'lok_baru_b1', 'Senin', '16.00-18.00', 3, 3, 24),
+        sesi('ses_kb_rab', 'lok_baru_b1', 'Rabu', '16.00-18.00', 3, 3, 24),
+        sesi('ses_dup1', 'lok_baru_a1', 'Senin', '16.00-18.00', 6, 7, 48),
+        sesi('ses_dup2', 'lok_default_1', 'Senin', '16.00 - 18.00', 6, 7, 48),
+        sesi('ses_dup3', 'lok_baru_b2', 'Rabu', '16.00-18.00', 3, 3, 24)
+      ]));
+      localStorage.setItem('pbts_attendance', JSON.stringify([
+        {
+          id: 'att1', tanggal: '2026-11-02', id_atlet: 'TRS901', tipe: 'atlet', status: 'Hadir',
+          lokasi: 'sport  center puncak permai', lokasi_ids: ['lok_baru_a2'],
+          lokasi_nama: ['sport  center puncak permai'], lokasi_lainnya: '', input_oleh: 'u1'
+        },
+        {
+          id: 'att2', tanggal: '2026-11-03', id_atlet: 'TRS901', tipe: 'atlet', status: 'Izin',
+          lokasi: 'GOR Timur Baru', lokasi_ids: [], lokasi_nama: [],
+          lokasi_lainnya: 'GOR Timur Baru', input_oleh: 'u1'
+        }
+      ]));
+      localStorage.setItem('pbts_absensi_asisten', JSON.stringify([
+        {
+          id: 'asb1', id_asisten: 'u1', nama_asisten: 'Uji', tanggal: '2026-11-02',
+          atlet: [], status_atlet: {}, program: 'uji', sesi_id: 'ses_dup1',
+          lokasi: 'Kintono Badminton Hall', lokasi_ids: ['lok_baru_b1'],
+          lokasi_nama: ['Kintono Badminton Hall'], lokasi_lainnya: ''
+        }
+      ]));
+      localStorage.setItem('pbts_logbook_entries', JSON.stringify([
+        {
+          id: 'lb1', id_atlet: 'TRS901', tanggal: '2026-11-02', nama_parameter: 'uji',
+          lokasi: 'lap atletik unesa', lokasi_ids: ['lok_default_3', 'lok_baru_c1'],
+          lokasi_nama: ['Lap. Atletik Unesa', 'lap atletik unesa'], lokasi_lainnya: ''
+        }
+      ]));
+      localStorage.setItem('pbts_athletes', JSON.stringify([
+        {
+          id: 'a_dup', id_atlet: 'TRS901', nama: 'Atlet Alpha', status: 'aktif', user_id: 'u_dup',
+          jadwal_sesi: ['ses_dup1', 'ses_sc_sen', 'ses_kb_sen', 'ses_dup2'],
+          jk: 'Laki-laki', sekolah: 'SDN 1', tgl_lahir: '2012-01-01', tgl_bergabung: '2025-01-01',
+          orang_tua: 'Orang Tua'
+        }
+      ]));
+    }
+
+    function ujiDedup() {
+      // --- Master lokasi bersih: tepat 3 lokasi aktif + lokasi lama nonaktif ---
+      var semua = Picker.masterSemua();
+      var aktif = Picker.masterAktif();
+      assert('Dedup: hanya 3 lokasi aktif setelah pembersihan',
+        aktif.length === 3, 'aktif=' + aktif.map(function (l) { return l.nama; }).join(' | '));
+      assert('Dedup: tidak ada lagi nama lokasi ganda',
+        semua.length === new Set(semua.map(function (l) { return Picker.normalNama(l.nama); })).size,
+        'total=' + semua.length);
+      assert('Dedup: ID tetap loc_scpp / loc_kintono / loc_unesa dipakai',
+        !!Picker.masterById('loc_scpp') && !!Picker.masterById('loc_kintono') && !!Picker.masterById('loc_unesa'));
+      assert('Dedup: SCPP hanya satu record', Store.where('lokasi_latihan', function (l) {
+        return Picker.normalNama(l.nama) === 'sport center puncak permai';
+      }).length === 1);
+      assert('Dedup: Kintono hanya satu record (rename + duplikat digabung)', Store.where('lokasi_latihan', function (l) {
+        return Picker.normalNama(l.nama) === 'kintono badminton hall';
+      }).length === 1);
+      assert('Dedup: lokasi lama (GOR Surabaya) tetap ada namun nonaktif',
+        !!Picker.masterCariNama('GOR Surabaya') && Picker.masterCariNama('GOR Surabaya').aktif === false);
+
+      // --- Sesi jadwal: tepat 9, duplikat digabung ke ID master ---
+      var sesi = Jadwal.semua();
+      assert('Dedup sesi: tepat 9 sesi tersisa', sesi.length === 9, 'jumlah=' + sesi.length);
+      assert('Dedup sesi: duplikat digabung ke ID master (ses_sc_sen, ses_kb_rab)',
+        !!Store.find('jadwal_sesi', 'ses_sc_sen') && !!Store.find('jadwal_sesi', 'ses_kb_rab') &&
+        !Store.find('jadwal_sesi', 'ses_dup1') && !Store.find('jadwal_sesi', 'ses_dup2') && !Store.find('jadwal_sesi', 'ses_dup3'));
+      assert('Dedup sesi: lokasi_id sesi menunjuk ID kanonik',
+        Store.find('jadwal_sesi', 'ses_sc_sen').lokasi_id === 'loc_scpp' &&
+        Store.find('jadwal_sesi', 'ses_kb_sen').lokasi_id === 'loc_kintono',
+        Store.find('jadwal_sesi', 'ses_sc_sen').lokasi_id);
+      assert('Dedup sesi: lokasi_nama sesi ikut nama kanonik',
+        Store.find('jadwal_sesi', 'ses_sc_sen').lokasi_nama === 'Sport Center Puncak Permai');
+
+      // --- Referensi tidak hilang / tidak tertukar ---
+      var att1 = Store.find('attendance', 'att1');
+      assert('Referensi: kehadiran lama tetap ada, ID lokasi dialihkan ke kanonik',
+        !!att1 && att1.lokasi_ids.length === 1 && att1.lokasi_ids[0] === 'loc_scpp' &&
+        att1.lokasi_nama[0] === 'Sport Center Puncak Permai' && att1.status === 'Hadir',
+        JSON.stringify(att1 && att1.lokasi_ids));
+      assert('Referensi: teks lokasi varian ejaan dirapikan ke nama kanonik',
+        att1 && att1.lokasi === 'Sport Center Puncak Permai', att1 && att1.lokasi);
+      var att2 = Store.find('attendance', 'att2');
+      assert('Referensi: data "Lainnya" (teks sendiri) tetap memakai nama aslinya',
+        !!att2 && att2.lokasi_lainnya === 'GOR Timur Baru' && att2.status === 'Izin');
+      var asb1 = Store.find('absensi_asisten', 'asb1');
+      assert('Referensi: sesi_id duplikat dialihkan ke sesi kanonik',
+        !!asb1 && asb1.sesi_id === 'ses_sc_sen' && asb1.lokasi_ids[0] === 'loc_kintono',
+        asb1 && asb1.sesi_id);
+      var lb1 = Store.find('logbook_entries', 'lb1');
+      assert('Referensi: logbook dengan 2 ID duplikat jadi 1 ID kanonik',
+        !!lb1 && lb1.lokasi_ids.length === 1 && lb1.lokasi_ids[0] === 'loc_unesa' &&
+        lb1.lokasi_nama.length === 1 && lb1.lokasi_nama[0] === 'Lap. Atletik Unesa',
+        JSON.stringify(lb1 && lb1.lokasi_ids));
+      var aDup = Store.findOne('athletes', function (a) { return a.id_atlet === 'TRS901'; });
+      assert('Referensi: jadwal_sesi atlet dirapikan (duplikat digabung)',
+        !!aDup && aDup.jadwal_sesi.length === 2 &&
+        aDup.jadwal_sesi.indexOf('ses_sc_sen') !== -1 && aDup.jadwal_sesi.indexOf('ses_kb_sen') !== -1,
+        JSON.stringify(aDup && aDup.jadwal_sesi));
+
+      // --- Stabilitas: init berulang tidak menambah apa pun ---
+      for (var i = 0; i < 3; i++) {
+        Picker.init();
+        Jadwal.init();
+      }
+      assert('Stabilitas: init berulang 3x tetap 3 lokasi aktif / 9 sesi',
+        Picker.masterAktif().length === 3 && Jadwal.semua().length === 9,
+        'lokasi=' + Picker.masterAktif().length + ' sesi=' + Jadwal.semua().length);
+    }
+
+    /* ==================== UJI SUPERADMIN ==================== */
+    async function ujiSuperadmin() {
+      ujiDedup();
+
+      // --- Data atlet uji ---
+      var sc = Store.find('jadwal_sesi', 'ses_sc_sen');
+      var kb = Store.find('jadwal_sesi', 'ses_kb_sen');
+      var rab = Store.find('jadwal_sesi', 'ses_sc_rab');
+      assert('Seed: SCPP Senin 6 lap / 7 pelatih / kuota 48',
+        sc && sc.lapangan === 6 && sc.pelatih === 7 && sc.kuota === 48 && sc.hari === 'Senin' && sc.jam === '16.00-18.00');
+      assert('Seed: KBH Senin kuota 24', kb && kb.kuota === 24 && kb.lapangan === 3);
+      assert('Seed: SCPP Rabu kuota 56', rab && rab.kuota === 56 && rab.lapangan === 7);
+
+      buatAtlet({ id_atlet: 'TRS901', nama: 'Atlet Alpha', jadwal_sesi: ['ses_sc_sen', 'ses_kb_sen'], sekolah: 'SDN 1' });
+      var B = buatAtlet({ id_atlet: 'TRS902', nama: 'Atlet Beta', jadwal_sesi: ['ses_sc_sen'], sekolah: 'SMPN 2' });
+      var C = buatAtlet({ id_atlet: 'TRS903', nama: 'Atlet Gamma', jadwal_sesi: ['ses_sc_sen'], status: 'cuti', sekolah: 'SMAN 3' });
+      buatAtlet({ id_atlet: 'TRS904', nama: 'Atlet Delta', sekolah: 'SDN 4' });
+      assert('Kuota: terisi SCPP Senin = 2 (atlet cuti tidak dihitung)',
+        Jadwal.terisi(sc) === 2, 'terisi=' + Jadwal.terisi(sc));
+      assert('Kuota: sisa SCPP Senin = 46', Jadwal.sisa(sc) === 46, 'sisa=' + Jadwal.sisa(sc));
+      assert('Kuota: atlet cuti tetap tersimpan di data sesi', Jadwal.semuaPeserta('ses_sc_sen').length === 3);
+
+      // --- Daftar Atlet: kolom + chip + filter ---
+      await bukaHalaman('#/daftar-atlet');
+      var judulKolom = document.querySelector('#page-content').textContent;
+      assert('Daftar Atlet: ada kolom "Jadwal Latihan"', judulKolom.indexOf('Jadwal Latihan') !== -1);
+      assert('Daftar Atlet: chip jadwal tampil (SCPP Sen 16.00)', judulKolom.indexOf('SCPP Sen 16.00') !== -1);
+      var filterJadwal = document.querySelector('#filter-jadwal');
+      assert('Daftar Atlet: filter "Semua jadwal" + "Belum dijadwalkan" ada',
+        filterJadwal && filterJadwal.textContent.indexOf('Semua jadwal') !== -1 &&
+        filterJadwal.textContent.indexOf('Belum dijadwalkan') !== -1);
+      isiNilai(filterJadwal, 'belum');
+      await tunda(60);
+      var isiTabel = document.querySelector('#daftar-atlet-list').textContent;
+      assert('Filter "Belum dijadwalkan": atlet tanpa sesi tampil',
+        isiTabel.indexOf('Atlet Delta') !== -1 && isiTabel.indexOf('Atlet Alpha') === -1);
+      isiNilai(filterJadwal, 'ses:ses_kb_sen');
+      await tunda(60);
+      isiTabel = document.querySelector('#daftar-atlet-list').textContent;
+      assert('Filter sesi KBH Senin: hanya atlet peserta',
+        isiTabel.indexOf('Atlet Alpha') !== -1 && isiTabel.indexOf('Atlet Beta') === -1);
+      isiNilai(filterJadwal, '');
+      await tunda(60);
+
+      // --- Kelola Jadwal & Kuota ---
+      klik(document.querySelector('[data-kelola-jadwal]'));
+      await tunda(80);
+      var kelola = document.getElementById('m-kelola-jadwal');
+      assert('Kelola Jadwal: modal terbuka', !!kelola && !kelola.hidden);
+      assert('Kelola Jadwal: 9 sesi terdaftar', kelola.querySelectorAll('tbody tr').length === 9);
+      assert('Kelola Jadwal: sesi terpakai tidak bisa dihapus (tampil "Dipakai")',
+        kelola.textContent.indexOf('Dipakai') !== -1);
+      klik(kelola.querySelector('[data-sesi-tambah]'));
+      await tunda(80);
+      var formSesi = document.getElementById('form-sesi');
+      isiNilai(formSesi.querySelector('[name="lokasi_id"]'), 'loc_kintono');
+      isiNilai(formSesi.querySelector('[name="hari"]'), 'Jumat');
+      isiNilai(formSesi.querySelector('[name="jam"]'), '16.00-18.00');
+      isiNilai(formSesi.querySelector('[name="lapangan"]'), '3');
+      isiNilai(formSesi.querySelector('[name="pelatih"]'), '3');
+      isiNilai(formSesi.querySelector('[name="kuota"]'), '20');
+      document.querySelector('button[form="form-sesi"]').click();
+      await tunda(120);
+      assert('Kelola Jadwal: sesi baru tersimpan (total 10)', Jadwal.semua().length === 10);
+      var tombolHapus = document.getElementById('m-kelola-jadwal').querySelector('[data-sesi-hapus]');
+      assert('Kelola Jadwal: sesi tak terpakai punya tombol Hapus', !!tombolHapus);
+      klik(tombolHapus);
+      await tunda(80);
+      klik(document.querySelector('[data-confirm="yes"]'));
+      await tunda(100);
+      assert('Kelola Jadwal: sesi terhapus', Jadwal.semua().length === 9);
+      klik(document.querySelector('#m-kelola-jadwal [data-back-close]'));
+      await tunda(80);
+
+      // --- Form atlet: pemilih jadwal ---
+      buatAtlet({ id_atlet: 'TRS904', nama: 'Atlet Delta', sekolah: 'SDN 4' });
+      klik(document.querySelector('[data-add-atlet]'));
+      await tunda(100);
+      assert('Form Atlet: field Jadwal Latihan ada', !!document.querySelector('#form-jadwal [data-jd-buka]'));
+      klik(document.querySelector('#form-jadwal [data-jd-buka]'));
+      await tunda(120);
+      var panel = document.querySelector('.picker-pop');
+      assert('Form Atlet: panel jadwal terbuka dengan grup per lokasi',
+        !!panel && panel.querySelectorAll('.jp-grup').length === 2);
+      assert('Form Atlet: pilihan menampilkan sisa kuota',
+        panel.textContent.indexOf('Sisa 46 dari 48') !== -1);
+      Store.update('jadwal_sesi', 'ses_kb_sen', { kuota: 1 });
+      panel.querySelector('[data-jp-cari]').value = 'Kintono';
+      panel.querySelector('[data-jp-cari]').dispatchEvent(new Event('input', { bubbles: true }));
+      await tunda(60);
+      var barisPenuh = panel.querySelector('.jp-row');
+      assert('Form Atlet: sesi penuh ditandai "Penuh" dan tidak bisa dipilih',
+        barisPenuh && barisPenuh.classList.contains('jp-mati') && barisPenuh.textContent.indexOf('Penuh') !== -1);
+      Store.update('jadwal_sesi', 'ses_kb_sen', { kuota: 24 });
+      panel.querySelector('[data-jp-cari]').value = 'Rabu';
+      panel.querySelector('[data-jp-cari]').dispatchEvent(new Event('input', { bubbles: true }));
+      await tunda(60);
+      klik(panel.querySelector('.jp-row'));
+      await tunda(60);
+      var chipsJadwal = document.querySelector('#form-jadwal [data-jd-chips]');
+      assert('Form Atlet: chip terpilih tampil dengan tombol hapus',
+        chipsJadwal && chipsJadwal.textContent.indexOf('SCPP Rab 16.00') !== -1 && !!chipsJadwal.querySelector('[data-jd-hapus]'));
+      var hiddenJadwal = document.querySelector('#form-jadwal input[name="jadwal_sesi"]');
+      assert('Form Atlet: nilai sesi tersimpan di field form',
+        hiddenJadwal && hiddenJadwal.value === 'ses_sc_rab', hiddenJadwal && hiddenJadwal.value);
+      klik(panel.querySelector('[data-jp-tutup]'));
+      await tunda(60);
+      App.setDirty(false);
+      klik(document.querySelector('#m-atlet [data-back-close]'));
+      await tunda(80);
+
+      // --- Detail atlet ---
+      await bukaHalaman('#/daftar-atlet');
+      klik(document.querySelector('[data-detail-atlet="TRS901"]'));
+      await tunda(100);
+      var detail = document.getElementById('m-detail');
+      assert('Detail Atlet: jadwal tampil di Data Tambahan',
+        !!detail && detail.textContent.indexOf('Jadwal Latihan') !== -1 &&
+        detail.textContent.indexOf('Sport Center Puncak Permai') !== -1);
+      klik(detail.querySelector('[data-back-close]'));
+      await tunda(80);
+
+      // --- Beranda: kuota ---
+      await bukaHalaman('#/beranda');
+      var kuotaBox = document.getElementById('home-kuota');
+      assert('Beranda: bagian "Kuota Atlet per Sesi Latihan" ada', !!kuotaBox);
+      assert('Beranda: ringkasan Total Kuota / Terjadwal / Sisa / Belum',
+        kuotaBox.textContent.indexOf('Total Kuota') !== -1 && kuotaBox.textContent.indexOf('Atlet Terjadwal') !== -1 &&
+        kuotaBox.textContent.indexOf('Sisa Kuota') !== -1 && kuotaBox.textContent.indexOf('Belum Dijadwalkan') !== -1);
+      assert('Beranda: tab per lokasi (SCPP & KBH)', kuotaBox.querySelectorAll('[data-kuota-tab]').length === 2);
+      assert('Beranda: batang progres tampil', !!document.querySelector('#kuota-isi .ku-track .ku-isi'));
+      klik(document.querySelector('[data-sesi-baris]'));
+      await tunda(120);
+      var peserta = document.getElementById('m-peserta');
+      assert('Beranda: klik sesi membuka daftar atlet peserta',
+        !!peserta && peserta.textContent.indexOf('Atlet Alpha') !== -1 && peserta.textContent.indexOf('TRS901') !== -1);
+      klik(peserta.querySelector('[data-back-close]'));
+      await tunda(80);
+
+      // --- Perubahan status -> kuota realtime ---
+      var jumlahSebelum = Jadwal.terisi('ses_sc_sen');
+      Shared.catatPerubahanStatus(UI.athleteById('TRS903'), 'aktif', 'Uji');
+      await tunda(120);
+      assert('Status Aktif: kuota terisi bertambah setelah atlet cuti kembali aktif',
+        Jadwal.terisi('ses_sc_sen') === jumlahSebelum + 1);
+      Shared.catatPerubahanStatus(UI.athleteById('TRS903'), 'berhenti', 'Uji');
+      await tunda(120);
+      assert('Status Berhenti: kuota terisi berkurang', Jadwal.terisi('ses_sc_sen') === jumlahSebelum);
+
+      // --- Rekap kehadiran: kolom & filter lokasi tanpa duplikat ---
+      await bukaHalaman('#/kehadiran');
+      var fLok = document.querySelector('#kh-lokasi');
+      assert('Kehadiran: filter Lokasi tersedia', !!fLok && fLok.textContent.indexOf('Semua lokasi') !== -1);
+      var opsi = Array.prototype.map.call(fLok.querySelectorAll('option'), function (o) { return o.textContent; });
+      var unik = new Set(opsi);
+      assert('Kehadiran: filter lokasi tanpa duplikat', opsi.length === unik.size, opsi.join(' | '));
+      assert('Kehadiran: ketiga lokasi tampil di filter',
+        opsi.indexOf('Sport Center Puncak Permai') !== -1 &&
+        opsi.indexOf('Kintono Badminton Hall') !== -1 && opsi.indexOf('Lap. Atletik Unesa') !== -1);
+      klik(document.querySelector('[data-tab="bulan"]'));
+      await tunda(100);
+      assert('Kehadiran: rekap bulanan punya kolom Lokasi',
+        document.querySelector('#kh-body').textContent.indexOf('Lokasi') !== -1);
+      assert('Kehadiran: lokasi lama tampil dengan nama kanonik',
+        document.querySelector('#kh-body').textContent.indexOf('Sport Center Puncak Permai') !== -1);
+
+      // --- Kelola Lokasi: tolak nama duplikat ("Lokasi sudah ada") ---
+      var hostLok = document.createElement('div');
+      document.body.appendChild(hostLok);
+      Picker.kelolaLokasi(hostLok);
+      klik(hostLok.querySelector('[data-lokasi-tambah]'));
+      await tunda(80);
+      var formLok = document.getElementById('form-lokasi');
+      assert('Kelola Lokasi: form tambah terbuka', !!formLok);
+      isiNilai(formLok.querySelector('[name="nama"]'), 'lap atletik unesa');
+      document.querySelector('button[form="form-lokasi"]').click();
+      await tunda(120);
+      var errLok = formLok.querySelector('[data-error-for="nama"]');
+      assert('Kelola Lokasi: nama sama (beda ejaan) ditolak dengan "Lokasi sudah ada"',
+        errLok && errLok.textContent.indexOf('Lokasi sudah ada') !== -1, errLok && errLok.textContent);
+      assert('Kelola Lokasi: lokasi tidak bertambah', Picker.masterAktif().length === 3);
+    }
+
+    /* ==================== UJI ASISTEN ==================== */
+    async function ujiAsisten() {
+      if (!UI.athleteById('TRS901')) {
+        buatAtlet({ id_atlet: 'TRS901', nama: 'Atlet Alpha', jadwal_sesi: ['ses_sc_sen', 'ses_kb_sen'] });
+        buatAtlet({ id_atlet: 'TRS902', nama: 'Atlet Beta', jadwal_sesi: ['ses_sc_sen'] });
+      }
+      await bukaHalaman('#/absensi');
+      assert('Absensi: halaman termuat', document.body.textContent.indexOf('Absen Diri Sendiri') !== -1);
+
+      // --- Lokasi: tepat 3 chip, urutan tetap, tanpa Lainnya/Pilih semua ---
+      var kartuLok = document.querySelectorAll('#absen-lokasi .lokasi-card');
+      assert('Absensi: tepat 3 pilihan lokasi', kartuLok.length === 3, 'jumlah=' + kartuLok.length);
+      var namaKartu = Array.prototype.map.call(kartuLok, function (k) {
+        return k.querySelector('.lokasi-nama').textContent;
+      });
+      assert('Absensi: urutan SCPP, Kintono, Unesa',
+        namaKartu[0] === 'Sport Center Puncak Permai' &&
+        namaKartu[1] === 'Kintono Badminton Hall' && namaKartu[2] === 'Lap. Atletik Unesa',
+        namaKartu.join(' | '));
+      assert('Absensi: tidak ada opsi "Lainnya"',
+        document.querySelector('#absen-lokasi').textContent.indexOf('Lainnya') === -1);
+      assert('Absensi: tidak ada tombol "Pilih semua"',
+        !document.querySelector('#absen-lokasi [data-lokasi-semua]'));
+      assert('Absensi: tombol "Hapus pilihan" tetap ada',
+        !!document.querySelector('#absen-lokasi [data-lokasi-reset]'));
+      assert('Absensi: teks bantuan sesuai ketentuan',
+        document.querySelector('#absen-lokasi').textContent.indexOf(
+          'Pilih satu lokasi latihan yang dipakai hari ini (wajib sebelum menyimpan absensi).') !== -1);
+      assert('Absensi: grid memakai tata letak 3 kolom',
+        !!document.querySelector('#absen-lokasi .lokasi-grid-tiga'));
+      assert('Absensi: nama lokasi tidak terpotong (overflow visible)',
+        document.querySelectorAll('#absen-lokasi .lokasi-nama').length === 3);
+
+      // --- Validasi wajib lokasi ---
+      var formAbsen = document.getElementById('form-absen');
+      isiNilai(formAbsen.querySelector('[name="program"]'), 'Uji program');
+      formAbsen.querySelector('button[type="submit"]').click();
+      await tunda(120);
+      assert('Absensi: wajib pilih lokasi sebelum menyimpan',
+        document.querySelector('#form-absen [data-error-for="lokasi"]').textContent.trim().length > 0 ||
+        document.querySelector('#form-absen [data-error-for="atlet"]').textContent.trim().length > 0);
+
+      // --- Sesi otomatis per lokasi + tanggal ---
+      isiNilai(formAbsen.querySelector('[name="tanggal"]'), '2026-11-16');
+      klik(document.querySelector('#absen-lokasi .lokasi-card input[value="loc_scpp"]'));
+      await tunda(120);
+      var sesiHost = document.getElementById('absen-sesi');
+      assert('Absensi: sesi jadwal otomatis terdeteksi (lokasi + hari)',
+        sesiHost && sesiHost.textContent.indexOf('Senin, 16.00-18.00') !== -1,
+        sesiHost ? sesiHost.textContent.slice(0, 120) : '');
+      // Kintono: hari Selasa tidak punya sesi
+      klik(document.querySelector('#absen-lokasi .lokasi-card input[value="loc_kintono"]'));
+      await tunda(120);
+      isiNilai(formAbsen.querySelector('[name="tanggal"]'), '2026-11-17');
+      await tunda(120);
+      sesiHost = document.getElementById('absen-sesi');
+      assert('Absensi: Kintono di hari Selasa tidak punya sesi (hanya Senin & Rabu)',
+        sesiHost.textContent.indexOf('Tidak ada sesi jadwal') !== -1);
+      // Kembali ke SCPP Senin
+      klik(document.querySelector('#absen-lokasi .lokasi-card input[value="loc_scpp"]'));
+      await tunda(120);
+      isiNilai(formAbsen.querySelector('[name="tanggal"]'), '2026-11-16');
+      await tunda(120);
+
+      // --- Daftar atlet default = peserta sesi ---
+      klik(document.querySelector('#absen-atlet [data-picker-buka]'));
+      await tunda(150);
+      var panel = document.querySelector('.picker-pop');
+      var baris = panel.querySelectorAll('[data-row-atlet]').length;
+      var pesertaSesi = Jadwal.peserta('ses_sc_sen');
+      assert('Absensi: daftar atlet default = atlet terjadwal pada sesi (' + pesertaSesi.length + ' atlet)',
+        baris === pesertaSesi.length, 'baris=' + baris);
+      klik(panel.querySelector('[data-picker-tutup]'));
+      await tunda(80);
+      var cbSemua = document.getElementById('absen-semua');
+      cbSemua.checked = true;
+      cbSemua.dispatchEvent(new Event('change', { bubbles: true }));
+      await tunda(80);
+      klik(document.querySelector('#absen-atlet [data-picker-buka]'));
+      await tunda(150);
+      panel = document.querySelector('.picker-pop');
+      assert('Absensi: opsi "Tampilkan semua atlet" menampilkan semua atlet aktif',
+        panel.querySelectorAll('[data-row-atlet]').length >= pesertaSesi.length);
+      klik(panel.querySelector('[data-row-atlet]'));
+      await tunda(80);
+      assert('DEBUG: atlet terpilih masuk field form',
+        document.querySelector('#absen-atlet input[name="atlet"]').value.length > 0,
+        'nilai="' + document.querySelector('#absen-atlet input[name="atlet"]').value + '"');
+      klik(panel.querySelector('[data-picker-selesai]'));
+      await tunda(80);
+      cbSemua.checked = false;
+      cbSemua.dispatchEvent(new Event('change', { bubbles: true }));
+      await tunda(80);
+
+      // --- Simpan absensi atlet ---
+      formAbsen.querySelector('button[type="submit"]').click();
+      await tunda(200);
+      var errTeks = Array.prototype.map.call(
+        formAbsen.querySelectorAll('.field-error'), function (e) {
+          return e.textContent.trim();
+        }).filter(Boolean).join(' / ');
+      assert('DEBUG: tidak ada error validasi saat simpan', errTeks === '', errTeks);
+      var jurnal = Store.findOne('absensi_asisten', function (r) { return r.tanggal === '2026-11-16'; });
+      assert('Absensi: jurnal asisten tersimpan dengan sesi_id',
+        !!jurnal && jurnal.sesi_id === 'ses_sc_sen', jurnal && jurnal.sesi_id);
+      assert('Absensi: lokasi tersimpan pada jurnal',
+        jurnal && jurnal.lokasi_ids && jurnal.lokasi_ids[0] === 'loc_scpp' &&
+        jurnal.lokasi === 'Sport Center Puncak Permai', jurnal && jurnal.lokasi);
+      var mirror = Store.findOne('attendance', function (r) {
+        return r.tipe === 'atlet' && r.tanggal === '2026-11-16' && r.id_atlet === 'TRS901';
+      });
+      assert('Absensi: kehadiran per atlet tersimpan + lokasi + sesi',
+        !!mirror && mirror.lokasi_ids && mirror.lokasi_ids[0] === 'loc_scpp' && mirror.sesi_id === 'ses_sc_sen');
+
+      // --- Pilih lokasi lain: Kintono Senin -> sesi KBH ---
+      formAbsen.querySelector('button[type="submit"]').click();
+      await tunda(150);
+      klik(document.querySelector('#absen-lokasi .lokasi-card input[value="loc_kintono"]'));
+      await tunda(120);
+      isiNilai(formAbsen.querySelector('[name="tanggal"]'), '2026-11-16');
+      await tunda(120);
+      sesiHost = document.getElementById('absen-sesi');
+      assert('Absensi: Kintono di hari Senin terdeteksi sesi KBH',
+        !!document.querySelector('#absen-sesi .chip.active') &&
+        document.querySelector('#absen-sesi .chip.active').textContent === 'Senin, 16.00-18.00',
+        sesiHost.textContent.slice(0, 80));
+
+      // --- Absen diri sendiri ---
+      var formDiri = document.getElementById('form-absen-diri');
+      isiNilai(formDiri.querySelector('[name="status_diri"]'), 'Hadir');
+      isiNilai(formDiri.querySelector('[name="jam_masuk"]'), '16:00');
+      formDiri.querySelector('button[type="submit"]').click();
+      await tunda(200);
+      var diri = Store.findOne('attendance', function (r) {
+        return r.tipe === 'asisten' && r.tanggal === '2026-11-16';
+      });
+      assert('Absen diri sendiri: tersimpan dengan lokasi & jam masuk',
+        !!diri && diri.lokasi_ids && diri.lokasi_ids[0] === 'loc_kintono' && diri.jam_masuk === '16:00',
+        diri && JSON.stringify({ l: diri.lokasi, j: diri.jam_masuk }));
+
+      var riwayat = document.getElementById('absen-riwayat');
+      assert('Absensi: riwayat menampilkan lokasi (chip)', !!riwayat.querySelector('.lokasi-chip'));
+
+      // --- Tata letak responsif: 3 kolom di desktop, 1 kolom di HP ---
+      var shell = document.querySelector('.app-shell');
+      shell.hidden = false;
+      var kartuGrid = document.querySelectorAll('#absen-lokasi .lokasi-card');
+      var barisPertama = Array.prototype.filter.call(kartuGrid, function (k) {
+        return Math.abs(k.getBoundingClientRect().top - kartuGrid[0].getBoundingClientRect().top) < 4;
+      }).length;
+      shell.hidden = true;
+      var lebar = window.innerWidth;
+      if (lebar <= 640) {
+        assert('Layout HP (' + lebar + 'px): lokasi tersusun satu kolom (1 per baris)',
+          barisPertama === 1, 'per baris=' + barisPertama);
+      } else {
+        assert('Layout desktop (' + lebar + 'px): tiga chip sejajar satu baris',
+          barisPertama === 3, 'per baris=' + barisPertama);
+      }
+    }
+
+    function tutup() {
+      var teks = hasil.map(function (h) {
+        return (h.ok ? 'OK   ' : 'GAGAL') + ' | ' + h.nama + (h.detail ? ' | ' + h.detail : '');
+      }).join('\n');
+      var jmlOk = hasil.filter(function (h) { return h.ok; }).length;
+      teks += '\n\nRINGKASAN: ' + jmlOk + '/' + hasil.length + ' lulus';
+      teks += '\nGALAT CONSOLE: ' + (galat.length ? galat.length + ' galat' : 'tidak ada');
+      document.getElementById('hasil').textContent = teks;
+      document.getElementById('galat').textContent = galat.length ? galat.join('\n') : '(tidak ada galat)';
+      document.title = 'UJI-SELESAI ' + jmlOk + '/' + hasil.length + (galat.length ? ' GALAT:' + galat.length : ' TANPA-GALAT');
+    }
+
+    window.addEventListener('DOMContentLoaded', function () {
+      var peran = param('peran') || 'superadmin';
+      utama(peran).catch(function (e) {
+        galat.push('FATAL: ' + (e && e.stack ? e.stack : e));
+        tutup();
+      });
+    });
+
+    async function utama(peran) {
+      if (peran !== 'asisten') {
+        siapkanDataKotor();
+      }
+      await new Promise(function (resolve) {
+        Store.init().then(resolve, function (e) {
+          galat.push('Store.init: ' + e.message);
+          resolve();
+        });
+      });
+      if (Picker.init) Picker.init();
+      if (Jadwal && Jadwal.init) Jadwal.init();
+
+      if (peran === 'asisten') {
+        var sudah = Store.findOne('users', function (u) { return u.username === 'asistenuji'; });
+        if (!sudah) {
+          await Auth.createUser({
+            nama: 'Asisten Uji', username: 'asistenuji', password: 'rahasia123',
+            role: 'asisten', no_hp: '081234567890'
+          });
+          sudah = Store.findOne('users', function (u) { return u.username === 'asistenuji'; });
+          Store.update('users', sudah.id, { alamat: 'Surabaya' });
+        }
+        localStorage.setItem('pbts_session', JSON.stringify({
+          userId: sudah.id, role: 'asisten', nama: sudah.nama, username: sudah.username,
+          id_atlet: null, exp: Date.now() + 3600000
+        }));
+      } else {
+        var admin = Store.findOne('users', function (u) { return u.username === 'superadmin'; });
+        localStorage.setItem('pbts_session', JSON.stringify({
+          userId: admin.id, role: admin.role, nama: admin.nama, username: admin.username,
+          id_atlet: null, exp: Date.now() + 3600000
+        }));
+      }
+      App.init();
+      await tunda(150);
+      if (peran === 'asisten') await ujiAsisten();
+      else await ujiSuperadmin();
+      tutup();
+    }
+  })();
+  </script>
+</body>
+</html>

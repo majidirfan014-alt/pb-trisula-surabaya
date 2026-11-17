@@ -18,3 +18,9 @@ tools/firestore-data.json
 WhatsApp Image*.jpeg
 WhatsApp Image*.jpg
 WhatsApp Image*.png
+
+# Hasil sementara uji lokal (tools/uji-lokal)
+tools/uji-lokal/hasil-*
+tools/uji-lokal/galat-*
+tools/uji-lokal/min.html
+tools/uji-lokal/server.err

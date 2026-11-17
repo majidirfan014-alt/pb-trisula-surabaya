@@ -5,6 +5,7 @@ var PagesAuth = (function () {
   var boxFotoAsisten = null;
   var boxSertifikat = null;
   var boxIjazah = null;
+  var boxKualifikasi = null;
 
   /* ---------- validasi isian bersama ---------- */
   // Tanggal lahir: wajib, tidak boleh hari ini maupun masa depan.
@@ -345,10 +346,8 @@ var PagesAuth = (function () {
     /* ================= FORM ASISTEN PELATIH ================= */
     if (formAsisten) {
       function kunciFormAsisten() {
-        var sibuk = (boxLisensi ? boxLisensi.busy() : 0) +
-          (boxFotoAsisten ? boxFotoAsisten.busy() : 0) +
-          (boxSertifikat ? boxSertifikat.busy() : 0) +
-          (boxIjazah ? boxIjazah.busy() : 0);
+        var sibuk = (boxKualifikasi ? boxKualifikasi.busy() : 0) +
+          (boxFotoAsisten ? boxFotoAsisten.busy() : 0);
         kunciTombol(formAsisten, sibuk > 0);
       }
 
@@ -368,17 +367,7 @@ var PagesAuth = (function () {
       }
       updateUsia();
 
-      // Lisensi & Foto Profil: satu komponen unggah bersama (lokal, tanpa cloud).
-      boxLisensi = siapkanBox('lisensi-box', {
-        key: 'lisensi',
-        label: 'Lisensi Pelatih',
-        jenis: 'campuran',
-        required: true,
-        labelRequired: 'Lisensi pelatih wajib diunggah.',
-        onChange: function () {},
-        onBusy: kunciFormAsisten
-      });
-
+      // Foto Profil: satu komponen unggah (lokal, tanpa cloud).
       boxFotoAsisten = siapkanBox('asisten-foto-box', {
         key: 'foto-asisten',
         label: 'Foto Profil',
@@ -391,34 +380,21 @@ var PagesAuth = (function () {
         onBusy: kunciFormAsisten
       });
 
-      // Sertifikat Pelatihan: multi-berkas (1-5). Ijazah Terakhir: satu berkas.
-      var hostSertifikat = document.getElementById('sertifikat-box');
-      if (hostSertifikat) {
-        hostSertifikat.innerHTML = Docs.boxMultiHtml({
-          key: 'sertifikat',
-          label: 'Sertifikat Pelatihan',
+      // Dokumen kualifikasi: pilih salah satu jenis (Sertifikat Pelatihan /
+      // Ijazah Terakhir / Lisensi Pelatih), lalu unggah tepat satu berkas.
+      var hostKualifikasi = document.getElementById('kualifikasi-host');
+      if (hostKualifikasi) {
+        hostKualifikasi.innerHTML = Docs.kualifikasiHtml({
+          key: 'dok-kualifikasi',
           required: true,
-          maks: 5
+          help: 'Pilih salah satu jenis dokumen kualifikasi, lalu unggah tepat satu berkas (PDF/JPG/PNG).'
         });
-        boxSertifikat = Docs.bindBoxMulti(hostSertifikat, {
-          key: 'sertifikat',
-          jenis: 'campuran',
+        boxKualifikasi = Docs.bindKualifikasi(hostKualifikasi, {
+          key: 'dok-kualifikasi',
           required: true,
-          maks: 5,
-          labelRequired: 'Sertifikat pelatihan wajib diunggah (minimal 1 berkas).',
           onBusy: kunciFormAsisten
         });
       }
-
-      boxIjazah = siapkanBox('ijazah-box', {
-        key: 'ijazah',
-        label: 'Ijazah Terakhir',
-        jenis: 'campuran',
-        required: true,
-        labelRequired: 'Ijazah terakhir wajib diunggah.',
-        onChange: function () {},
-        onBusy: kunciFormAsisten
-      });
 
       UI.bindSubmit(formAsisten, function () {
         Utils.clearErrors(formAsisten);
@@ -436,14 +412,13 @@ var PagesAuth = (function () {
         if (!data.password || data.password.length < 6) errors.password = 'Kata sandi minimal 6 karakter.';
         if (data.password !== data.password2) errors.password2 = 'Konfirmasi kata sandi tidak sama.';
 
-        if ((boxLisensi && boxLisensi.busy() > 0) || (boxFotoAsisten && boxFotoAsisten.busy() > 0) ||
-          (boxSertifikat && boxSertifikat.busy() > 0) || (boxIjazah && boxIjazah.busy() > 0)) {
+        if ((boxKualifikasi && boxKualifikasi.busy() > 0) || (boxFotoAsisten && boxFotoAsisten.busy() > 0)) {
           Utils.toast('Tunggu proses unggahan selesai terlebih dahulu.', 'danger');
           return;
         }
-        if (!boxLisensi || !boxLisensi.validate(true)) errors.lisensi_file = 'Lisensi pelatih wajib diunggah.';
-        if (!boxSertifikat || !boxSertifikat.validate(true)) errors.sertifikat_file = 'Sertifikat pelatihan wajib diunggah (minimal 1 berkas).';
-        if (!boxIjazah || !boxIjazah.validate(true)) errors.ijazah_file = 'Ijazah terakhir wajib diunggah.';
+        if (!boxKualifikasi || !boxKualifikasi.validate(true)) {
+          errors.dok_kualifikasi = 'Pilih satu jenis dokumen kualifikasi dan unggah berkasnya.';
+        }
         if (!boxFotoAsisten || !boxFotoAsisten.validate(true)) errors.foto_file = 'Foto profil wajib diunggah.';
 
         if (Object.keys(errors).length) {
@@ -455,7 +430,12 @@ var PagesAuth = (function () {
         var btn = UI.submitButton(formAsisten);
         if (btn) btn.textContent = 'Mendaftarkan...';
 
-        var lisensiHasil = boxLisensi ? boxLisensi.get() : null;
+        var kualHasil = boxKualifikasi ? boxKualifikasi.get() : { jenis: '', ref: null };
+        var payloadKual = { lisensi: null, sertifikat: [], ijazah: null, dok_kualifikasi_jenis: kualHasil.jenis || '' };
+        if (kualHasil.jenis && kualHasil.ref) {
+          if (kualHasil.jenis === 'sertifikat') payloadKual.sertifikat = [kualHasil.ref];
+          else payloadKual[kualHasil.jenis] = kualHasil.ref;
+        }
         var fotoHasilAsisten = boxFotoAsisten ? boxFotoAsisten.get() : null;
 
         return Auth.registerAsisten({
@@ -463,9 +443,10 @@ var PagesAuth = (function () {
           tgl_lahir: data.tgl_lahir,
           alamat: data.alamat,
           no_hp: data.no_hp,
-          lisensi: lisensiHasil,
-          sertifikat: boxSertifikat ? boxSertifikat.get() : [],
-          ijazah: boxIjazah ? boxIjazah.get() : null,
+          lisensi: payloadKual.lisensi,
+          sertifikat: payloadKual.sertifikat,
+          ijazah: payloadKual.ijazah,
+          dok_kualifikasi_jenis: payloadKual.dok_kualifikasi_jenis,
           foto: fotoHasilAsisten ? (fotoHasilAsisten.thumb || '') : '',
           username: data.username,
           password: data.password
